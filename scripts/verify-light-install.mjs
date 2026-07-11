@@ -93,7 +93,7 @@ try {
   writeFileSync(
     join(appDir, "index.ts"),
     [
-      'import { createApp, defineComponent, useRef, type ElfElementConstructor } from "elfui";',
+      'import { createApp, defineComponent, useRef, type ElfElementConstructor } from "@elfui/core";',
       "",
       "const Counter = defineComponent<{ initial: number }, { change: [value: number] }>({",
       '  name: "x-light-counter",',
@@ -116,7 +116,7 @@ try {
   writeFileSync(
     join(appDir, "index.mjs"),
     [
-      'import { createApp, defineComponent, useRef } from "elfui";',
+      'import { createApp, defineComponent, useRef } from "@elfui/core";',
       "",
       "const count = useRef(1);",
       "if (count.value !== 1) throw new Error('useRef smoke failed');",

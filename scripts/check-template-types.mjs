@@ -20,7 +20,7 @@ const ignoredFilePattern = /\.(?:spec|test)\.tsx?$/u;
 const macroFilePattern = /\.elf\.tsx?$/u;
 const tsFilePattern = /\.tsx?$/u;
 const componentPragmaPattern = /^\s*\/\/\/\s*<!--\s*@elf component\s*-->/mu;
-const macroImportPattern = /import\s*\{[^}]*\bdefineHtml\b[^}]*\}\s*from\s*["']elfui["']/u;
+const macroImportPattern = /import\s*\{[^}]*\bdefineHtml\b[^}]*\}\s*from\s*["']@elfui\/core["']/u;
 
 const toRelative = (file) => path.relative(repoRoot, file).replace(/\\/g, "/");
 

@@ -24,7 +24,7 @@ const evalMacroModule = (code: string): EvaluatedModule => {
   }).outputText;
   const module = { exports: {} as EvaluatedModule };
   const require = (id: string): unknown => {
-    if (id === "elfui") return elfuiRuntimeShim;
+    if (id === "@elfui/core") return elfuiRuntimeShim;
     if (id === "@elfui/reactivity") return reactivity;
     if (id === "@elfui/runtime") return runtime;
     if (id === "@elfui/runtime/internal") return runtimeInternal;
@@ -64,7 +64,7 @@ import {
   onUpdated,
   usePlugin,
   useRef
-} from "elfui";
+} from "@elfui/core";
 
 const log = (globalThis as { __elfMacroRuntimeLog: string[] }).__elfMacroRuntimeLog;
 
@@ -126,7 +126,7 @@ export const MacroLifecycleProbe = defineHtml(html\`
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const result = compileMacroComponent(
       `
-import { defineHtml, html, onErrorCaptured } from "elfui";
+import { defineHtml, html, onErrorCaptured } from "@elfui/core";
 
 const log = (globalThis as { __elfMacroRuntimeLog: string[] }).__elfMacroRuntimeLog;
 const fail = (): string => {

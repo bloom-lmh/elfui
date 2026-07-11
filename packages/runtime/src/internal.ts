@@ -1,7 +1,7 @@
 // @elfui/runtime/internal — 编译产物与框架内部 helper
 //
 // 这个入口不作为用户主路径承诺稳定性。宏组件、离线 codegen、runtime compiler
-// 和少量框架测试可以依赖它；普通组件代码优先从 `elfui` / `@elfui/runtime` 导入。
+// 和少量框架测试可以依赖它；普通组件代码优先从 `@elfui/core` / `@elfui/runtime` 导入。
 
 export {
   attr,

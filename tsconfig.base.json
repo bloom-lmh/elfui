@@ -22,7 +22,7 @@
       "@elfui/compiler-template": ["./packages/compiler-template/src/index.ts"],
       "@elfui/compiler": ["./packages/compiler/src/index.ts"],
       "@elfui/vite-plugin": ["./packages/vite-plugin/src/index.ts"],
-      "elfui": ["./packages/elfui/src/index.ts"],
+      "@elfui/core": ["./packages/elfui/src/index.ts"],
       "@elfui/compiler/compile": ["./packages/compiler/src/compile.ts"],
       "@elfui/compiler/macro-component": ["./packages/compiler/src/macro-component.ts"],
       "@elfui/compiler/vite": ["./packages/compiler/src/vite.ts"]

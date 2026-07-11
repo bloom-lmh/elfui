@@ -19,5 +19,5 @@ export const elfuiDevAliases = [
   },
   { find: "@elfui/compiler", replacement: fromRoot("packages/compiler/src/index.ts") },
   { find: "@elfui/vite-plugin", replacement: fromRoot("packages/vite-plugin/src/index.ts") },
-  { find: "elfui", replacement: fromRoot("packages/elfui/src/index.ts") }
+  { find: "@elfui/core", replacement: fromRoot("packages/elfui/src/index.ts") }
 ] as const;

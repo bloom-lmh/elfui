@@ -105,7 +105,7 @@ try {
   writeFileSync(
     join(appDir, "index.mjs"),
     [
-      'import { createApp } from "elfui";',
+      'import { createApp } from "@elfui/core";',
       'import { useRef } from "@elfui/reactivity";',
       'import { defineComponent } from "@elfui/runtime";',
       'import { parse } from "@elfui/compiler-template";',

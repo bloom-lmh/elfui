@@ -7,7 +7,7 @@ import {
 } from "./macro-component";
 import { createElfDiagnostic, formatElfDiagnostic, type ElfDiagnostic } from "./diagnostic";
 
-const DEFAULT_MACRO_IMPORT = "elfui";
+const DEFAULT_MACRO_IMPORT = "@elfui/core";
 const elfFileRE = /\.elf\.tsx?(?:\?.*)?$/;
 const scriptFileRE = /\.[cm]?[jt]sx?(?:\?.*)?$/;
 const pragmaCommentRE = /^\/\/\/[ \t]*<!--[ \t]*@elf[ \t]+component[ \t]*-->[ \t]*$/;
@@ -113,7 +113,7 @@ export const elfuiMacroPlugin = (options: ElfUIMacroPluginOptions = {}): Minimal
               message: `Found ElfUI component pragma, but no import from ${JSON.stringify(
                 macroImport
               )}.`,
-              hint: "Add a macro import from `elfui`, or remove the pragma."
+              hint: "Add a macro import from `@elfui/core`, or remove the pragma."
             }),
             options
           );

@@ -14,12 +14,12 @@ import type { ElfDiagnostic, ElfDiagnosticSeverity } from "./diagnostic";
 
 export { formatElfDiagnostic, type ElfDiagnostic, type ElfDiagnosticSeverity } from "./diagnostic";
 
-const DEFAULT_RUNTIME_IMPORT = "elfui";
-const DEFAULT_MACRO_IMPORT = "elfui";
+const DEFAULT_RUNTIME_IMPORT = "@elfui/core";
+const DEFAULT_MACRO_IMPORT = "@elfui/core";
 const DEFAULT_RENDER_RUNTIME_IMPORT = "@elfui/runtime/internal";
 const DEFAULT_MODEL_RUNTIME_IMPORT = "@elfui/runtime";
 const TEMPLATE_MACRO_STUB = `
-declare module "elfui" {
+declare module "@elfui/core" {
   export type MacroHtmlTemplate = string & { readonly __elfHtmlTemplate?: true };
   export type MacroSlotMap = object;
   export type MacroEmitMap = Record<string, (...args: any[]) => void> | Record<string, readonly unknown[]>;

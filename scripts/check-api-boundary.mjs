@@ -36,7 +36,7 @@ const assertExact = (entry, expected, reason) => {
 };
 
 assertMissing(
-  "elfui",
+  "@elfui/core",
   [
     "compile",
     "CompileOptions",
@@ -70,7 +70,7 @@ assertMissing(
     "useTheme",
     "useVariant"
   ],
-  "链式包只承载 builder/runtime compile，宏组件入口只能从 elfui 导入。"
+  "链式包只承载 builder/runtime compile，宏组件入口只能从 @elfui/core 导入。"
 );
 
 assertMissing(

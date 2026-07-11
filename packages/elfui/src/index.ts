@@ -1,4 +1,4 @@
-// elfui — ElfUI 主入口（用户使用入口）
+// @elfui/core — ElfUI 主入口（用户使用入口）
 //
 // 这个包做三件事：
 // 1. 直接承载宏组件 API：defineHtml / defineProps / defineEmits / defineModel / html
@@ -6,7 +6,7 @@
 // 3. 不注入 runtime compiler；链式 `.template()` 请使用 @elfui/chain
 //
 // 用户用法：
-//   import { defineHtml, html, useRef, onMount } from "elfui";
+//   import { defineHtml, html, useRef, onMount } from "@elfui/core";
 
 export {
   createApp,
