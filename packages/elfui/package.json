@@ -1,0 +1,51 @@
+{
+  "name": "elfui",
+  "version": "0.1.0-beta.0",
+  "description": "Main macro component entry for ElfUI.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bloom-lmh/elfui.git",
+    "directory": "packages/elfui"
+  },
+  "homepage": "https://github.com/bloom-lmh/elfui/tree/main/packages/elfui",
+  "bugs": {
+    "url": "https://github.com/bloom-lmh/elfui/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/index.js",
+    "dist/index.js.map",
+    "dist/index.d.ts",
+    "dist/index.d.ts.map",
+    "dist/app.js",
+    "dist/app.js.map",
+    "dist/app.d.ts",
+    "dist/app.d.ts.map",
+    "dist/macro.js",
+    "dist/macro.js.map",
+    "dist/macro.d.ts",
+    "dist/macro.d.ts.map"
+  ],
+  "scripts": {
+    "build": "tsc -b && node ../../scripts/fix-esm-extensions.mjs packages/elfui",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@elfui/reactivity": "workspace:*",
+    "@elfui/runtime": "workspace:*",
+    "@elfui/shared": "workspace:*"
+  },
+  "license": "MIT"
+}

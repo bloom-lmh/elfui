@@ -1,0 +1,20 @@
+{
+  "mode": "pre",
+  "tag": "beta",
+  "initialVersions": {
+    "@elfui/demo": "0.0.1",
+    "@elfui/chain": "0.0.0",
+    "@elfui/compiler": "0.0.0",
+    "@elfui/compiler-template": "0.0.0",
+    "elfui": "0.0.0",
+    "@elfui/reactivity": "0.0.0",
+    "@elfui/router": "0.0.0",
+    "@elfui/runtime": "0.0.0",
+    "@elfui/shared": "0.0.0",
+    "@elfui/vite-plugin": "0.0.0",
+    "elfui-language-features": "0.2.2",
+    "@elfui/ui-kit": "0.0.1",
+    "@elfui/docs-site": "0.0.0"
+  },
+  "changesets": ["first-public-beta"]
+}

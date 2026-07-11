@@ -1,0 +1,23 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
+  "changelog": false,
+  "commit": false,
+  "fixed": [
+    [
+      "elfui",
+      "@elfui/shared",
+      "@elfui/reactivity",
+      "@elfui/runtime",
+      "@elfui/compiler-template",
+      "@elfui/compiler",
+      "@elfui/router",
+      "@elfui/vite-plugin",
+      "@elfui/chain"
+    ]
+  ],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": []
+}

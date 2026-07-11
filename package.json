@@ -1,0 +1,82 @@
+{
+  "name": "elfui-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "description": "ElfUI - compile-time fine-grained reactive Web Components framework.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bloom-lmh/elfui.git"
+  },
+  "homepage": "https://github.com/bloom-lmh/elfui",
+  "bugs": {
+    "url": "https://github.com/bloom-lmh/elfui/issues"
+  },
+  "scripts": {
+    "build": "tsc -b packages/shared packages/reactivity packages/runtime packages/compiler-template packages/compiler packages/elfui packages/vite-plugin && node scripts/fix-esm-extensions.mjs",
+    "clean": "rimraf --glob \"packages/*/dist\" \"packages/*/tsconfig.tsbuildinfo\" \"coverage\" \"output\"",
+    "ci": "pnpm verify",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:template": "pnpm build && node scripts/check-template-types.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "spellcheck": "cspell .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "size": "node scripts/check-size.mjs",
+    "size:report": "node scripts/check-size.mjs --report=output/SIZE-REPORT.md --baseline=output/SIZE-BASELINE.json",
+    "benchmark": "npm run build && node --expose-gc scripts/benchmark.mjs --report=output/BENCHMARK.md",
+    "benchmark:browser": "npm run build && node scripts/benchmark-browser.mjs --report=output/BROWSER-BENCHMARK.md",
+    "benchmark:list": "npm run build && node scripts/benchmark-list.mjs",
+    "verify:dist-boundary": "node scripts/check-dist-boundary.mjs",
+    "verify:api-boundary": "node scripts/check-api-boundary.mjs",
+    "verify:csp-boundary": "node scripts/check-csp-boundary.mjs",
+    "gen:public-api": "node scripts/check-public-api.mjs --write",
+    "verify:public-api": "node scripts/check-public-api.mjs",
+    "verify:light-install": "node scripts/verify-light-install.mjs",
+    "verify:publish": "pnpm build && node scripts/verify-publish.mjs",
+    "changeset": "changeset",
+    "release:status": "changeset status --output=output/release-status.json",
+    "release:version": "changeset version && pnpm --dir tools/create-elfui sync:versions",
+    "release:publish": "changeset publish",
+    "gen:tags": "node scripts/generate-tag-types.mjs",
+    "verify": "pnpm verify:dist-boundary && pnpm verify:public-api && pnpm verify:api-boundary && pnpm verify:csp-boundary && pnpm format:check && pnpm lint && pnpm spellcheck && pnpm typecheck && pnpm test && pnpm typecheck:template",
+    "prepare": "node ./scripts/prepare-husky.mjs"
+  },
+  "lint-staged": {
+    "*.{ts,js,mjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml,css,scss}": [
+      "prettier --write"
+    ]
+  },
+  "devDependencies": {
+    "@changesets/cli": "2.31.0",
+    "@commitlint/cli": "latest",
+    "@commitlint/config-conventional": "latest",
+    "@eslint/js": "latest",
+    "@types/node": "25.8.0",
+    "@vitest/coverage-v8": "latest",
+    "cspell": "8.19.4",
+    "esbuild": "^0.28.0",
+    "eslint": "latest",
+    "eslint-config-prettier": "latest",
+    "husky": "latest",
+    "jsdom": "latest",
+    "lint-staged": "latest",
+    "lit-html": "3.3.3",
+    "prettier": "3.8.3",
+    "rimraf": "latest",
+    "solid-js": "1.9.13",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "latest",
+    "vitest": "latest",
+    "vue": "3.5.39"
+  },
+  "license": "MIT"
+}

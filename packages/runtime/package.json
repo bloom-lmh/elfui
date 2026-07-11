@@ -1,0 +1,46 @@
+{
+  "name": "@elfui/runtime",
+  "version": "0.1.0-beta.0",
+  "description": "Runtime APIs and Web Components helpers for ElfUI.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bloom-lmh/elfui.git",
+    "directory": "packages/runtime"
+  },
+  "homepage": "https://github.com/bloom-lmh/elfui/tree/main/packages/runtime",
+  "bugs": {
+    "url": "https://github.com/bloom-lmh/elfui/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./internal": {
+      "types": "./dist/internal.d.ts",
+      "import": "./dist/internal.js"
+    }
+  },
+  "files": [
+    "dist/*.js",
+    "dist/*.js.map",
+    "dist/*.d.ts",
+    "dist/*.d.ts.map"
+  ],
+  "scripts": {
+    "build": "tsc -b && node ../../scripts/fix-esm-extensions.mjs packages/runtime",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@elfui/reactivity": "workspace:*",
+    "@elfui/shared": "workspace:*"
+  },
+  "license": "MIT"
+}

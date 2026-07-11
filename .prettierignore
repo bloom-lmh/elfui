@@ -1,0 +1,15 @@
+node_modules
+coverage
+.claude
+.vscode-test
+.pnpm-store
+packages/*/dist
+ui-kit/dist
+ui-kit
+website/dist
+website/.vitepress/cache
+website/.vitepress/dist
+tools
+examples/*/dist
+demo
+pnpm-lock.yaml

@@ -1,0 +1,140 @@
+// 生命周期钩子
+//
+// 设计：每个组件实例运行 setup 时，建立一个"当前实例"上下文。
+// 钩子注册时把回调挂到该实例的对应数组上。
+// 实例 mount/unmount/update 时顺序调用对应数组。
+
+export type LifecycleHook = () => void;
+export type AttributeChangedHook = (
+  name: string,
+  oldValue: string | null,
+  newValue: string | null
+) => void;
+export type ErrorCapturedHook = (
+  err: unknown,
+  instance: ComponentInstance | null
+) => boolean | void;
+
+/** 组件实例 — 由 defineCustomElement 内部维护 */
+export interface ComponentInstance {
+  host: HTMLElement;
+  shadow: ShadowRoot | null;
+  /** formControl=true 时由 element 注入，供组合式 helper 读取 */
+  form?: unknown;
+  isMounted: boolean;
+  isUnmounted: boolean;
+  beforeMountHooks: LifecycleHook[];
+  mountedHooks: LifecycleHook[];
+  beforeUnmountHooks: LifecycleHook[];
+  unmountedHooks: LifecycleHook[];
+  beforeUpdateHooks: LifecycleHook[];
+  updatedHooks: LifecycleHook[];
+  attrChangedHooks: AttributeChangedHook[];
+  errorCapturedHooks: ErrorCapturedHook[];
+  /** KeepAlive 激活/未激活：仅在 KeepAlive 包裹时有意义 */
+  activatedHooks: LifecycleHook[];
+  deactivatedHooks: LifecycleHook[];
+}
+
+let currentInstance: ComponentInstance | null = null;
+const pendingUpdatedInstances = new WeakSet<ComponentInstance>();
+
+export const setCurrentInstance = (i: ComponentInstance | null): ComponentInstance | null => {
+  const prev = currentInstance;
+  currentInstance = i;
+  return prev;
+};
+
+export const getCurrentInstance = (): ComponentInstance | null => currentInstance;
+
+const inject =
+  <K extends Exclude<keyof ComponentInstance, "host" | "shadow" | "isMounted" | "isUnmounted">>(
+    key: K
+  ) =>
+  (fn: ComponentInstance[K] extends Array<infer F> ? F : never): void => {
+    if (!currentInstance) {
+      if (__DEV__) console.warn(`[lifecycle] 钩子必须在 setup 同步执行期间调用。`);
+      return;
+    }
+    (currentInstance[key] as unknown as Array<unknown>).push(fn);
+  };
+
+export const onMount = inject("mountedHooks");
+export const onBeforeMount = inject("beforeMountHooks");
+export const onBeforeUnmount = inject("beforeUnmountHooks");
+export const onUnmount = inject("unmountedHooks");
+export const onBeforeUpdate = inject("beforeUpdateHooks");
+export const onUpdated = inject("updatedHooks");
+export const onAttributeChanged = inject("attrChangedHooks");
+export const onErrorCaptured = inject("errorCapturedHooks");
+/** KeepAlive 切回到该组件时触发 */
+export const onActivated = inject("activatedHooks");
+/** KeepAlive 切走该组件时触发 */
+export const onDeactivated = inject("deactivatedHooks");
+
+/** 创建一个空实例骨架 */
+export const createInstance = (
+  host: HTMLElement,
+  shadow: ShadowRoot | null
+): ComponentInstance => ({
+  host,
+  shadow,
+  form: undefined,
+  isMounted: false,
+  isUnmounted: false,
+  beforeMountHooks: [],
+  mountedHooks: [],
+  beforeUnmountHooks: [],
+  unmountedHooks: [],
+  beforeUpdateHooks: [],
+  updatedHooks: [],
+  attrChangedHooks: [],
+  errorCapturedHooks: [],
+  activatedHooks: [],
+  deactivatedHooks: []
+});
+
+/** 调用一组钩子，错误隔离 */
+export const callHooks = (hooks: LifecycleHook[]): void => {
+  for (const fn of hooks) {
+    try {
+      fn();
+    } catch (err) {
+      if (__DEV__) console.error("[lifecycle] hook error:", err);
+      else console.error(err);
+    }
+  }
+};
+
+/** 动态绑定更新时调用，负责触发组件 update 生命周期并在同一轮内去重。 */
+export const runWithUpdateHooks = (
+  instance: ComponentInstance | null,
+  update: () => void
+): void => {
+  if (
+    !instance ||
+    !instance.isMounted ||
+    instance.isUnmounted ||
+    (instance.beforeUpdateHooks.length === 0 && instance.updatedHooks.length === 0)
+  ) {
+    update();
+    return;
+  }
+
+  const shouldSchedule = !pendingUpdatedInstances.has(instance);
+  if (shouldSchedule) {
+    pendingUpdatedInstances.add(instance);
+    callHooks(instance.beforeUpdateHooks);
+  }
+
+  try {
+    update();
+  } finally {
+    if (shouldSchedule) {
+      queueMicrotask(() => {
+        pendingUpdatedInstances.delete(instance);
+        if (!instance.isUnmounted) callHooks(instance.updatedHooks);
+      });
+    }
+  }
+};
