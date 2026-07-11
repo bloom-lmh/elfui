@@ -1,6 +1,6 @@
 {
   "name": "elfui",
-  "version": "0.1.0-beta.0",
+  "version": "0.1.0-beta.1",
   "description": "Main macro component entry for ElfUI.",
   "repository": {
     "type": "git",
@@ -43,9 +43,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@elfui/reactivity": "workspace:*",
-    "@elfui/runtime": "workspace:*",
-    "@elfui/shared": "workspace:*"
+    "@elfui/reactivity": "0.1.0-beta.1",
+    "@elfui/runtime": "0.1.0-beta.1",
+    "@elfui/shared": "0.1.0-beta.1"
   },
   "license": "MIT"
 }

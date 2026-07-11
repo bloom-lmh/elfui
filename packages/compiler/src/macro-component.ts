@@ -1994,7 +1994,6 @@ const typeCheckVirtualTemplate = (
     noEmit: true,
     noUncheckedIndexedAccess: true,
     exactOptionalPropertyTypes: true,
-    ignoreDeprecations: "6.0",
     baseUrl: workspaceRoot
   };
   const globalsFileName = `${workspaceRoot}/.elf-template-globals.d.ts`;

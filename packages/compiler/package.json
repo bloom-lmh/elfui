@@ -1,6 +1,6 @@
 {
   "name": "@elfui/compiler",
-  "version": "0.1.0-beta.0",
+  "version": "0.1.0-beta.1",
   "description": "Macro component compiler for ElfUI.",
   "repository": {
     "type": "git",
@@ -47,10 +47,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@elfui/compiler-template": "workspace:*",
-    "@elfui/reactivity": "workspace:*",
-    "@elfui/runtime": "workspace:*",
-    "@elfui/shared": "workspace:*",
+    "@elfui/compiler-template": "0.1.0-beta.1",
+    "@elfui/reactivity": "0.1.0-beta.1",
+    "@elfui/runtime": "0.1.0-beta.1",
+    "@elfui/shared": "0.1.0-beta.1",
     "typescript": "^5.9.3"
   },
   "license": "MIT"

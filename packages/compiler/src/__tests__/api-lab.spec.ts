@@ -17,7 +17,6 @@ const typeCheckOptions: ts.CompilerOptions = {
   noEmit: true,
   noUncheckedIndexedAccess: true,
   exactOptionalPropertyTypes: true,
-  ignoreDeprecations: "6.0",
   baseUrl: workspaceRoot,
   paths: {
     "@elfui/shared": ["./packages/shared/src/index.ts"],
