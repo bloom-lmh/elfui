@@ -4,15 +4,13 @@
   "commit": false,
   "fixed": [
     [
-      "elfui",
       "@elfui/shared",
       "@elfui/reactivity",
       "@elfui/runtime",
       "@elfui/compiler-template",
       "@elfui/compiler",
-      "@elfui/router",
-      "@elfui/vite-plugin",
-      "@elfui/chain"
+      "@elfui/core",
+      "@elfui/vite-plugin"
     ]
   ],
   "linked": [],

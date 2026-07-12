@@ -1,7 +1,14 @@
 {
   "name": "@elfui/vite-plugin",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "description": "Vite plugin for compiling ElfUI macro components.",
+  "keywords": [
+    "elfui",
+    "vite",
+    "vite-plugin",
+    "macro-components",
+    "typescript"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bloom-lmh/elfui.git",
@@ -25,6 +32,8 @@
     }
   },
   "files": [
+    "README.md",
+    "LICENSE",
     "dist/*.js",
     "dist/*.js.map",
     "dist/*.d.ts",
@@ -35,7 +44,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@elfui/compiler": "0.1.0-beta.1"
+    "@elfui/compiler": "0.1.0-beta.2"
   },
   "license": "MIT"
 }

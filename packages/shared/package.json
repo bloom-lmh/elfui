@@ -1,7 +1,13 @@
 {
   "name": "@elfui/shared",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "description": "Shared utilities for ElfUI.",
+  "keywords": [
+    "elfui",
+    "web-components",
+    "typescript",
+    "utilities"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bloom-lmh/elfui.git",
@@ -25,6 +31,8 @@
     }
   },
   "files": [
+    "README.md",
+    "LICENSE",
     "dist/*.js",
     "dist/*.js.map",
     "dist/*.d.ts",

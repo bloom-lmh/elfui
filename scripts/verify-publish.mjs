@@ -58,6 +58,12 @@ const manifests = workspacePackages.map((packageDir) => {
   if (manifest.publishConfig.access !== "public") {
     throw new Error(`${manifest.name} must publish with public access.`);
   }
+  if (!Array.isArray(manifest.keywords) || manifest.keywords.length === 0) {
+    throw new Error(`${manifest.name} must declare npm keywords.`);
+  }
+  if (!existsSync(join(repoRoot, packageDir, "README.md"))) {
+    throw new Error(`${manifest.name} is missing its package README.md.`);
+  }
   const distEntry = join(repoRoot, packageDir, "dist", "index.js");
   if (!existsSync(distEntry)) {
     throw new Error(`Missing ${distEntry}. Run pnpm build first.`);
@@ -99,6 +105,10 @@ try {
     const licensePath = join(appDir, "node_modules", ...manifest.name.split("/"), "LICENSE");
     if (!existsSync(licensePath)) {
       throw new Error(`${manifest.name} package is missing LICENSE in installed tarball.`);
+    }
+    const readmePath = join(appDir, "node_modules", ...manifest.name.split("/"), "README.md");
+    if (!existsSync(readmePath)) {
+      throw new Error(`${manifest.name} package is missing README.md in installed tarball.`);
     }
   }
 

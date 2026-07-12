@@ -1,7 +1,14 @@
 {
   "name": "@elfui/runtime",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "description": "Runtime APIs and Web Components helpers for ElfUI.",
+  "keywords": [
+    "elfui",
+    "web-components",
+    "custom-elements",
+    "runtime",
+    "typescript"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bloom-lmh/elfui.git",
@@ -29,6 +36,8 @@
     }
   },
   "files": [
+    "README.md",
+    "LICENSE",
     "dist/*.js",
     "dist/*.js.map",
     "dist/*.d.ts",
@@ -39,8 +48,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@elfui/reactivity": "0.1.0-beta.1",
-    "@elfui/shared": "0.1.0-beta.1"
+    "@elfui/reactivity": "0.1.0-beta.2",
+    "@elfui/shared": "0.1.0-beta.2"
   },
   "license": "MIT"
 }

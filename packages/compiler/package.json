@@ -1,7 +1,14 @@
 {
   "name": "@elfui/compiler",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "description": "Macro component compiler for ElfUI.",
+  "keywords": [
+    "elfui",
+    "compiler",
+    "macro-components",
+    "template",
+    "typescript"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bloom-lmh/elfui.git",
@@ -37,6 +44,8 @@
     }
   },
   "files": [
+    "README.md",
+    "LICENSE",
     "dist/*.js",
     "dist/*.js.map",
     "dist/*.d.ts",
@@ -47,10 +56,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@elfui/compiler-template": "0.1.0-beta.1",
-    "@elfui/reactivity": "0.1.0-beta.1",
-    "@elfui/runtime": "0.1.0-beta.1",
-    "@elfui/shared": "0.1.0-beta.1",
+    "@elfui/compiler-template": "0.1.0-beta.2",
+    "@elfui/reactivity": "0.1.0-beta.2",
+    "@elfui/runtime": "0.1.0-beta.2",
+    "@elfui/shared": "0.1.0-beta.2",
     "typescript": "^5.9.3"
   },
   "license": "MIT"

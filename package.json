@@ -40,7 +40,7 @@
     "verify:publish": "pnpm build && node scripts/verify-publish.mjs",
     "changeset": "changeset",
     "release:status": "changeset status --output=output/release-status.json",
-    "release:version": "changeset version && pnpm --dir tools/create-elfui sync:versions",
+    "release:version": "changeset version",
     "release:publish": "changeset publish",
     "gen:tags": "node scripts/generate-tag-types.mjs",
     "verify": "pnpm verify:dist-boundary && pnpm verify:public-api && pnpm verify:api-boundary && pnpm verify:csp-boundary && pnpm format:check && pnpm lint && pnpm spellcheck && pnpm typecheck && pnpm test && pnpm typecheck:template",
