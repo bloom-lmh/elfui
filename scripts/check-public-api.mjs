@@ -136,6 +136,8 @@ const formatSnapshot = async (snapshot) => {
   return prettier.format(JSON.stringify(snapshot), { parser: "json" });
 };
 
+const normalizeLineEndings = (content) => content.replace(/\r\n/g, "\n");
+
 const diffEntries = (expected, actual) => {
   const messages = [];
   const entryNames = new Set([...Object.keys(expected.entries), ...Object.keys(actual.entries)]);
@@ -172,7 +174,7 @@ if (!existsSync(snapshotPath)) {
 }
 
 const currentContent = readFileSync(snapshotPath, "utf8");
-if (currentContent !== nextContent) {
+if (normalizeLineEndings(currentContent) !== normalizeLineEndings(nextContent)) {
   const expected = JSON.parse(currentContent);
   const messages = diffEntries(expected, snapshot);
   console.error("Public API snapshot changed.");
