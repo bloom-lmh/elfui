@@ -43,7 +43,7 @@
     "release:version": "changeset version",
     "release:publish": "changeset publish",
     "gen:tags": "node scripts/generate-tag-types.mjs",
-    "verify": "pnpm verify:dist-boundary && pnpm verify:public-api && pnpm verify:api-boundary && pnpm verify:csp-boundary && pnpm format:check && pnpm lint && pnpm spellcheck && pnpm typecheck && pnpm test && pnpm typecheck:template",
+    "verify": "pnpm verify:dist-boundary && pnpm verify:public-api && pnpm verify:api-boundary && pnpm verify:csp-boundary && pnpm format:check && pnpm lint && pnpm spellcheck && pnpm typecheck && pnpm build && pnpm test && node scripts/check-template-types.mjs",
     "prepare": "node ./scripts/prepare-husky.mjs"
   },
   "lint-staged": {
