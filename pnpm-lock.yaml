@@ -75,16 +75,16 @@ importers:
   packages/compiler:
     dependencies:
       '@elfui/compiler-template':
-        specifier: 0.1.0-beta.1
+        specifier: workspace:*
         version: link:../compiler-template
       '@elfui/reactivity':
-        specifier: 0.1.0-beta.1
+        specifier: workspace:*
         version: link:../reactivity
       '@elfui/runtime':
-        specifier: 0.1.0-beta.1
+        specifier: workspace:*
         version: link:../runtime
       '@elfui/shared':
-        specifier: 0.1.0-beta.1
+        specifier: workspace:*
         version: link:../shared
       typescript:
         specifier: ^5.9.3
@@ -93,34 +93,34 @@ importers:
   packages/compiler-template:
     dependencies:
       '@elfui/shared':
-        specifier: 0.1.0-beta.1
+        specifier: workspace:*
         version: link:../shared
 
   packages/elfui:
     dependencies:
       '@elfui/reactivity':
-        specifier: 0.1.0-beta.1
+        specifier: workspace:*
         version: link:../reactivity
       '@elfui/runtime':
-        specifier: 0.1.0-beta.1
+        specifier: workspace:*
         version: link:../runtime
       '@elfui/shared':
-        specifier: 0.1.0-beta.1
+        specifier: workspace:*
         version: link:../shared
 
   packages/reactivity:
     dependencies:
       '@elfui/shared':
-        specifier: 0.1.0-beta.1
+        specifier: workspace:*
         version: link:../shared
 
   packages/runtime:
     dependencies:
       '@elfui/reactivity':
-        specifier: 0.1.0-beta.1
+        specifier: workspace:*
         version: link:../reactivity
       '@elfui/shared':
-        specifier: 0.1.0-beta.1
+        specifier: workspace:*
         version: link:../shared
 
   packages/shared: {}
@@ -128,7 +128,7 @@ importers:
   packages/vite-plugin:
     dependencies:
       '@elfui/compiler':
-        specifier: 0.1.0-beta.1
+        specifier: workspace:*
         version: link:../compiler
 
 packages:

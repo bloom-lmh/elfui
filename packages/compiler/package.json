@@ -56,10 +56,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@elfui/compiler-template": "0.1.0-beta.2",
-    "@elfui/reactivity": "0.1.0-beta.2",
-    "@elfui/runtime": "0.1.0-beta.2",
-    "@elfui/shared": "0.1.0-beta.2",
+    "@elfui/compiler-template": "workspace:*",
+    "@elfui/reactivity": "workspace:*",
+    "@elfui/runtime": "workspace:*",
+    "@elfui/shared": "workspace:*",
     "typescript": "^5.9.3"
   },
   "license": "MIT"

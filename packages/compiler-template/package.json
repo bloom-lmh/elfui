@@ -45,7 +45,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@elfui/shared": "0.1.0-beta.2"
+    "@elfui/shared": "workspace:*"
   },
   "license": "MIT"
 }

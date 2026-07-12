@@ -53,9 +53,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@elfui/reactivity": "0.1.0-beta.2",
-    "@elfui/runtime": "0.1.0-beta.2",
-    "@elfui/shared": "0.1.0-beta.2"
+    "@elfui/reactivity": "workspace:*",
+    "@elfui/runtime": "workspace:*",
+    "@elfui/shared": "workspace:*"
   },
   "license": "MIT"
 }
