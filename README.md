@@ -7,7 +7,7 @@
 
 A compiler-first, fine-grained reactive component framework for native Web Components.
 
-[中文文档](https://github.com/bloom-lmh/elfui-docs/tree/main/zh) · [English docs](https://github.com/bloom-lmh/elfui-docs) · [GitHub](https://github.com/bloom-lmh/elfui)
+[中文文档](https://elfui-2igtsk.maozi.io/) · [English docs](https://elfui-docs.vercel.app/en/) · [GitHub](https://github.com/bloom-lmh/elfui)
 
 ## Why ElfUI
 
@@ -21,32 +21,6 @@ ElfUI borrows familiar template and composition ideas from Vue, fine-grained upd
 | Fine-grained reactivity   | A state change only wakes the bindings that read it.                  |
 | Standard Custom Elements  | Components work in an ElfUI app, an older page, or another framework. |
 | Optional runtime compiler | Macro is the default; Chain keeps runtime templates as an extension.  |
-
-### How the Macro path works
-
-```mermaid
-flowchart LR
-  subgraph build[Build time]
-    source[".ts / .tsx\ndefineHtml(html`...`)"] --> macro["Vite Macro compiler\nparse template and TypeScript scope"]
-    macro --> output["Compiled component factory\nstatic DOM blueprint + binding effects"]
-  end
-
-  subgraph runtime[Browser runtime]
-    output --> element["Custom Element connects\ncreate Shadow DOM and clone static DOM"]
-    state["useRef / useReactive"] --> effects["Fine-grained effects\none effect per dynamic point"]
-    element --> effects
-    effects --> text["text / attr / class / style"]
-    effects --> branch["v-if branch"]
-    effects --> list["keyed v-for list"]
-    text --> dom["Precise DOM update"]
-    branch --> dom
-    list --> dom
-  end
-
-  note["No VNode tree\nNo component re-render loop\nNo DOM patch pass"] -.-> effects
-```
-
-The compiler creates the static DOM once and places a small reactive effect at every dynamic point. When state changes, only the effects that read that state run; ElfUI does not re-render a component into a VNode tree and diff it afterward.
 
 ## Quick start
 

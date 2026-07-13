@@ -7,7 +7,7 @@
 
 一款面向原生 Web Components 的编译时细粒度响应式组件框架，专为组件而生。
 
-[中文文档](https://github.com/bloom-lmh/elfui-docs/tree/main/zh) · [English docs](https://github.com/bloom-lmh/elfui-docs) · [GitHub](https://github.com/bloom-lmh/elfui)
+[中文文档](https://elfui-2igtsk.maozi.io/) · [English docs](https://elfui-docs.vercel.app/en/) · [GitHub](https://github.com/bloom-lmh/elfui)
 
 ## 为什么是 ElfUI
 
@@ -21,32 +21,6 @@ ElfUI 借鉴 Vue 熟悉的模板与组合式心智、Solid 的细粒度更新、
 | 细粒度响应式            | 状态变化只唤醒真正读取它的绑定。               |
 | 标准 Custom Elements    | 组件可进入 ElfUI、旧页面或其他框架。           |
 | 可选 runtime compiler   | Macro 是主线，Chain 以扩展方式保留运行时模板。 |
-
-### Macro 主线如何工作
-
-```mermaid
-flowchart LR
-  subgraph build[构建期]
-    source[".ts / .tsx\ndefineHtml(html`...`)"] --> macro["Vite Macro 编译器\n解析模板与 TypeScript 作用域"]
-    macro --> output["编译后的组件工厂\n静态 DOM 蓝图 + 绑定 effect"]
-  end
-
-  subgraph runtime[浏览器运行时]
-    output --> element["Custom Element 连接\n创建 Shadow DOM 并克隆静态 DOM"]
-    state["useRef / useReactive"] --> effects["细粒度 effect\n每个动态点一个 effect"]
-    element --> effects
-    effects --> text["文本 / 属性 / class / style"]
-    effects --> branch["v-if 分支"]
-    effects --> list["带 key 的 v-for 列表"]
-    text --> dom["精确更新 DOM"]
-    branch --> dom
-    list --> dom
-  end
-
-  note["没有 VNode 树\n没有组件重渲染循环\n没有 DOM patch 阶段"] -.-> effects
-```
-
-编译器只创建一次静态 DOM，并在每个动态点放入一个很小的响应式 effect。状态变化时，只有读取该状态的 effect 会执行；ElfUI 不会把整个组件重新渲染成 VNode 树，再进行 diff 和 patch。
 
 ## 快速开始
 
