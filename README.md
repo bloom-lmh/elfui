@@ -1,15 +1,25 @@
-# ElfUI
+<p align="center">
+  <img src="https://raw.githubusercontent.com/bloom-lmh/elfui/main/assets/elfui-snowflake.png" width="156" alt="ElfUI snowflake logo">
+</p>
 
-[![npm beta](https://img.shields.io/npm/v/%40elfui/core/beta?label=%40elfui%2Fcore&color=16803c)](https://www.npmjs.com/package/@elfui/core)
-[![Web Components](https://img.shields.io/badge/platform-Web%20Components-0d8fda)](https://developer.mozilla.org/docs/Web/API/Web_components)
-[![TypeScript](https://img.shields.io/badge/language-TypeScript-3178c6)](https://www.typescriptlang.org/)
-[![License](https://img.shields.io/badge/license-MIT-8a8a8a)](./LICENSE)
+<h1 align="center">ElfUI</h1>
 
-A compiler-first, fine-grained reactive component framework for native Web Components.
+<p align="center">A compiler-first, fine-grained reactive component framework for native Web Components.</p>
 
-[中文文档](https://elfui-2igtsk.maozi.io/) · [English docs](https://elfui-docs.vercel.app/en/) · [GitHub](https://github.com/bloom-lmh/elfui)
+<p align="center">
+  <a href="https://elfui-2igtsk.maozi.io/">中文文档</a> ·
+  <a href="https://elfui-docs.vercel.app/en/">English docs</a> ·
+  <a href="https://github.com/bloom-lmh/elfui">GitHub</a>
+</p>
 
-## Why ElfUI
+<p align="center">
+  <a href="https://www.npmjs.com/package/@elfui/core"><img src="https://img.shields.io/npm/v/%40elfui/core/beta?label=%40elfui%2Fcore&color=16803c" alt="npm beta"></a>
+  <a href="https://developer.mozilla.org/docs/Web/API/Web_components"><img src="https://img.shields.io/badge/platform-Web%20Components-0d8fda" alt="Web Components"></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/language-TypeScript-3178c6" alt="TypeScript"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-8a8a8a" alt="MIT License"></a>
+</p>
+
+## ✨ Why ElfUI
 
 ElfUI borrows familiar template and composition ideas from Vue, fine-grained updates from Solid, and platform-first Custom Elements from Lit. It is not trying to replace them. It is a different answer for teams that want a modern component framework while keeping Web Components at the center.
 
@@ -22,7 +32,7 @@ ElfUI borrows familiar template and composition ideas from Vue, fine-grained upd
 | Standard Custom Elements  | Components work in an ElfUI app, an older page, or another framework. |
 | Optional runtime compiler | Macro is the default; Chain keeps runtime templates as an extension.  |
 
-## Quick start
+## 🚀 Quick start
 
 The official scaffold is the recommended path. It creates a Vite project and can add Router, Vitest, ESLint, Prettier, and your preferred stylesheet setup.
 
@@ -47,7 +57,7 @@ import { elfuiMacroPlugin } from "@elfui/vite-plugin";
 export default defineConfig({ plugins: [elfuiMacroPlugin()] });
 ```
 
-## TypeScript components, not special files
+## 🧩 TypeScript components, not special files
 
 An exported `defineHtml(html\`...\`)` is a component. Top-level TypeScript is its setup logic, and the compiler turns the template into direct DOM bindings.
 
@@ -84,7 +94,7 @@ import App from "./App";
 createApp(App).mount("#app");
 ```
 
-## Templates and directives
+## 📝 Templates and directives
 
 | Value source           | Syntax      | Example                          |
 | ---------------------- | ----------- | -------------------------------- |
@@ -118,7 +128,7 @@ Use `${...}` for a value owned by TypeScript. Use `{{ ... }}` only when the comp
 
 Use `defineDirective()` for a component-local DOM behavior, or `app.directive()` to register one for an application.
 
-## Reactivity and lifecycle
+## ⚡ Reactivity and lifecycle
 
 | Need                  | API                             |
 | --------------------- | ------------------------------- |
@@ -146,7 +156,7 @@ useEffect(() => {
 | Unmount          | `onBeforeUnmount`, `onUnmount`                    |
 | Cache and errors | `onActivated`, `onDeactivated`, `onErrorCaptured` |
 
-## Component collaboration and composables
+## 🧬 Component collaboration and composables
 
 | Job                              | API                                                 |
 | -------------------------------- | --------------------------------------------------- |
@@ -162,7 +172,7 @@ useEffect(() => {
 
 `useExtend` and `useVariant` are component reuse tools, not class inheritance. They preserve the base component contract while producing a deliberate new component or variant.
 
-## Built-ins and styling boundaries
+## 🎨 Built-ins and styling boundaries
 
 `Teleport` moves overlay content to a target outside the current component tree:
 
@@ -196,7 +206,7 @@ export const ElfButton = defineHtml(html`<button part="control"><slot></slot></b
 
 Use `:class=${...}` with strings, arrays, or objects; use `:style=${...}` for inline style objects and CSS variables. `theme` / `useTheme` handle theme overrides. Shadow DOM keeps internals private, while `part` and `::part()` expose an intentional styling boundary for consumers.
 
-## Application, router, and tooling
+## 🛠️ Application, router, and tooling
 
 ```ts
 import { createApp } from "@elfui/core";
@@ -224,7 +234,7 @@ Create it with `createRouter({ mode, routes })`, import its module before mounti
 
 `@elfui/vite-plugin` compiles Macro components, owns the build-time `tagPrefix` option, and can enable strict diagnostics plus template type checking. [Language Tools](https://github.com/bloom-lmh/elfui-language-tools) keeps editor completion, navigation, diagnostics, and formatting outside the runtime.
 
-## Compared with familiar ideas
+## 🧭 Compared with familiar ideas
 
 | Framework | ElfUI takes                              | Different choice                                            |
 | --------- | ---------------------------------------- | ----------------------------------------------------------- |
@@ -234,7 +244,7 @@ Create it with `createRouter({ mode, routes })`, import its module before mounti
 
 Local jsdom micro-benchmarks are a health signal, not a universal ranking. In the current harness, ElfUI's median is **4.56 ms** for 200 hello mounts and **8.72 ms** for a 500 x 8 table update. Reproduce the baselines with `pnpm benchmark` and `pnpm benchmark:browser`.
 
-## Ecosystem, beta, and license
+## 🌱 Ecosystem, beta, and license
 
 | Project                                                                  | Role                                                 |
 | ------------------------------------------------------------------------ | ---------------------------------------------------- |

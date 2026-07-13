@@ -1,15 +1,25 @@
-# ElfUI
+<p align="center">
+  <img src="https://raw.githubusercontent.com/bloom-lmh/elfui/main/assets/elfui-snowflake.png" width="156" alt="ElfUI 雪花标志">
+</p>
 
-[![npm beta](https://img.shields.io/npm/v/%40elfui/core/beta?label=%40elfui%2Fcore&color=16803c)](https://www.npmjs.com/package/@elfui/core)
-[![Web Components](https://img.shields.io/badge/platform-Web%20Components-0d8fda)](https://developer.mozilla.org/docs/Web/API/Web_components)
-[![TypeScript](https://img.shields.io/badge/language-TypeScript-3178c6)](https://www.typescriptlang.org/)
-[![License](https://img.shields.io/badge/license-MIT-8a8a8a)](./LICENSE)
+<h1 align="center">ElfUI</h1>
 
-一款面向原生 Web Components 的编译时细粒度响应式组件框架，专为组件而生。
+<p align="center">一款面向原生 Web Components 的编译时细粒度响应式组件框架，专为组件而生。</p>
 
-[中文文档](https://elfui-2igtsk.maozi.io/) · [English docs](https://elfui-docs.vercel.app/en/) · [GitHub](https://github.com/bloom-lmh/elfui)
+<p align="center">
+  <a href="https://elfui-2igtsk.maozi.io/">中文文档</a> ·
+  <a href="https://elfui-docs.vercel.app/en/">English docs</a> ·
+  <a href="https://github.com/bloom-lmh/elfui">GitHub</a>
+</p>
 
-## 为什么是 ElfUI
+<p align="center">
+  <a href="https://www.npmjs.com/package/@elfui/core"><img src="https://img.shields.io/npm/v/%40elfui/core/beta?label=%40elfui%2Fcore&color=16803c" alt="npm beta"></a>
+  <a href="https://developer.mozilla.org/docs/Web/API/Web_components"><img src="https://img.shields.io/badge/platform-Web%20Components-0d8fda" alt="Web Components"></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/language-TypeScript-3178c6" alt="TypeScript"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-8a8a8a" alt="MIT License"></a>
+</p>
+
+## ✨ 为什么是 ElfUI
 
 ElfUI 借鉴 Vue 熟悉的模板与组合式心智、Solid 的细粒度更新、Lit 对 Web Components 平台的尊重，但并不试图替代它们。它是在原生组件模型处于中心时，对现代组件开发的一种解法。
 
@@ -22,7 +32,7 @@ ElfUI 借鉴 Vue 熟悉的模板与组合式心智、Solid 的细粒度更新、
 | 标准 Custom Elements    | 组件可进入 ElfUI、旧页面或其他框架。           |
 | 可选 runtime compiler   | Macro 是主线，Chain 以扩展方式保留运行时模板。 |
 
-## 快速开始
+## 🚀 快速开始
 
 官方脚手架是推荐入口。它会创建 Vite 项目，并可按需加入 Router、Vitest、ESLint、Prettier 和样式方案。
 
@@ -47,7 +57,7 @@ import { elfuiMacroPlugin } from "@elfui/vite-plugin";
 export default defineConfig({ plugins: [elfuiMacroPlugin()] });
 ```
 
-## TS 文件组件
+## 🧩 TS 文件组件
 
 导出的 `defineHtml(html\`...\`)` 就是组件。文件顶层的 TypeScript 是 setup 逻辑，编译器会把模板变成直接 DOM 绑定。
 
@@ -84,7 +94,7 @@ import App from "./App";
 createApp(App).mount("#app");
 ```
 
-## 模板与指令
+## 📝 模板与指令
 
 | 值来自哪里      | 写法        | 示例                           |
 | --------------- | ----------- | ------------------------------ |
@@ -118,7 +128,7 @@ TypeScript 拥有的值使用 `${...}`；只有编译器创造局部模板作用
 
 `defineDirective()` 注册组件局部 DOM 行为，`app.directive()` 注册当前应用的全局指令。
 
-## 响应式与生命周期
+## ⚡ 响应式与生命周期
 
 | 需求           | API                             |
 | -------------- | ------------------------------- |
@@ -146,7 +156,7 @@ useEffect(() => {
 | 卸载         | `onBeforeUnmount`、`onUnmount`                    |
 | 缓存与错误   | `onActivated`、`onDeactivated`、`onErrorCaptured` |
 
-## 组件协作与组合式函数
+## 🧬 组件协作与组合式函数
 
 | 工作               | API                                                 |
 | ------------------ | --------------------------------------------------- |
@@ -162,7 +172,7 @@ useEffect(() => {
 
 `useExtend` 和 `useVariant` 是组件复用工具，不是类继承。它们保留基础组件契约，再明确地产出一个新组件或变体。
 
-## 内置组件与样式边界
+## 🎨 内置组件与样式边界
 
 `Teleport` 把弹层内容移动到当前组件树外的目标节点：
 
@@ -196,7 +206,7 @@ export const ElfButton = defineHtml(html`<button part="control"><slot></slot></b
 
 `:class=${...}` 支持字符串、数组和对象；`:style=${...}` 支持内联样式对象与 CSS 变量。`theme` / `useTheme` 管理主题覆盖。Shadow DOM 保护组件内部，`part` 与 `::part()` 则为使用者开放有意设计的样式边界。
 
-## 应用、路由与工具链
+## 🛠️ 应用、路由与工具链
 
 ```ts
 import { createApp } from "@elfui/core";
@@ -224,7 +234,7 @@ pnpm add @elfui/router
 
 `@elfui/vite-plugin` 负责编译 Macro 组件，管理构建期 `tagPrefix`，并可开启严格诊断与模板类型检查。[Language Tools](https://github.com/bloom-lmh/elfui-language-tools) 把补全、跳转、诊断与格式化留在编辑器侧，而不是带入运行时。
 
-## 与熟悉方案的关系
+## 🧭 与熟悉方案的关系
 
 | 框架  | ElfUI 借鉴                  | 不同选择                                         |
 | ----- | --------------------------- | ------------------------------------------------ |
@@ -234,7 +244,7 @@ pnpm add @elfui/router
 
 本地 jsdom 微基准是健康信号，不是通用排名。当前测试中，ElfUI 的中位数为：200 次 hello mount **4.56 ms**、500 x 8 表格更新 **8.72 ms**。可通过 `pnpm benchmark` 与 `pnpm benchmark:browser` 复现基线。
 
-## 生态、Beta 与许可证
+## 🌱 生态、Beta 与许可证
 
 | 项目                                                                     | 职责                               |
 | ------------------------------------------------------------------------ | ---------------------------------- |
