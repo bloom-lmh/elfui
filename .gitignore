@@ -2,6 +2,7 @@ node_modules/
 coverage/
 output/
 .claude/
+.local-archive/
 packages/*/dist/
 extensions/*/dist/
 packages/*/tsconfig.tsbuildinfo

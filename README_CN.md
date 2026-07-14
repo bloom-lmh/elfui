@@ -4,11 +4,11 @@
 
 <h1 align="center">ElfUI</h1>
 
-<p align="center">一款面向原生 Web Components 的编译时细粒度响应式组件框架，专为组件而生。</p>
+<p align="center">一款面向原生 Web Components 的编译时细粒度响应式框架。</p>
 
 <p align="center">
-  <a href="https://elfui-2igtsk.maozi.io/"><strong>elfui-2igtsk.maozi.io</strong></a> ·
-  <a href="https://elfui-docs.vercel.app/en/">English docs</a> ·
+  <a href="https://elfui-2igtsk.maozi.io/">中文官网</a> ·
+  <a href="https://elfui-docs.vercel.app/en/">English Docs</a> ·
   <a href="https://github.com/bloom-lmh/elfui">GitHub</a>
 </p>
 
@@ -19,22 +19,22 @@
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-8a8a8a" alt="MIT License"></a>
 </p>
 
-## ✨ 为什么是 ElfUI
+ElfUI 使用普通 TypeScript 文件定义组件，将模板编译为直接 DOM 更新，并输出标准 Custom Elements。它借鉴 Vue 的模板与组合式开发体验、Solid 的细粒度更新思路，以及 Lit 对 Web Components 平台的尊重。
 
-ElfUI 借鉴 Vue 熟悉的模板与组合式心智、Solid 的细粒度更新、Lit 对 Web Components 平台的尊重，但并不试图替代它们。它是在原生组件模型处于中心时，对现代组件开发的一种解法。
+> TypeScript in, Custom Elements out.
 
-| 选择                    | 带来的结果                                     |
-| ----------------------- | ---------------------------------------------- |
-| `.ts` / `.tsx` 组件     | 不需要 `.vue` 文件，也不强制 JSX。             |
-| 编译期模板              | 构建时获得诊断，Macro 组件更适合严格 CSP。     |
-| 无 VNode、无 patch 循环 | 动态点直接更新 DOM。                           |
-| 细粒度响应式            | 状态变化只唤醒真正读取它的绑定。               |
-| 标准 Custom Elements    | 组件可进入 ElfUI、旧页面或其他框架。           |
-| 可选 runtime compiler   | Macro 是主线，Chain 以扩展方式保留运行时模板。 |
+## 🧭 环境要求
+
+| 工具    | 版本                      |
+| ------- | ------------------------- |
+| Node.js | `^20.19.0` 或 `>=22.12.0` |
+| pnpm    | `>=10.28.0`（推荐）       |
+
+也可以使用 npm、Yarn 或 Bun。本文示例统一使用 pnpm。
 
 ## 🚀 快速开始
 
-官方脚手架是推荐入口。它会创建 Vite 项目，并可按需加入 Router、Vitest、ESLint、Prettier 和样式方案。
+推荐使用官方脚手架创建项目并安装依赖：
 
 ```bash
 pnpm create elfui@beta my-app --install
@@ -42,13 +42,46 @@ cd my-app
 pnpm dev
 ```
 
-> **推荐：** 安装 [ElfUI Language Tools](https://marketplace.visualstudio.com/items?itemName=SWUST-WEBLAB-LMH.elfui-language-features)，在 VS Code 中获得模板语法高亮、补全、诊断、跳转与格式化支持。
-
-已有 Vite 项目也可以手动接入：
+脚手架会进入交互模式，可选择 TypeScript、Macro 组件、样式方案、Router、测试、代码规范与 CI。需要直接采用推荐配置时：
 
 ```bash
-pnpm add @elfui/core
-pnpm add -D @elfui/vite-plugin
+pnpm create elfui@beta my-app --default --install
+```
+
+建议安装 [ElfUI Language Tools](https://marketplace.visualstudio.com/items?itemName=SWUST-WEBLAB-LMH.elfui-language-features)，获得模板高亮、补全、诊断、跳转与格式化支持。
+
+## 🗂️ 仓库结构（Monorepo）
+
+本仓库使用 pnpm workspace，主要目录如下：
+
+| 路径                                                       | 说明                                                    |
+| ---------------------------------------------------------- | ------------------------------------------------------- |
+| [`packages/elfui`](packages/elfui)                         | 用户主入口（`@elfui/core`）                             |
+| [`packages/reactivity`](packages/reactivity)               | 细粒度响应式系统（`@elfui/reactivity`）                 |
+| [`packages/runtime`](packages/runtime)                     | 组件运行时与 Web Components helpers（`@elfui/runtime`） |
+| [`packages/compiler-template`](packages/compiler-template) | HTML 模板解析器（`@elfui/compiler-template`）           |
+| [`packages/compiler`](packages/compiler)                   | Macro 组件编译器（`@elfui/compiler`）                   |
+| [`packages/vite-plugin`](packages/vite-plugin)             | Vite 编译集成（`@elfui/vite-plugin`）                   |
+| [`packages/shared`](packages/shared)                       | 内部共享工具（`@elfui/shared`）                         |
+
+## ✨ 特性
+
+- **TS 文件组件**：不需要 `.vue` 文件，也不强制使用 JSX。
+- **编译期模板**：构建时分析模板、生成诊断并输出直接 DOM 操作。
+- **细粒度响应式**：每个动态点只订阅自己读取的状态。
+- **无 VNode / patch**：状态变化直接更新对应 DOM，不运行虚拟 DOM diff。
+- **标准 Web Components**：输出 Custom Elements，可用于原生页面或其他框架。
+- **Shadow DOM 边界**：组件内部可隔离，并通过 CSS 变量与 `::part()` 开放样式入口。
+- **完整组件能力**：Props、Emits、Model、Slots、生命周期、指令、插件和内置组件。
+- **独立生态包**：Router、UI Kit、Language Tools 与 Chain 扩展按需安装。
+
+## 📦 安装
+
+新项目优先使用脚手架。已有 Vite 项目可以手动安装：
+
+```bash
+pnpm add @elfui/core@beta
+pnpm add -D @elfui/vite-plugin@beta
 ```
 
 ```ts
@@ -56,12 +89,64 @@ pnpm add -D @elfui/vite-plugin
 import { defineConfig } from "vite";
 import { elfuiMacroPlugin } from "@elfui/vite-plugin";
 
-export default defineConfig({ plugins: [elfuiMacroPlugin()] });
+export default defineConfig({
+  plugins: [elfuiMacroPlugin()]
+});
 ```
 
-## 🧩 TS 文件组件
+Router 是独立包，需要单独安装：
 
-导出的 `defineHtml(html\`...\`)` 就是组件。文件顶层的 TypeScript 是 setup 逻辑，编译器会把模板变成直接 DOM 绑定。
+```bash
+pnpm add @elfui/router@beta
+```
+
+## 🧩 第一个组件
+
+```ts
+// Counter.ts
+import { css, defineHtml, defineStyle, html, useRef } from "@elfui/core";
+
+defineStyle(css`
+  :host {
+    display: inline-block;
+  }
+
+  button {
+    padding: 8px 12px;
+  }
+`);
+
+const count = useRef(0);
+const increment = (): void => count.set(count.peek() + 1);
+
+export default defineHtml(html` <button @click=${increment}>点击了 ${count} 次</button> `);
+```
+
+使用 `createApp` 注册并挂载根组件，不需要在 `index.html` 手写自定义元素标签：
+
+```ts
+// main.ts
+import { createApp } from "@elfui/core";
+import Counter from "./Counter";
+
+createApp(Counter).mount("#app");
+```
+
+## 🏗️ 组件结构
+
+一个 Macro 组件由普通 TypeScript 顶层逻辑和一个导出的 `defineHtml(html\`...\`)` 组成：
+
+| API               | 用途                                |
+| ----------------- | ----------------------------------- |
+| `defineProps()`   | 声明外部属性与类型                  |
+| `defineEmits()`   | 声明组件事件                        |
+| `defineModel()`   | 声明 `v-model` 双向绑定             |
+| `defineSlots()`   | 声明插槽契约                        |
+| `defineOptions()` | 配置 Shadow DOM、表单控件等组件选项 |
+| `defineStyle()`   | 声明组件样式                        |
+| `defineExpose()`  | 向父组件暴露实例方法                |
+| `useComponents()` | 注册当前模板依赖的局部组件          |
+| `defineHtml()`    | 定义并导出组件模板                  |
 
 ```ts
 import {
@@ -74,189 +159,277 @@ import {
   html
 } from "@elfui/core";
 
-const props = defineProps<{ label: string }>(); // 类型化输入
-const emit = defineEmits<{ save: [] }>(); // 类型化 Custom Event
-const value = defineModel<string>({ default: "" }); // v-model 契约
-defineSlots<{ default: () => unknown }>(); // 插槽契约
-defineOptions({ shadow: "open" }); // 组件选项
-// 有局部组件依赖时，在这里写 useComponents(Child)。
+const props = defineProps<{ label: string }>();
+const emit = defineEmits<{ save: [value: string] }>();
+const value = defineModel<string>({ default: "" });
+
+defineSlots<{ default: () => unknown }>();
+defineOptions({ shadow: "open" });
 
 export const SaveField = defineHtml(html`
+  <label>${props.label}</label>
   <input .value=${value} />
-  <button @click=${() => emit("save")}>${props.label}</button>
+  <button @click=${() => emit("save", value.value)}>保存</button>
+  <slot></slot>
 `);
 ```
 
-根组件不必在 `index.html` 手写标签：
+## ⚡ 响应式
+
+`useRef` 用于基本类型或需要整体替换的值，`useReactive` 用于对象、数组与集合：
 
 ```ts
-import { createApp } from "@elfui/core";
-import App from "./App";
+import { useComputed, useEffect, useReactive, useRef } from "@elfui/core";
 
-createApp(App).mount("#app");
+const count = useRef(1);
+const user = useReactive({ name: "Elf", online: true });
+const doubled = useComputed(() => count.value * 2);
+
+useEffect(() => {
+  document.title = `${user.name}: ${doubled.value}`;
+});
 ```
 
-## 📝 模板与指令
+| API                         | 用途                                          |
+| --------------------------- | --------------------------------------------- |
+| `useRef()`                  | 创建带 `.value`、`.set()` 与 `.peek()` 的 Ref |
+| `useReactive()`             | 创建深度响应式对象、数组、Map 或 Set          |
+| `useComputed()`             | 创建惰性派生状态                              |
+| `useEffect()`               | 自动收集依赖并执行副作用与清理函数            |
+| `watch()` / `watchEffect()` | 精确监听或自动监听响应式依赖                  |
 
-| 值来自哪里      | 写法        | 示例                           |
-| --------------- | ----------- | ------------------------------ |
-| 静态 HTML       | 字符串      | `class="panel"`                |
-| 外层 TypeScript | `${...}`    | `${count}`、`@click=${save}`   |
-| 模板局部作用域  | `{{ ... }}` | `v-for` 中的 `{{ item.name }}` |
+## 🔄 组件生命周期
 
 ```ts
-import { defineHtml, html, useReactive, useRef } from "@elfui/core";
+import { onMount, onUnmount } from "@elfui/core";
 
+onMount(() => {
+  console.log("组件已挂载");
+});
+
+onUnmount(() => {
+  console.log("组件已卸载");
+});
+```
+
+| 阶段     | Hooks                          |
+| -------- | ------------------------------ |
+| 挂载前后 | `onBeforeMount`、`onMount`     |
+| 更新前后 | `onBeforeUpdate`、`onUpdated`  |
+| 卸载前后 | `onBeforeUnmount`、`onUnmount` |
+| 属性变化 | `onAttributeChanged`           |
+| 缓存激活 | `onActivated`、`onDeactivated` |
+| 错误捕获 | `onErrorCaptured`              |
+
+生命周期函数应在组件顶层同步调用。事件监听、Observer 与其他需要清理的资源，可以配合 `useEventListener` 或 `onUnmount` 管理。
+
+## 🎨 样式
+
+可以直接使用 `css` 模板，也可以像脚手架生成的项目一样导入独立样式文件：
+
+```ts
+import { defineStyle } from "@elfui/core";
+import styles from "./Button.scss?inline";
+
+defineStyle(styles);
+```
+
+Shadow DOM 隔离组件内部样式。组件可以使用 CSS 自定义属性接收主题值，并通过 `part` 开放可控的外部样式入口：
+
+```ts
+export const Button = defineHtml(html` <button part="control"><slot></slot></button> `);
+```
+
+```css
+elf-button {
+  --button-color: #16803c;
+}
+
+elf-button::part(control) {
+  font-weight: 600;
+}
+```
+
+`:class=${...}` 支持字符串、数组和对象，`:style=${...}` 支持样式对象与 CSS 变量。
+
+## 🧷 插槽 Slot
+
+ElfUI 基于标准 Web Components 插槽模型，支持默认插槽与具名插槽：
+
+```ts
+export const Panel = defineHtml(html`
+  <header><slot name="title"></slot></header>
+  <section><slot></slot></section>
+`);
+```
+
+```html
+<elf-panel>
+  <h2 slot="title">标题</h2>
+  <p>默认插槽内容</p>
+</elf-panel>
+```
+
+需要由父组件消费子组件数据时，可使用 `defineSlots()` 与 `useScopedSlot()` 声明和读取作用域插槽。
+
+## 📝 模板表达式
+
+ElfUI 模板里有三种值来源：
+
+| 值来源                 | 写法        | 示例                           |
+| ---------------------- | ----------- | ------------------------------ |
+| 静态 HTML              | 普通字符串  | `class="panel"`                |
+| 外层 TypeScript 作用域 | `${...}`    | `${count}`、`@click=${save}`   |
+| 模板局部作用域         | `{{ ... }}` | `v-for` 中的 `{{ item.name }}` |
+
+```ts
 const open = useRef(true);
-const items = useReactive([{ id: "elf", name: "ElfUI" }]);
+const items = useReactive([
+  { id: 1, name: "Macro" },
+  { id: 2, name: "Web Components" }
+]);
 
-export const Menu = defineHtml(html`
+export const FeatureList = defineHtml(html`
   <button @click=${() => open.set(!open.peek())}>切换</button>
-  <ul v-if=${open}>
+  <ul v-if=${open} :class=${{ active: open }}>
     <li v-for="item in items" :key="item.id">{{ item.name }}</li>
   </ul>
 `);
 ```
 
-TypeScript 拥有的值使用 `${...}`；只有编译器创造局部模板作用域时，例如 `v-for` 和作用域插槽，才使用 `{{ ... }}`。
+`${...}` 消费 TypeScript 文件中的值；`{{ ... }}` 只用于 `v-for` 和作用域插槽等由编译器创建的局部变量。
 
-| 内置指令          | 用途                            |
-| ----------------- | ------------------------------- |
-| `v-if` / `v-else` | 创建或移除分支                  |
-| `v-for`           | 渲染带 key 的列表               |
-| `v-show`          | 切换显示但不卸载                |
-| `v-model`         | 绑定表单与组件值                |
-| 事件修饰符        | `.stop`、`.prevent`、`.once` 等 |
+## 🪄 指令
 
-`defineDirective()` 注册组件局部 DOM 行为，`app.directive()` 注册当前应用的全局指令。
+| 指令                            | 用途                   |
+| ------------------------------- | ---------------------- |
+| `v-if` / `v-else-if` / `v-else` | 创建或移除条件分支     |
+| `v-for`                         | 渲染带 key 的列表      |
+| `v-show`                        | 切换显示状态但保留 DOM |
+| `v-model`                       | 绑定表单值或组件 Model |
+| `v-once`                        | 只渲染一次             |
+| `v-memo`                        | 按依赖缓存模板区域     |
 
-## ⚡ 响应式与生命周期
+局部自定义指令使用 `defineDirective()`，应用级指令使用 `app.directive()` 注册。
 
-| 需求           | API                             |
-| -------------- | ------------------------------- |
-| 基本类型状态   | `useRef()`                      |
-| 对象或数组状态 | `useReactive()`                 |
-| 派生状态       | `useComputed()`                 |
-| 自动副作用     | `useEffect()` / `watchEffect()` |
+## 🔔 事件
+
+原生事件使用 `@事件名=${handler}`：
 
 ```ts
-import { useComputed, useEffect, useRef } from "@elfui/core";
+const submit = (event: SubmitEvent): void => {
+  event.preventDefault();
+};
 
-const quantity = useRef(1);
-const price = useRef(16);
-const total = useComputed(() => quantity.value * price.value);
-
-useEffect(() => {
-  document.title = `总价：${total.value}`;
-});
-```
-
-| 生命周期分组 | 钩子                                              |
-| ------------ | ------------------------------------------------- |
-| 挂载         | `onBeforeMount`、`onMount`                        |
-| 更新         | `onBeforeUpdate`、`onUpdated`                     |
-| 卸载         | `onBeforeUnmount`、`onUnmount`                    |
-| 缓存与错误   | `onActivated`、`onDeactivated`、`onErrorCaptured` |
-
-## 🧬 组件协作与组合式函数
-
-| 工作               | API                                                 |
-| ------------------ | --------------------------------------------------- |
-| 父传子与子通知父   | `defineProps`、`defineEmits`                        |
-| 共享值             | `defineModel`、`v-model`                            |
-| 内容投射           | 默认和具名 `<slot>`                                 |
-| 父组件渲染子数据   | `defineSlots`、`useScopedSlot`                      |
-| 跨树上下文         | `provide`、`inject`                                 |
-| 暴露实例方法       | `defineExpose`、`useTemplateRef`                    |
-| 扩展或定制组件     | `useExtend`、`useVariant`                           |
-| 编写表单组件       | `useFormControlContext`、`createFormControlContext` |
-| 向宿主元素反射状态 | `useHostClass`、`useHostAttr`、`useHostCssVar`      |
-
-`useExtend` 和 `useVariant` 是组件复用工具，不是类继承。它们保留基础组件契约，再明确地产出一个新组件或变体。
-
-## 🎨 内置组件与样式边界
-
-`Teleport` 把弹层内容移动到当前组件树外的目标节点：
-
-```html
-<Teleport to="body">
-  <div class="dialog">弹窗内容</div>
-</Teleport>
-```
-
-| 内置组件                         | 适用场景             |
-| -------------------------------- | -------------------- |
-| `Transition` / `TransitionGroup` | 进入、离开与列表动画 |
-| `KeepAlive`                      | 保留非激活组件状态   |
-| `Suspense`                       | 异步 fallback 边界   |
-| 动态组件                         | 运行时切换组件       |
-
-```ts
-import { css, defineHtml, defineStyle, html } from "@elfui/core";
-
-defineStyle(css`
-  :host {
-    display: inline-block;
-  }
-  button {
-    padding: 8px 12px;
-  }
+export const Form = defineHtml(html`
+  <form @submit=${submit}>
+    <button type="submit">提交</button>
+  </form>
 `);
-
-export const ElfButton = defineHtml(html`<button part="control"><slot></slot></button>`);
 ```
 
-`:class=${...}` 支持字符串、数组和对象；`:style=${...}` 支持内联样式对象与 CSS 变量。`theme` / `useTheme` 管理主题覆盖。Shadow DOM 保护组件内部，`part` 与 `::part()` 则为使用者开放有意设计的样式边界。
+模板支持 `.stop`、`.prevent`、`.once`、`.capture`、`.passive` 等事件修饰符。组件事件使用 `defineEmits()` 声明，最终以标准 Custom Event 对外派发。
 
-## 🛠️ 应用、路由与工具链
+## 🚦 应用
+
+`createApp()` 创建彼此隔离的应用实例。每个实例拥有独立的配置、插件、全局组件、指令和依赖注入上下文：
 
 ```ts
 import { createApp } from "@elfui/core";
 import App from "./App";
 import { Button } from "./Button";
 
-const app = createApp(App);
+const app = createApp(App, { title: "ElfUI" });
 
 app.component(Button);
-app.directive("focus", { mounted: (el) => (el as HTMLElement).focus() });
-app.use((currentApp) => {
-  currentApp.config.globalProperties.appName = "Console";
+app.directive("focus", {
+  mounted: (element) => (element as HTMLElement).focus()
 });
+app.provide("apiBase", "/api");
 app.config.errorHandler = (error) => console.error(error);
 app.mount("#app");
 ```
 
-路由有意保持独立：
+同一页面可以创建多个 App；每个 App 只能挂载一次，并可通过 `app.unmount()` 卸载。
 
-```bash
-pnpm add @elfui/router
+## 🧱 内置组件
+
+| 能力                             | 用途                               |
+| -------------------------------- | ---------------------------------- |
+| `Teleport`                       | 将弹层内容渲染到组件树外的目标节点 |
+| `Transition` / `TransitionGroup` | 处理元素和列表的进入、离开动画     |
+| `KeepAlive`                      | 缓存暂时离开的组件实例             |
+| `Suspense`                       | 管理异步内容、fallback 与错误边界  |
+
+## 🧬 组合式函数
+
+| 能力                               | 用途                                   |
+| ---------------------------------- | -------------------------------------- |
+| `useTemplateRef()`                 | 类型化访问模板元素或组件实例           |
+| `useHostAttr()` / `useHostClass()` | 将响应式状态反射到 Custom Element Host |
+| `useExtend()` / `useVariant()`     | 扩展基础组件或创建组件变体             |
+| `useFormControlContext()`          | 编写可参与原生表单的组件               |
+
+完整说明与示例请查看[中文官网](https://elfui-2igtsk.maozi.io/)或[英文官网](https://elfui-docs.vercel.app/en/)。
+
+## 📐 标准组件模式
+
+建议组件目录保持简单：
+
+```text
+Button/
+├─ index.ts
+├─ style.scss
+└─ types.ts       # 仅在公共类型较多时创建
 ```
 
-使用 `createRouter({ mode, routes })` 创建 router，在挂载应用前导入 router 模块，并在模板中使用 `<elf-link>` 与 `<elf-router-view>`。脚手架使用 `--router` 会自动加入它。
+推荐顺序：
 
-`@elfui/vite-plugin` 负责编译 Macro 组件，管理构建期 `tagPrefix`，并可开启严格诊断与模板类型检查。[Language Tools](https://github.com/bloom-lmh/elfui-language-tools) 把补全、跳转、诊断与格式化留在编辑器侧，而不是带入运行时。
+1. 导入依赖与样式。
+2. 使用 `defineProps`、`defineEmits`、`defineModel` 声明组件契约。
+3. 创建响应式状态、计算属性与事件函数。
+4. 注册生命周期、Host helpers 和局部组件。
+5. 最后导出 `defineHtml(html\`...\`)`。
 
-## 🧭 与熟悉方案的关系
+## 🌐 浏览器支持
 
-| 框架  | ElfUI 借鉴                  | 不同选择                                         |
-| ----- | --------------------------- | ------------------------------------------------ |
-| Vue   | 模板与组合式易用性          | Web Components、编译期 DOM 绑定、无 VNode 运行时 |
-| Solid | 细粒度响应式更新            | HTML 模板与 Custom Elements，而不是 JSX          |
-| Lit   | 平台优先的组件与 Shadow DOM | 内置响应式模型与编译器指令                       |
+ElfUI 输出 ES2022 和标准 Custom Elements，需要浏览器支持：
 
-本地 jsdom 微基准是健康信号，不是通用排名。当前测试中，ElfUI 的中位数为：200 次 hello mount **4.56 ms**、500 x 8 表格更新 **8.72 ms**。可通过 `pnpm benchmark` 与 `pnpm benchmark:browser` 复现基线。
+- Custom Elements v1
+- Shadow DOM v1
+- ES Modules 与 ES2022
 
-## 🌱 生态、Beta 与许可证
+建议使用当前仍受支持的 Chrome、Edge、Firefox 与 Safari。更旧的浏览器需要由应用构建工具降级语法并按需提供 Web Components polyfill。
 
-| 项目                                                                     | 职责                               |
-| ------------------------------------------------------------------------ | ---------------------------------- |
-| [`@elfui/core`](https://www.npmjs.com/package/@elfui/core)               | Macro 组件、App API 与常用框架能力 |
-| [`@elfui/vite-plugin`](https://www.npmjs.com/package/@elfui/vite-plugin) | Vite Macro 编译集成                |
-| [ElfUI Router](https://github.com/bloom-lmh/elfui-router)                | 独立路由包                         |
-| [Create ElfUI](https://github.com/bloom-lmh/create-elfui)                | 官方 Vite 项目脚手架               |
-| [ElfUI Kit](https://github.com/bloom-lmh/elfui-kit)                      | 官方 UI 组件库                     |
-| [Extensions](https://github.com/bloom-lmh/elfui-extensions)              | Chain 等可选扩展                   |
-| [Language Tools](https://github.com/bloom-lmh/elfui-language-tools)      | VS Code 插件与语言服务             |
-| [Docs](https://github.com/bloom-lmh/elfui-docs)                          | 指南与 API 参考                    |
+## 🌱 生态
 
-**Beta 主线：** Macro 组件加 Vite。**扩展路线：** Chain 用于运行时模板、旧页面和无构建场景。**许可证：** [MIT](./LICENSE)。
+| 项目                                                                     | 说明                         |
+| ------------------------------------------------------------------------ | ---------------------------- |
+| [`@elfui/core`](https://www.npmjs.com/package/@elfui/core)               | Macro 组件、响应式与应用 API |
+| [`@elfui/vite-plugin`](https://www.npmjs.com/package/@elfui/vite-plugin) | Macro 组件编译与模板诊断     |
+| [ElfUI Router](https://github.com/bloom-lmh/elfui-router)                | 独立路由包                   |
+| [Create ElfUI](https://github.com/bloom-lmh/create-elfui)                | 官方项目与组件脚手架         |
+| [ElfUI Kit](https://github.com/bloom-lmh/elfui-kit)                      | 官方 UI 组件库               |
+| [Language Tools](https://github.com/bloom-lmh/elfui-language-tools)      | VS Code 插件与语言服务器     |
+| [Extensions](https://github.com/bloom-lmh/elfui-extensions)              | Chain 等可选扩展             |
+| [Documentation](https://github.com/bloom-lmh/elfui-docs)                 | 指南、API 与生态文档         |
+
+Macro + Vite 是当前推荐主线。Chain 是独立扩展，适合运行时模板、渐进式接入与无构建场景。
+
+## 🛠️ 本地开发
+
+```bash
+pnpm install
+pnpm verify
+pnpm verify:publish
+```
+
+`pnpm verify` 会执行边界检查、格式化检查、Lint、类型检查、构建、单元测试和模板类型检查。`pnpm verify:publish` 会对真实 npm tarball 做安装验证。
+
+## 🤝 参与贡献
+
+欢迎提交 Issue 与 Pull Request。提交前请运行 `pnpm verify`，并使用 Conventional Commits 格式编写提交信息。
+
+## 📄 License
+
+[MIT](./LICENSE) © ElfUI contributors

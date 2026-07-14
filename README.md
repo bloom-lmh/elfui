@@ -4,11 +4,11 @@
 
 <h1 align="center">ElfUI</h1>
 
-<p align="center">A compiler-first, fine-grained reactive component framework for native Web Components.</p>
+<p align="center">A compile-time, fine-grained reactive framework for native Web Components.</p>
 
 <p align="center">
-  <a href="https://elfui-2igtsk.maozi.io/"><strong>elfui-2igtsk.maozi.io</strong></a> ·
-  <a href="https://elfui-docs.vercel.app/en/">English docs</a> ·
+  <a href="https://elfui-2igtsk.maozi.io/">中文官网</a> ·
+  <a href="https://elfui-docs.vercel.app/en/">English Docs</a> ·
   <a href="https://github.com/bloom-lmh/elfui">GitHub</a>
 </p>
 
@@ -19,22 +19,22 @@
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-8a8a8a" alt="MIT License"></a>
 </p>
 
-## ✨ Why ElfUI
+ElfUI defines components in ordinary TypeScript files, compiles templates into direct DOM updates, and outputs standard Custom Elements. It combines Vue-inspired templates and composition, Solid-inspired fine-grained updates, and Lit's respect for the Web Components platform.
 
-ElfUI borrows familiar template and composition ideas from Vue, fine-grained updates from Solid, and platform-first Custom Elements from Lit. It is not trying to replace them. It is a different answer for teams that want a modern component framework while keeping Web Components at the center.
+> TypeScript in, Custom Elements out.
 
-| Choice                    | Result                                                                |
-| ------------------------- | --------------------------------------------------------------------- |
-| `.ts` / `.tsx` components | No `.vue` files and no JSX requirement.                               |
-| Compile-time templates    | Diagnostics at build time; Macro components stay CSP-friendly.        |
-| No VNode or patch loop    | Dynamic points update the DOM directly.                               |
-| Fine-grained reactivity   | A state change only wakes the bindings that read it.                  |
-| Standard Custom Elements  | Components work in an ElfUI app, an older page, or another framework. |
-| Optional runtime compiler | Macro is the default; Chain keeps runtime templates as an extension.  |
+## 🧭 Requirements
+
+| Tool    | Version                   |
+| ------- | ------------------------- |
+| Node.js | `^20.19.0` or `>=22.12.0` |
+| pnpm    | `>=10.28.0` (recommended) |
+
+npm, Yarn, and Bun are also supported. The examples below use pnpm.
 
 ## 🚀 Quick start
 
-The official scaffold is the recommended path. It creates a Vite project and can add Router, Vitest, ESLint, Prettier, and your preferred stylesheet setup.
+Use the official scaffold to create a project and install its dependencies:
 
 ```bash
 pnpm create elfui@beta my-app --install
@@ -42,13 +42,46 @@ cd my-app
 pnpm dev
 ```
 
-> **Recommended:** install [ElfUI Language Tools](https://marketplace.visualstudio.com/items?itemName=SWUST-WEBLAB-LMH.elfui-language-features) for template syntax highlighting, completion, diagnostics, navigation, and formatting in VS Code.
-
-For an existing Vite project, install the core package and compiler plugin yourself:
+The interactive scaffold can configure TypeScript, Macro components, styling, Router, testing, code quality, and CI. To use the recommended defaults directly:
 
 ```bash
-pnpm add @elfui/core
-pnpm add -D @elfui/vite-plugin
+pnpm create elfui@beta my-app --default --install
+```
+
+Install [ElfUI Language Tools](https://marketplace.visualstudio.com/items?itemName=SWUST-WEBLAB-LMH.elfui-language-features) for template highlighting, completion, diagnostics, navigation, and formatting.
+
+## 🗂️ Repository structure (Monorepo)
+
+This repository is a pnpm workspace with the following primary packages:
+
+| Path                                                       | Purpose                                                         |
+| ---------------------------------------------------------- | --------------------------------------------------------------- |
+| [`packages/elfui`](packages/elfui)                         | Public entry point (`@elfui/core`)                              |
+| [`packages/reactivity`](packages/reactivity)               | Fine-grained reactivity (`@elfui/reactivity`)                   |
+| [`packages/runtime`](packages/runtime)                     | Component runtime and Web Components helpers (`@elfui/runtime`) |
+| [`packages/compiler-template`](packages/compiler-template) | HTML template parser (`@elfui/compiler-template`)               |
+| [`packages/compiler`](packages/compiler)                   | Macro component compiler (`@elfui/compiler`)                    |
+| [`packages/vite-plugin`](packages/vite-plugin)             | Vite compiler integration (`@elfui/vite-plugin`)                |
+| [`packages/shared`](packages/shared)                       | Internal shared utilities (`@elfui/shared`)                     |
+
+## ✨ Features
+
+- **TypeScript file components**: no `.vue` files and no JSX requirement.
+- **Compile-time templates**: analyze templates, produce diagnostics, and generate direct DOM operations during the build.
+- **Fine-grained reactivity**: every dynamic point subscribes only to the state it reads.
+- **No VNode or patch loop**: state changes update the corresponding DOM directly.
+- **Standard Web Components**: output Custom Elements for native pages and other frameworks.
+- **Shadow DOM boundaries**: isolate internals while exposing CSS variables and `::part()` styling contracts.
+- **Complete component model**: Props, Emits, Model, Slots, lifecycle hooks, directives, plugins, and built-ins.
+- **Independent ecosystem packages**: install Router, UI Kit, Language Tools, and Chain only when needed.
+
+## 📦 Installation
+
+Prefer the scaffold for new projects. To add ElfUI to an existing Vite project:
+
+```bash
+pnpm add @elfui/core@beta
+pnpm add -D @elfui/vite-plugin@beta
 ```
 
 ```ts
@@ -56,12 +89,64 @@ pnpm add -D @elfui/vite-plugin
 import { defineConfig } from "vite";
 import { elfuiMacroPlugin } from "@elfui/vite-plugin";
 
-export default defineConfig({ plugins: [elfuiMacroPlugin()] });
+export default defineConfig({
+  plugins: [elfuiMacroPlugin()]
+});
 ```
 
-## 🧩 TypeScript components, not special files
+Router is an independent package and must be installed separately:
 
-An exported `defineHtml(html\`...\`)` is a component. Top-level TypeScript is its setup logic, and the compiler turns the template into direct DOM bindings.
+```bash
+pnpm add @elfui/router@beta
+```
+
+## 🧩 Your first component
+
+```ts
+// Counter.ts
+import { css, defineHtml, defineStyle, html, useRef } from "@elfui/core";
+
+defineStyle(css`
+  :host {
+    display: inline-block;
+  }
+
+  button {
+    padding: 8px 12px;
+  }
+`);
+
+const count = useRef(0);
+const increment = (): void => count.set(count.peek() + 1);
+
+export default defineHtml(html` <button @click=${increment}>Clicked ${count} times</button> `);
+```
+
+Register and mount the root component with `createApp`. You do not need to place its Custom Element tag in `index.html` manually:
+
+```ts
+// main.ts
+import { createApp } from "@elfui/core";
+import Counter from "./Counter";
+
+createApp(Counter).mount("#app");
+```
+
+## 🏗️ Component structure
+
+A Macro component combines ordinary top-level TypeScript with an exported `defineHtml(html\`...\`)` template:
+
+| API               | Purpose                                                            |
+| ----------------- | ------------------------------------------------------------------ |
+| `defineProps()`   | Declare external properties and their types                        |
+| `defineEmits()`   | Declare component events                                           |
+| `defineModel()`   | Declare a `v-model` contract                                       |
+| `defineSlots()`   | Declare the slot contract                                          |
+| `defineOptions()` | Configure Shadow DOM, form control behavior, and component options |
+| `defineStyle()`   | Declare component styles                                           |
+| `defineExpose()`  | Expose instance methods to a parent                                |
+| `useComponents()` | Register local components used by the template                     |
+| `defineHtml()`    | Define and export the component template                           |
 
 ```ts
 import {
@@ -74,189 +159,277 @@ import {
   html
 } from "@elfui/core";
 
-const props = defineProps<{ label: string }>(); // typed input
-const emit = defineEmits<{ save: [] }>(); // typed Custom Event
-const value = defineModel<string>({ default: "" }); // v-model contract
-defineSlots<{ default: () => unknown }>(); // slot contract
-defineOptions({ shadow: "open" }); // component options
-// Use useComponents(Child) here when this component has local dependencies.
+const props = defineProps<{ label: string }>();
+const emit = defineEmits<{ save: [value: string] }>();
+const value = defineModel<string>({ default: "" });
+
+defineSlots<{ default: () => unknown }>();
+defineOptions({ shadow: "open" });
 
 export const SaveField = defineHtml(html`
+  <label>${props.label}</label>
   <input .value=${value} />
-  <button @click=${() => emit("save")}>${props.label}</button>
+  <button @click=${() => emit("save", value.value)}>Save</button>
+  <slot></slot>
 `);
 ```
 
-Mount the root without hand-writing its tag in `index.html`:
+## ⚡ Reactivity
+
+Use `useRef` for primitives or replaceable values, and `useReactive` for objects, arrays, and collections:
 
 ```ts
-import { createApp } from "@elfui/core";
-import App from "./App";
+import { useComputed, useEffect, useReactive, useRef } from "@elfui/core";
 
-createApp(App).mount("#app");
+const count = useRef(1);
+const user = useReactive({ name: "Elf", online: true });
+const doubled = useComputed(() => count.value * 2);
+
+useEffect(() => {
+  document.title = `${user.name}: ${doubled.value}`;
+});
 ```
 
-## 📝 Templates and directives
+| API                         | Purpose                                                        |
+| --------------------------- | -------------------------------------------------------------- |
+| `useRef()`                  | Create a Ref with `.value`, `.set()`, and `.peek()`            |
+| `useReactive()`             | Create a deeply reactive object, array, Map, or Set            |
+| `useComputed()`             | Create lazy derived state                                      |
+| `useEffect()`               | Track dependencies and manage side effects and cleanup         |
+| `watch()` / `watchEffect()` | Observe explicit sources or automatically tracked dependencies |
 
-| Value source           | Syntax      | Example                          |
-| ---------------------- | ----------- | -------------------------------- |
-| Static HTML            | strings     | `class="panel"`                  |
-| Surrounding TypeScript | `${...}`    | `${count}`, `@click=${save}`     |
-| Template-local scope   | `{{ ... }}` | `{{ item.name }}` inside `v-for` |
+## 🔄 Component lifecycle
 
 ```ts
-import { defineHtml, html, useReactive, useRef } from "@elfui/core";
+import { onMount, onUnmount } from "@elfui/core";
 
+onMount(() => {
+  console.log("component mounted");
+});
+
+onUnmount(() => {
+  console.log("component unmounted");
+});
+```
+
+| Phase                    | Hooks                          |
+| ------------------------ | ------------------------------ |
+| Before and after mount   | `onBeforeMount`, `onMount`     |
+| Before and after update  | `onBeforeUpdate`, `onUpdated`  |
+| Before and after unmount | `onBeforeUnmount`, `onUnmount` |
+| Attribute changes        | `onAttributeChanged`           |
+| Cache activation         | `onActivated`, `onDeactivated` |
+| Error capture            | `onErrorCaptured`              |
+
+Register lifecycle hooks synchronously at component setup time. Use `useEventListener` or `onUnmount` for listeners, observers, and other disposable resources.
+
+## 🎨 Styling
+
+Use a `css` template directly, or import an external stylesheet as generated by the scaffold:
+
+```ts
+import { defineStyle } from "@elfui/core";
+import styles from "./Button.scss?inline";
+
+defineStyle(styles);
+```
+
+Shadow DOM isolates component styles. Components can consume CSS custom properties and expose intentional external styling points through `part`:
+
+```ts
+export const Button = defineHtml(html` <button part="control"><slot></slot></button> `);
+```
+
+```css
+elf-button {
+  --button-color: #16803c;
+}
+
+elf-button::part(control) {
+  font-weight: 600;
+}
+```
+
+`:class=${...}` accepts strings, arrays, and objects. `:style=${...}` accepts style objects and CSS variables.
+
+## 🧷 Slots
+
+ElfUI follows the standard Web Components slot model with default and named slots:
+
+```ts
+export const Panel = defineHtml(html`
+  <header><slot name="title"></slot></header>
+  <section><slot></slot></section>
+`);
+```
+
+```html
+<elf-panel>
+  <h2 slot="title">Title</h2>
+  <p>Default slot content</p>
+</elf-panel>
+```
+
+Use `defineSlots()` and `useScopedSlot()` when a parent needs to render data provided by a child through a scoped slot.
+
+## 📝 Template expressions
+
+ElfUI templates have three value sources:
+
+| Value source                 | Syntax        | Example                          |
+| ---------------------------- | ------------- | -------------------------------- |
+| Static HTML                  | Plain strings | `class="panel"`                  |
+| Surrounding TypeScript scope | `${...}`      | `${count}`, `@click=${save}`     |
+| Template-local scope         | `{{ ... }}`   | `{{ item.name }}` inside `v-for` |
+
+```ts
 const open = useRef(true);
-const items = useReactive([{ id: "elf", name: "ElfUI" }]);
+const items = useReactive([
+  { id: 1, name: "Macro" },
+  { id: 2, name: "Web Components" }
+]);
 
-export const Menu = defineHtml(html`
+export const FeatureList = defineHtml(html`
   <button @click=${() => open.set(!open.peek())}>Toggle</button>
-  <ul v-if=${open}>
+  <ul v-if=${open} :class=${{ active: open }}>
     <li v-for="item in items" :key="item.id">{{ item.name }}</li>
   </ul>
 `);
 ```
 
-Use `${...}` for a value owned by TypeScript. Use `{{ ... }}` only when the compiler creates a local template scope, such as `v-for` and scoped slots.
+`${...}` consumes values from the TypeScript file. Use `{{ ... }}` only for compiler-created local variables from `v-for`, scoped slots, and similar template scopes.
 
-| Built-in directive | Purpose                                |
-| ------------------ | -------------------------------------- |
-| `v-if` / `v-else`  | Create or remove a branch              |
-| `v-for`            | Render a keyed list                    |
-| `v-show`           | Toggle display without unmounting      |
-| `v-model`          | Bind form and component values         |
-| event modifiers    | `.stop`, `.prevent`, `.once`, and more |
+## 🪄 Directives
 
-Use `defineDirective()` for a component-local DOM behavior, or `app.directive()` to register one for an application.
+| Directive                       | Purpose                                    |
+| ------------------------------- | ------------------------------------------ |
+| `v-if` / `v-else-if` / `v-else` | Create or remove conditional branches      |
+| `v-for`                         | Render a keyed list                        |
+| `v-show`                        | Toggle visibility while preserving the DOM |
+| `v-model`                       | Bind form values or a component Model      |
+| `v-once`                        | Render a region once                       |
+| `v-memo`                        | Cache a template region by dependencies    |
 
-## ⚡ Reactivity and lifecycle
+Use `defineDirective()` for component-local custom directives and `app.directive()` for application-wide directives.
 
-| Need                  | API                             |
-| --------------------- | ------------------------------- |
-| Primitive state       | `useRef()`                      |
-| Object or array state | `useReactive()`                 |
-| Derived state         | `useComputed()`                 |
-| Automatic side effect | `useEffect()` / `watchEffect()` |
+## 🔔 Events
+
+Bind native events with `@event=${handler}`:
 
 ```ts
-import { useComputed, useEffect, useRef } from "@elfui/core";
+const submit = (event: SubmitEvent): void => {
+  event.preventDefault();
+};
 
-const quantity = useRef(1);
-const price = useRef(16);
-const total = useComputed(() => quantity.value * price.value);
-
-useEffect(() => {
-  document.title = `Total: ${total.value}`;
-});
-```
-
-| Lifecycle group  | Hooks                                             |
-| ---------------- | ------------------------------------------------- |
-| Mount            | `onBeforeMount`, `onMount`                        |
-| Update           | `onBeforeUpdate`, `onUpdated`                     |
-| Unmount          | `onBeforeUnmount`, `onUnmount`                    |
-| Cache and errors | `onActivated`, `onDeactivated`, `onErrorCaptured` |
-
-## 🧬 Component collaboration and composables
-
-| Job                              | API                                                 |
-| -------------------------------- | --------------------------------------------------- |
-| Parent input and child events    | `defineProps`, `defineEmits`                        |
-| Shared value                     | `defineModel`, `v-model`                            |
-| Content projection               | default and named `<slot>`                          |
-| Render child data in the parent  | `defineSlots`, `useScopedSlot`                      |
-| Cross-tree context               | `provide`, `inject`                                 |
-| Expose an instance method        | `defineExpose`, `useTemplateRef`                    |
-| Extend or specialize a component | `useExtend`, `useVariant`                           |
-| Build a form component           | `useFormControlContext`, `createFormControlContext` |
-| Reflect component state outward  | `useHostClass`, `useHostAttr`, `useHostCssVar`      |
-
-`useExtend` and `useVariant` are component reuse tools, not class inheritance. They preserve the base component contract while producing a deliberate new component or variant.
-
-## 🎨 Built-ins and styling boundaries
-
-`Teleport` moves overlay content to a target outside the current component tree:
-
-```html
-<Teleport to="body">
-  <div class="dialog">Dialog content</div>
-</Teleport>
-```
-
-| Built-in                         | Use it for                          |
-| -------------------------------- | ----------------------------------- |
-| `Transition` / `TransitionGroup` | Enter, leave, and list motion       |
-| `KeepAlive`                      | Preserving inactive component state |
-| `Suspense`                       | Async fallback boundaries           |
-| dynamic component                | Switching a component at runtime    |
-
-```ts
-import { css, defineHtml, defineStyle, html } from "@elfui/core";
-
-defineStyle(css`
-  :host {
-    display: inline-block;
-  }
-  button {
-    padding: 8px 12px;
-  }
+export const Form = defineHtml(html`
+  <form @submit=${submit}>
+    <button type="submit">Submit</button>
+  </form>
 `);
-
-export const ElfButton = defineHtml(html`<button part="control"><slot></slot></button>`);
 ```
 
-Use `:class=${...}` with strings, arrays, or objects; use `:style=${...}` for inline style objects and CSS variables. `theme` / `useTheme` handle theme overrides. Shadow DOM keeps internals private, while `part` and `::part()` expose an intentional styling boundary for consumers.
+Templates support event modifiers such as `.stop`, `.prevent`, `.once`, `.capture`, and `.passive`. Events declared with `defineEmits()` are exposed as standard Custom Events.
 
-## 🛠️ Application, router, and tooling
+## 🚦 Applications
+
+`createApp()` creates isolated application instances. Each instance has its own configuration, plugins, global components, directives, and dependency injection context:
 
 ```ts
 import { createApp } from "@elfui/core";
 import App from "./App";
 import { Button } from "./Button";
 
-const app = createApp(App);
+const app = createApp(App, { title: "ElfUI" });
 
 app.component(Button);
-app.directive("focus", { mounted: (el) => (el as HTMLElement).focus() });
-app.use((currentApp) => {
-  currentApp.config.globalProperties.appName = "Console";
+app.directive("focus", {
+  mounted: (element) => (element as HTMLElement).focus()
 });
+app.provide("apiBase", "/api");
 app.config.errorHandler = (error) => console.error(error);
 app.mount("#app");
 ```
 
-Router is intentionally separate:
+You can create multiple applications on the same page. Each application can mount once and can later be removed with `app.unmount()`.
 
-```bash
-pnpm add @elfui/router
+## 🧱 Built-in components
+
+| Built-in                         | Purpose                                                   |
+| -------------------------------- | --------------------------------------------------------- |
+| `Teleport`                       | Render overlay content outside the current component tree |
+| `Transition` / `TransitionGroup` | Manage enter, leave, and list transitions                 |
+| `KeepAlive`                      | Preserve temporarily inactive component instances         |
+| `Suspense`                       | Coordinate asynchronous content, fallbacks, and errors    |
+
+## 🧬 Composables
+
+| API                                | Purpose                                                    |
+| ---------------------------------- | ---------------------------------------------------------- |
+| `useTemplateRef()`                 | Access template elements or component instances with types |
+| `useHostAttr()` / `useHostClass()` | Reflect reactive state onto the Custom Element host        |
+| `useExtend()` / `useVariant()`     | Extend a base component or create a component variant      |
+| `useFormControlContext()`          | Build components that participate in native forms          |
+
+See the [Chinese documentation](https://elfui-2igtsk.maozi.io/) or [English documentation](https://elfui-docs.vercel.app/en/) for complete guides and examples.
+
+## 📐 Standard component pattern
+
+Keep component directories straightforward:
+
+```text
+Button/
+├─ index.ts
+├─ style.scss
+└─ types.ts       # Add only when the component exposes several public types
 ```
 
-Create it with `createRouter({ mode, routes })`, import its module before mounting the app, and use `<elf-link>` with `<elf-router-view>` in templates. The scaffold adds it automatically with `--router`.
+Recommended order:
 
-`@elfui/vite-plugin` compiles Macro components, owns the build-time `tagPrefix` option, and can enable strict diagnostics plus template type checking. [Language Tools](https://github.com/bloom-lmh/elfui-language-tools) keeps editor completion, navigation, diagnostics, and formatting outside the runtime.
+1. Import dependencies and styles.
+2. Declare the component contract with `defineProps`, `defineEmits`, and `defineModel`.
+3. Create reactive state, computed values, and event handlers.
+4. Register lifecycle hooks, host helpers, and local components.
+5. Export `defineHtml(html\`...\`)` last.
 
-## 🧭 Compared with familiar ideas
+## 🌐 Browser support
 
-| Framework | ElfUI takes                              | Different choice                                            |
-| --------- | ---------------------------------------- | ----------------------------------------------------------- |
-| Vue       | Templates and composition ergonomics     | Web Components, compile-time DOM bindings, no VNode runtime |
-| Solid     | Fine-grained reactive updates            | HTML templates and Custom Elements rather than JSX          |
-| Lit       | Platform-first components and Shadow DOM | A built-in reactive model and compiler-driven directives    |
+ElfUI outputs ES2022 and standard Custom Elements. It requires:
 
-Local jsdom micro-benchmarks are a health signal, not a universal ranking. In the current harness, ElfUI's median is **4.56 ms** for 200 hello mounts and **8.72 ms** for a 500 x 8 table update. Reproduce the baselines with `pnpm benchmark` and `pnpm benchmark:browser`.
+- Custom Elements v1
+- Shadow DOM v1
+- ES Modules and ES2022
 
-## 🌱 Ecosystem, beta, and license
+Use currently supported Chrome, Edge, Firefox, and Safari releases. Older browsers require syntax transpilation by the application build and, when necessary, Web Components polyfills.
 
-| Project                                                                  | Role                                                 |
-| ------------------------------------------------------------------------ | ---------------------------------------------------- |
-| [`@elfui/core`](https://www.npmjs.com/package/@elfui/core)               | Macro components, app API, and common framework APIs |
-| [`@elfui/vite-plugin`](https://www.npmjs.com/package/@elfui/vite-plugin) | Macro compiler integration for Vite                  |
-| [ElfUI Router](https://github.com/bloom-lmh/elfui-router)                | Independent routing package                          |
-| [Create ElfUI](https://github.com/bloom-lmh/create-elfui)                | Official Vite project scaffold                       |
-| [ElfUI Kit](https://github.com/bloom-lmh/elfui-kit)                      | Official UI component library                        |
-| [Extensions](https://github.com/bloom-lmh/elfui-extensions)              | Optional extensions, including Chain                 |
-| [Language Tools](https://github.com/bloom-lmh/elfui-language-tools)      | VS Code extension and language service               |
-| [Docs](https://github.com/bloom-lmh/elfui-docs)                          | Guides and API reference                             |
+## 🌱 Ecosystem
 
-**Beta path:** Macro components plus Vite. **Extension path:** Chain for runtime templates, legacy pages, and no-build usage. **License:** [MIT](./LICENSE).
+| Project                                                                  | Purpose                                             |
+| ------------------------------------------------------------------------ | --------------------------------------------------- |
+| [`@elfui/core`](https://www.npmjs.com/package/@elfui/core)               | Macro components, reactivity, and application APIs  |
+| [`@elfui/vite-plugin`](https://www.npmjs.com/package/@elfui/vite-plugin) | Macro compilation and template diagnostics          |
+| [ElfUI Router](https://github.com/bloom-lmh/elfui-router)                | Independent routing package                         |
+| [Create ElfUI](https://github.com/bloom-lmh/create-elfui)                | Official project and component scaffold             |
+| [ElfUI Kit](https://github.com/bloom-lmh/elfui-kit)                      | Official UI component library                       |
+| [Language Tools](https://github.com/bloom-lmh/elfui-language-tools)      | VS Code extension and language server               |
+| [Extensions](https://github.com/bloom-lmh/elfui-extensions)              | Optional extensions including Chain                 |
+| [Documentation](https://github.com/bloom-lmh/elfui-docs)                 | Guides, API references, and ecosystem documentation |
+
+Macro + Vite is the recommended path. Chain is an independent extension for runtime templates, progressive adoption, and no-build scenarios.
+
+## 🛠️ Local development
+
+```bash
+pnpm install
+pnpm verify
+pnpm verify:publish
+```
+
+`pnpm verify` runs boundary checks, formatting, linting, type checking, builds, unit tests, and template type checks. `pnpm verify:publish` installs and verifies the actual npm tarballs.
+
+## 🤝 Contributing
+
+Issues and pull requests are welcome. Run `pnpm verify` before submitting changes and use Conventional Commits for commit messages.
+
+## 📄 License
+
+[MIT](./LICENSE) © ElfUI contributors
