@@ -212,8 +212,10 @@ export const useHostClass = (getter: () => HostClassValue): void => {
  *   // 之后 document.querySelector('elf-input').focus()
  */
 export const defineExpose = (exposed: Record<string, unknown>): void => {
+  const instance = getCurrentInstance();
   const host = useHost();
   if (!host) return;
+  if (__DEV__ && instance) instance.devtools.exposed = exposed;
   for (const k of Object.keys(exposed)) {
     if (__DEV__ && k in host) {
       warn(`[defineExpose] "${k}" 会覆盖 host 上已有的属性或方法。`);

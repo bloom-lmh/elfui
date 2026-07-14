@@ -4,6 +4,12 @@
 // 钩子注册时把回调挂到该实例的对应数组上。
 // 实例 mount/unmount/update 时顺序调用对应数组。
 
+import {
+  emitDevtoolsRuntimeEvent,
+  hasDevtoolsRuntimeHook,
+  type ElfUIDevtoolsDebugState
+} from "./devtools";
+
 export type LifecycleHook = () => void;
 export type AttributeChangedHook = (
   name: string,
@@ -34,6 +40,8 @@ export interface ComponentInstance {
   /** KeepAlive 激活/未激活：仅在 KeepAlive 包裹时有意义 */
   activatedHooks: LifecycleHook[];
   deactivatedHooks: LifecycleHook[];
+  /** 仅开发态 DevTools 读取；生产构建中的访问会被 __DEV__ 分支移除。 */
+  devtools: ElfUIDevtoolsDebugState;
 }
 
 let currentInstance: ComponentInstance | null = null;
@@ -91,7 +99,8 @@ export const createInstance = (
   attrChangedHooks: [],
   errorCapturedHooks: [],
   activatedHooks: [],
-  deactivatedHooks: []
+  deactivatedHooks: [],
+  devtools: { props: {}, setup: {}, exposed: {} }
 });
 
 /** 调用一组钩子，错误隔离 */
@@ -111,11 +120,16 @@ export const runWithUpdateHooks = (
   instance: ComponentInstance | null,
   update: () => void
 ): void => {
+  if (!instance || !instance.isMounted || instance.isUnmounted) {
+    update();
+    return;
+  }
+
+  const collectDevtoolsUpdate = hasDevtoolsRuntimeHook();
   if (
-    !instance ||
-    !instance.isMounted ||
-    instance.isUnmounted ||
-    (instance.beforeUpdateHooks.length === 0 && instance.updatedHooks.length === 0)
+    !collectDevtoolsUpdate &&
+    instance.beforeUpdateHooks.length === 0 &&
+    instance.updatedHooks.length === 0
   ) {
     update();
     return;
@@ -133,7 +147,12 @@ export const runWithUpdateHooks = (
     if (shouldSchedule) {
       queueMicrotask(() => {
         pendingUpdatedInstances.delete(instance);
-        if (!instance.isUnmounted) callHooks(instance.updatedHooks);
+        if (!instance.isUnmounted) {
+          callHooks(instance.updatedHooks);
+          if (collectDevtoolsUpdate) {
+            emitDevtoolsRuntimeEvent({ type: "component:update", host: instance.host });
+          }
+        }
       });
     }
   }

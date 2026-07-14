@@ -5,6 +5,13 @@ import {
   type ElfUIConfig,
   type InjectionKey
 } from "@elfui/runtime";
+import {
+  attachDevtoolsAppId,
+  createDevtoolsAppId,
+  emitDevtoolsRuntimeEvent
+} from "@elfui/runtime/internal";
+
+declare const __DEV__: boolean;
 
 export type AppMountTarget = string | Element;
 export type AppRootProps = Record<string, unknown>;
@@ -95,6 +102,7 @@ export const createApp = <RootComponent extends ElfElementConstructor>(
   const directives = new Map<string, DirectiveDefinition>();
   let rootInstance: InstanceType<RootComponent> | null = null;
   let mountCalled = false;
+  const devtoolsAppId = __DEV__ ? createDevtoolsAppId() : "";
 
   const app: ElfUIApp<RootComponent> = {
     config: appConfig,
@@ -112,6 +120,13 @@ export const createApp = <RootComponent extends ElfElementConstructor>(
       const tag = ensureCustomElement(rootComponent);
       const instance = document.createElement(tag) as InstanceType<RootComponent>;
       attachAppContext(instance, provides, appConfig, directives);
+      if (__DEV__) {
+        attachDevtoolsAppId(instance, devtoolsAppId);
+        emitDevtoolsRuntimeEvent({
+          type: "app:mount",
+          app: { id: devtoolsAppId, label: tag, root: instance }
+        });
+      }
       Object.assign(instance, rootProps);
       container.replaceChildren(instance);
       rootInstance = instance;
@@ -120,6 +135,9 @@ export const createApp = <RootComponent extends ElfElementConstructor>(
 
     unmount(): void {
       if (rootInstance) {
+        if (__DEV__) {
+          emitDevtoolsRuntimeEvent({ type: "app:unmount", appId: devtoolsAppId });
+        }
         rootInstance.remove();
         rootInstance = null;
       }

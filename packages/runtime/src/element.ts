@@ -25,6 +25,7 @@ import {
 } from "./form-control";
 import { attachInstanceToHost } from "./inject";
 import { callHooks, createInstance, setCurrentInstance, type ComponentInstance } from "./lifecycle";
+import { emitDevtoolsRuntimeEvent, findDevtoolsParentHost, getDevtoolsAppId } from "./devtools";
 
 /** Prop 选项 */
 export interface PropOption<T = unknown> {
@@ -244,6 +245,7 @@ export const defineCustomElement = (
 
           // 构造 props（解包后的对象）
           const props = createPropsProxy(this.__propStates);
+          if (__DEV__) instance.devtools.props = props;
           const emit = createEmit(this, definition.emitOptions);
           const ctx: SetupContext = {
             emit,
@@ -285,6 +287,9 @@ export const defineCustomElement = (
                 $asyncError: null as unknown,
                 $asyncResolved: false
               });
+              if (__DEV__) {
+                instance.devtools.setup = asyncState as unknown as Record<string, unknown>;
+              }
 
               const target: ShadowRoot | HTMLElement = this.__shadow ?? this;
 
@@ -309,6 +314,12 @@ export const defineCustomElement = (
                   if (!this.isConnected) return;
                   asyncState.$asyncPending = false;
                   asyncState.$asyncResolved = true;
+                  if (__DEV__) {
+                    instance.devtools.setup = {
+                      ...(asyncState as unknown as Record<string, unknown>),
+                      ...(resolvedState ?? {})
+                    };
+                  }
                   this.__rerenderAsync(
                     asyncState as unknown as Record<string, unknown>,
                     props,
@@ -335,6 +346,7 @@ export const defineCustomElement = (
             } else {
               // 同步 setup
               const setupResult = setupReturned as Record<string, unknown> | void;
+              if (__DEV__) instance.devtools.setup = setupResult ?? {};
               if (definition.render) {
                 const renderCtx: RenderContext = buildRenderCtx(
                   this,
@@ -359,6 +371,38 @@ export const defineCustomElement = (
 
           instance.isMounted = true;
           callHooks(instance.mountedHooks);
+          if (__DEV__) {
+            const source = (
+              this.constructor as typeof HTMLElement & {
+                __elfSource?: {
+                  file: string;
+                  line: number;
+                  column: number;
+                  endLine?: number;
+                  endColumn?: number;
+                };
+              }
+            ).__elfSource;
+            emitDevtoolsRuntimeEvent({
+              type: "component:mount",
+              component: {
+                host: this,
+                appId: getDevtoolsAppId(this),
+                parentHost: findDevtoolsParentHost(this),
+                tag: definition.tag,
+                displayName: definition.tag,
+                shadowMode: definition.shadow === false ? "none" : (definition.shadow ?? "open"),
+                ...(source ? { source } : {}),
+                props: () => instance.devtools.props,
+                attrs: () =>
+                  Object.fromEntries(
+                    Array.from(this.attributes, (attribute) => [attribute.name, attribute.value])
+                  ),
+                setup: () => instance.devtools.setup,
+                exposed: () => instance.devtools.exposed
+              }
+            });
+          }
         });
 
         this.__setupDone = true;
@@ -391,6 +435,7 @@ export const defineCustomElement = (
         }
         this.__scope?.stop();
         if (this.__instance) callHooks(this.__instance.unmountedHooks);
+        if (__DEV__) emitDevtoolsRuntimeEvent({ type: "component:unmount", host: this });
         disposeHostAttrs(this);
         this.__mounted = false;
 
@@ -593,6 +638,9 @@ const createEmit = (
   return (ev, ...args) => {
     const detail = options?.rawDetail === false ? args : args.length <= 1 ? args[0] : args;
     host.dispatchEvent(new CustomEvent(ev, { detail }));
+    if (__DEV__) {
+      emitDevtoolsRuntimeEvent({ type: "component:emit", host, event: ev, args });
+    }
   };
 };
 
@@ -633,6 +681,9 @@ const injectStyles = (shadow: ShadowRoot, styles: string[]): void => {
  */
 const handleError = (instance: ComponentInstance | null, err: unknown): void => {
   if (instance) {
+    if (__DEV__) {
+      emitDevtoolsRuntimeEvent({ type: "component:error", host: instance.host, error: err });
+    }
     for (const fn of instance.errorCapturedHooks) {
       try {
         const res = fn(err, instance);

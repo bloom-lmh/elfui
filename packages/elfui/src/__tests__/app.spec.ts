@@ -52,6 +52,44 @@ describe("createApp", () => {
   afterEach(() => {
     document.body.innerHTML = "";
     resetDirectives();
+    delete (globalThis as Record<string, unknown>).__ELFUI_DEVTOOLS_GLOBAL_HOOK__;
+  });
+
+  it("reports real app and component state to the development hook", async () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    const events: Array<Record<string, unknown>> = [];
+    (globalThis as Record<string, unknown>).__ELFUI_DEVTOOLS_GLOBAL_HOOK__ = {
+      emitRuntimeEvent: (event: Record<string, unknown>) => events.push(event)
+    };
+    const Root = defineTestElement(
+      "devtools",
+      () => {
+        defineExpose({ ping: () => undefined });
+        return { ready: true };
+      },
+      undefined,
+      { title: String }
+    );
+    const app = createApp(Root, { title: "ElfUI" });
+
+    app.mount("#app");
+
+    expect(events.map((event) => event.type)).toEqual(["app:mount", "component:mount"]);
+    const component = events[1]!.component as {
+      appId: string;
+      props(): Record<string, unknown>;
+      setup(): Record<string, unknown>;
+      exposed(): Record<string, unknown>;
+    };
+    expect(component.appId).toBe((events[0]!.app as { id: string }).id);
+    expect(component.props()).toMatchObject({ title: "ElfUI" });
+    expect(component.setup()).toMatchObject({ ready: true });
+    expect(component.exposed()).toHaveProperty("ping");
+
+    app.unmount();
+    await Promise.resolve();
+    expect(events.map((event) => event.type)).toContain("app:unmount");
+    expect(events.map((event) => event.type)).toContain("component:unmount");
   });
 
   it("mounts a root component with root props", () => {

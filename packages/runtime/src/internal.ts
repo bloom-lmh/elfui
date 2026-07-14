@@ -40,6 +40,8 @@ export {
 
 export { attachInstanceToHost, getInstanceFromHost, PROVIDES_KEY } from "./inject";
 
+export { attachDevtoolsAppId, createDevtoolsAppId, emitDevtoolsRuntimeEvent } from "./devtools";
+
 export {
   ELF_SCOPED_SLOTS,
   hasScopedSlot,
