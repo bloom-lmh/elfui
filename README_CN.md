@@ -7,7 +7,7 @@
 <p align="center">一款面向原生 Web Components 的编译时细粒度响应式组件框架，专为组件而生。</p>
 
 <p align="center">
-  <a href="https://elfui-2igtsk.maozi.io/">中文文档</a> ·
+  <a href="https://elfui-2igtsk.maozi.io/"><strong>elfui-2igtsk.maozi.io</strong></a> ·
   <a href="https://elfui-docs.vercel.app/en/">English docs</a> ·
   <a href="https://github.com/bloom-lmh/elfui">GitHub</a>
 </p>
@@ -41,6 +41,8 @@ pnpm create elfui@beta my-app --install
 cd my-app
 pnpm dev
 ```
+
+> **推荐：** 安装 [ElfUI Language Tools](https://marketplace.visualstudio.com/items?itemName=SWUST-WEBLAB-LMH.elfui-language-features)，在 VS Code 中获得模板语法高亮、补全、诊断、跳转与格式化支持。
 
 已有 Vite 项目也可以手动接入：
 

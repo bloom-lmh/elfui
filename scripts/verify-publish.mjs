@@ -102,13 +102,20 @@ try {
   });
 
   for (const { manifest } of manifests) {
-    const licensePath = join(appDir, "node_modules", ...manifest.name.split("/"), "LICENSE");
+    const packageRoot = join(appDir, "node_modules", ...manifest.name.split("/"));
+    const licensePath = join(packageRoot, "LICENSE");
     if (!existsSync(licensePath)) {
       throw new Error(`${manifest.name} package is missing LICENSE in installed tarball.`);
     }
-    const readmePath = join(appDir, "node_modules", ...manifest.name.split("/"), "README.md");
+    const readmePath = join(packageRoot, "README.md");
     if (!existsSync(readmePath)) {
       throw new Error(`${manifest.name} package is missing README.md in installed tarball.`);
+    }
+    const publishedManifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
+    for (const [dependency, range] of Object.entries(publishedManifest.dependencies ?? {})) {
+      if (typeof range === "string" && range.startsWith("workspace:")) {
+        throw new Error(`${manifest.name} leaks workspace dependency ${dependency}@${range}.`);
+      }
     }
   }
 

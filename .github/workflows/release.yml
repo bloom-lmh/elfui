@@ -32,6 +32,7 @@ jobs:
         run: npm install --global npm@11.5.1
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
+      - run: pnpm verify:publish
       - name: Resolve release metadata
         id: release
         env:
@@ -57,16 +58,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          pack_dir="$RUNNER_TEMP/elfui-packages"
+          rm -rf "$pack_dir"
+          mkdir -p "$pack_dir"
           for pkg in shared reactivity runtime compiler-template compiler elfui vite-plugin; do
-            cd "packages/$pkg"
-            name=$(node -p "require('./package.json').name")
-            version=$(node -p "require('./package.json').version")
+            package_dir="packages/$pkg"
+            name=$(node -p "require('./$package_dir/package.json').name")
+            version=$(node -p "require('./$package_dir/package.json').version")
             if npm view "$name@$version" version >/dev/null 2>&1; then
               echo "skip existing $name@$version"
             else
-              npm publish --provenance --access public --tag "${{ steps.release.outputs.npm-tag }}"
+              rm -f "$pack_dir"/*.tgz
+              pnpm --dir "$package_dir" pack --pack-destination "$pack_dir"
+              tarball=$(find "$pack_dir" -maxdepth 1 -name '*.tgz' -print -quit)
+              test -n "$tarball"
+              npm publish "$tarball" --provenance --access public --tag "${{ steps.release.outputs.npm-tag }}"
             fi
-            cd ../..
           done
       - name: Create GitHub release
         env:

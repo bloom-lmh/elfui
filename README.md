@@ -7,7 +7,7 @@
 <p align="center">A compiler-first, fine-grained reactive component framework for native Web Components.</p>
 
 <p align="center">
-  <a href="https://elfui-2igtsk.maozi.io/">中文文档</a> ·
+  <a href="https://elfui-2igtsk.maozi.io/"><strong>elfui-2igtsk.maozi.io</strong></a> ·
   <a href="https://elfui-docs.vercel.app/en/">English docs</a> ·
   <a href="https://github.com/bloom-lmh/elfui">GitHub</a>
 </p>
@@ -41,6 +41,8 @@ pnpm create elfui@beta my-app --install
 cd my-app
 pnpm dev
 ```
+
+> **Recommended:** install [ElfUI Language Tools](https://marketplace.visualstudio.com/items?itemName=SWUST-WEBLAB-LMH.elfui-language-features) for template syntax highlighting, completion, diagnostics, navigation, and formatting in VS Code.
 
 For an existing Vite project, install the core package and compiler plugin yourself:
 
