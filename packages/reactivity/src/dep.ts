@@ -46,7 +46,7 @@ export const trigger = (target: object, key: unknown): void => {
     return;
   }
 
-  triggerEffects(dep);
+  triggerEffects(dep, { target, key });
 };
 
 /** 一次性触发多个 key，并对重复 effect 去重 */
@@ -67,7 +67,7 @@ export const triggerMany = (target: object, keys: readonly unknown[]): void => {
   }
 
   if (effects.size > 0) {
-    triggerEffects(effects);
+    triggerEffects(effects, { target, key: keys });
   }
 };
 
@@ -87,6 +87,6 @@ export const triggerAll = (target: object): void => {
   }
 
   if (effects.size > 0) {
-    triggerEffects(effects);
+    triggerEffects(effects, { target, key: "*" });
   }
 };

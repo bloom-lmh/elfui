@@ -8,6 +8,7 @@ import {
   createDevtoolsComponentId,
   emitDevtoolsRuntimeEvent,
   hasDevtoolsRuntimeHook,
+  setDevtoolsComponentContext,
   type ElfUIDevtoolsDebugState
 } from "./devtools";
 
@@ -51,6 +52,7 @@ const pendingUpdatedInstances = new WeakSet<ComponentInstance>();
 export const setCurrentInstance = (i: ComponentInstance | null): ComponentInstance | null => {
   const prev = currentInstance;
   currentInstance = i;
+  if (__DEV__) setDevtoolsComponentContext(i?.devtools.id ?? null);
   return prev;
 };
 

@@ -19,6 +19,7 @@
 import { isFunction, isObject } from "@elfui/shared";
 
 import { track, trigger, triggerAll, triggerMany } from "./dep";
+import { setReactivityDebugName } from "./devtools";
 
 // ---------- 标识 ----------
 
@@ -151,7 +152,7 @@ export function useRef<T>(initial: T | Ref<T>, name?: string): Ref<T> {
   if (isRef(initial)) {
     return initial as Ref<T>;
   }
-  const ref = createRef<T>(initial as T);
+  const ref = createRef<T>(initial as T, name);
   if (__DEV__ && name) {
     Object.defineProperty(ref, "__elf_name", {
       value: name,
@@ -163,7 +164,7 @@ export function useRef<T>(initial: T | Ref<T>, name?: string): Ref<T> {
   return ref;
 }
 
-const createRef = <T>(initialValue: T): Ref<T> => {
+const createRef = <T>(initialValue: T, debugName?: string): Ref<T> => {
   // Vue 3 风格：ref 内部对象会被深度 reactive 包装，这样
   // ref.value.foo = 1 / arr.push(x) 都会触发响应式
   let raw = shouldProxyTarget(initialValue)
@@ -171,6 +172,7 @@ const createRef = <T>(initialValue: T): Ref<T> => {
     : initialValue;
   // 用稳定 token 作 (target, key)；不能用 ref 自身（toPrimitive 拦截会绕回来）
   const token: object = {};
+  if (__DEV__) setReactivityDebugName(token, debugName);
 
   const ref: Ref<T> = {
     [STATE_FLAG]: true,
@@ -257,6 +259,7 @@ export function useReactive<T extends object>(initial: T, name?: string): Reacti
     return initial;
   }
   const proxy = createReactive(initial);
+  if (__DEV__) setReactivityDebugName(initial, name);
   if (__DEV__ && name) {
     Object.defineProperty(initial, "__elf_name", {
       value: name,

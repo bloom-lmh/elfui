@@ -3,6 +3,9 @@ export const ELFUI_DEVTOOLS_GLOBAL_HOOK = "__ELFUI_DEVTOOLS_GLOBAL_HOOK__";
 const APP_ID_KEY: unique symbol = Symbol.for("elfui.app.id") as never;
 const INSTANCE_KEY: unique symbol = Symbol.for("elfui.instance") as never;
 const LOGICAL_PARENT_KEY: unique symbol = Symbol.for("elfui.devtools.logical-parent") as never;
+const COMPONENT_CONTEXT_KEY: unique symbol = Symbol.for(
+  "elfui.devtools.component-context"
+) as never;
 
 export interface ElfUIDevtoolsDebugState {
   id: string;
@@ -151,6 +154,26 @@ export const disconnectDevtoolsComponent = (owner: DevtoolsComponentOwner): void
   const parentHost = owner.devtools.parentHost?.deref() ?? null;
   readDevtoolsOwner(parentHost)?.devtools.children.delete(owner.devtools.id);
   owner.devtools.parentHost = null;
+};
+
+export const withDevtoolsComponentContext = <T>(componentId: string, run: () => T): T => {
+  if (!__DEV__) return run();
+  const target = globalThis as unknown as Record<symbol, unknown>;
+  const previous = target[COMPONENT_CONTEXT_KEY];
+  target[COMPONENT_CONTEXT_KEY] = componentId;
+  try {
+    return run();
+  } finally {
+    if (previous === undefined) delete target[COMPONENT_CONTEXT_KEY];
+    else target[COMPONENT_CONTEXT_KEY] = previous;
+  }
+};
+
+export const setDevtoolsComponentContext = (componentId: string | null): void => {
+  if (!__DEV__) return;
+  const target = globalThis as unknown as Record<symbol, unknown>;
+  if (componentId) target[COMPONENT_CONTEXT_KEY] = componentId;
+  else delete target[COMPONENT_CONTEXT_KEY];
 };
 
 export const hasDevtoolsRuntimeHook = (): boolean =>

@@ -28,7 +28,8 @@ import { callHooks, createInstance, setCurrentInstance, type ComponentInstance }
 import {
   connectDevtoolsComponent,
   disconnectDevtoolsComponent,
-  emitDevtoolsRuntimeEvent
+  emitDevtoolsRuntimeEvent,
+  withDevtoolsComponentContext
 } from "./devtools";
 
 /** Prop 选项 */
@@ -181,7 +182,7 @@ export const defineCustomElement = (
       // 初始化 prop states 为默认值
       for (const [key, opt] of propEntries) {
         const def = resolveDefault(opt);
-        this.__propStates.set(key, useRef(def));
+        this.__propStates.set(key, useRef(def, `prop:${key}`));
       }
     }
 
@@ -488,7 +489,11 @@ export const defineCustomElement = (
         definition.directives,
         definition.components
       );
-      const rootNode = definition.render(renderCtx);
+      const render = (): Node => definition.render!(renderCtx);
+      const rootNode =
+        __DEV__ && this.__instance
+          ? withDevtoolsComponentContext(this.__instance.devtools.id, render)
+          : render();
       target.appendChild(rootNode);
     }
 

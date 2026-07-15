@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useEffect, useRef } from "@elfui/reactivity";
 
 import {
   type ComponentDefinition,
@@ -93,6 +94,41 @@ describe("createApp", () => {
     await Promise.resolve();
     expect(events.map((event) => event.type)).toContain("app:unmount");
     expect(events.map((event) => event.type)).toContain("component:unmount");
+  });
+
+  it("associates setup effects with the runtime component id", async () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    const events: Array<Record<string, unknown>> = [];
+    (globalThis as Record<string, unknown>).__ELFUI_DEVTOOLS_GLOBAL_HOOK__ = {
+      emitRuntimeEvent: (event: Record<string, unknown>) => events.push(event),
+      emitReactivityEvent: (event: Record<string, unknown>) => events.push(event)
+    };
+    let increment = (): void => undefined;
+    const Root = defineTestElement("devtools-reactivity", () => {
+      const count = useRef(0, "count");
+      increment = () => {
+        count.value += 1;
+      };
+      useEffect(() => {
+        void count.value;
+      });
+      return { count };
+    });
+    const app = createApp(Root);
+
+    app.mount("#app");
+    increment();
+
+    const component = events.find((event) => event.type === "component:mount")!.component as {
+      id: string;
+    };
+    const trigger = events.find((event) => event.type === "reactivity:trigger") as {
+      effects: Array<{ componentId: string | null }>;
+    };
+    expect(trigger.effects[0]?.componentId).toBe(component.id);
+
+    app.unmount();
+    await Promise.resolve();
   });
 
   it("reports stable logical parent ids for nested components", async () => {

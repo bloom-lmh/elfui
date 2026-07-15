@@ -12,6 +12,14 @@
 // - track：把当前 active effect 加入指定 Dep
 // - trigger：通知 Dep 中的所有 effect 重跑（或调度）
 
+import {
+  createReactivityEffectId,
+  emitReactivityEffect,
+  emitReactivityTrigger,
+  getReactivityComponentContext,
+  reactivityNow,
+  withReactivityTrigger
+} from "./devtools";
 import { recordEffectScope } from "./scope";
 
 export type Dep = Set<ReactiveEffect>;
@@ -39,6 +47,9 @@ export class ReactiveEffect<T = unknown> {
   public active = true;
   public deps: Dep[] = [];
   public onStop?: (() => void) | undefined;
+  public readonly devtoolsId = __DEV__ ? createReactivityEffectId() : "";
+  public readonly devtoolsComponentId = __DEV__ ? getReactivityComponentContext() : null;
+  public devtoolsTriggerId: string | null = null;
   private parent: ReactiveEffect | undefined;
 
   public constructor(
@@ -53,6 +64,9 @@ export class ReactiveEffect<T = unknown> {
       return this.fn();
     }
 
+    const triggerId = this.devtoolsTriggerId;
+    this.devtoolsTriggerId = null;
+    const startedAt = __DEV__ && triggerId ? reactivityNow() : 0;
     try {
       this.parent = activeEffect;
       activeEffect = this;
@@ -61,6 +75,14 @@ export class ReactiveEffect<T = unknown> {
     } finally {
       activeEffect = this.parent;
       this.parent = undefined;
+      if (__DEV__ && triggerId) {
+        emitReactivityEffect(
+          triggerId,
+          this.devtoolsId,
+          this.devtoolsComponentId,
+          Math.max(0, reactivityNow() - startedAt)
+        );
+      }
     }
   }
 
@@ -146,17 +168,20 @@ export const trackEffects = (dep: Dep): void => {
 };
 
 /** 通知 Dep 内所有 effect 重跑（或调度） */
-export const triggerEffects = (dep: Dep): void => {
+export const triggerEffects = (dep: Dep, debug?: { target: object; key: unknown }): void => {
   // 复制一份避免 effect 重跑时改动原 set 导致迭代异常
-  const effects = Array.from(dep);
+  const effects = Array.from(dep).filter((reactiveEffect) => reactiveEffect !== activeEffect);
+  const triggerId =
+    __DEV__ && debug ? emitReactivityTrigger(debug.target, debug.key, effects) : null;
 
   for (const reactiveEffect of effects) {
-    // 防止 effect 自身写状态又触发自己导致死循环
-    if (reactiveEffect === activeEffect) {
-      continue;
-    }
-
-    if (reactiveEffect.scheduler) {
+    if (triggerId) reactiveEffect.devtoolsTriggerId = triggerId;
+    if (triggerId) {
+      withReactivityTrigger(triggerId, () => {
+        if (reactiveEffect.scheduler) reactiveEffect.scheduler();
+        else reactiveEffect.run();
+      });
+    } else if (reactiveEffect.scheduler) {
       reactiveEffect.scheduler();
     } else {
       reactiveEffect.run();
