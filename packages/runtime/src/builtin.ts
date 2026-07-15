@@ -9,8 +9,9 @@
 import { effectScope, useEffect } from "@elfui/reactivity";
 
 import { ensureCustomElement } from "./element";
+import { attachDevtoolsLogicalParent } from "./devtools";
 import { getInstanceFromHost } from "./inject";
-import { callHooks } from "./lifecycle";
+import { callHooks, getCurrentInstance } from "./lifecycle";
 
 /** KeepAlive 标记 host 不会被卸载（即使从 DOM 中移除） */
 export const ELF_KEEP_ALIVE_FLAG: unique symbol = Symbol("elfui.keep-alive");
@@ -30,6 +31,7 @@ export const teleport = (
   renderChildren: () => Node
 ): Node => {
   const anchor = document.createComment("teleport");
+  const logicalOwner = __DEV__ ? (getCurrentInstance()?.host ?? null) : null;
   // 用 effectScope 隔离子内容的 effect
   const scope = effectScope(true);
   let mounted: Node | null = null;
@@ -46,6 +48,7 @@ export const teleport = (
     // 首次渲染
     if (!mounted) {
       mounted = scope.run(() => renderChildren()) as Node;
+      if (__DEV__) attachDevtoolsLogicalParent(mounted, logicalOwner);
     }
 
     // 决定挂载位置
@@ -177,6 +180,7 @@ export const dynamicComponent = (
   applyProps?: (el: HTMLElement) => void
 ): Node => {
   const anchor = document.createComment("component");
+  const logicalOwner = __DEV__ ? (getCurrentInstance()?.host ?? null) : null;
   let current: HTMLElement | null = null;
   let lastKey: unknown = undefined;
 
@@ -204,6 +208,7 @@ export const dynamicComponent = (
       }
     }
     if (applyProps) applyProps(el);
+    if (__DEV__) attachDevtoolsLogicalParent(el, logicalOwner);
     anchor.parentNode?.insertBefore(el, anchor);
     current = el;
   };
@@ -242,6 +247,7 @@ export const keepAlive = (
   options: KeepAliveOptions = {}
 ): Node => {
   const anchor = document.createComment("keep-alive");
+  const logicalOwner = __DEV__ ? (getCurrentInstance()?.host ?? null) : null;
   const cache = new Map<string, KeepAliveCacheEntry>();
   // LRU 顺序追踪
   const order: string[] = [];
@@ -286,6 +292,7 @@ export const keepAlive = (
     if (!entry) {
       const scope = effectScope(true);
       const el = scope.run(() => factory(key)) as HTMLElement;
+      if (__DEV__) attachDevtoolsLogicalParent(el, logicalOwner);
       // 标记此 host 处于 KeepAlive 控制下：detach 时不要触发 unmount
       (el as unknown as Record<symbol, unknown>)[ELF_KEEP_ALIVE_FLAG] = true;
       entry = { el, scope };

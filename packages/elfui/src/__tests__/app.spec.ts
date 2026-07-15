@@ -4,9 +4,12 @@ import {
   type ComponentDefinition,
   defineCustomElement,
   defineExpose,
+  ensureCustomElement,
   inject,
+  keepAlive,
   onUnmount,
   resetDirectives,
+  teleport,
   useAppConfig,
   type ElfElementConstructor
 } from "@elfui/runtime";
@@ -90,6 +93,91 @@ describe("createApp", () => {
     await Promise.resolve();
     expect(events.map((event) => event.type)).toContain("app:unmount");
     expect(events.map((event) => event.type)).toContain("component:unmount");
+  });
+
+  it("reports stable logical parent ids for nested components", async () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    const events: Array<Record<string, unknown>> = [];
+    (globalThis as Record<string, unknown>).__ELFUI_DEVTOOLS_GLOBAL_HOOK__ = {
+      emitRuntimeEvent: (event: Record<string, unknown>) => events.push(event)
+    };
+    const Child = defineTestElement("devtools-child");
+    const childTag = ensureCustomElement(Child);
+    const Root = defineTestElement("devtools-parent", undefined, () =>
+      document.createElement(childTag)
+    );
+    const app = createApp(Root);
+
+    app.mount("#app");
+
+    const mounts = events
+      .filter((event) => event.type === "component:mount")
+      .map((event) => event.component as { id: string; parentId: string | null });
+    expect(mounts).toHaveLength(2);
+    const parent = mounts.find((component) => component.parentId === null);
+    const child = mounts.find((component) => component.parentId !== null);
+    expect(child?.parentId).toBe(parent?.id);
+
+    app.unmount();
+    await Promise.resolve();
+  });
+
+  it("keeps a teleported component under its logical owner", async () => {
+    document.body.innerHTML = '<div id="app"></div><div id="target"></div>';
+    const events: Array<Record<string, unknown>> = [];
+    (globalThis as Record<string, unknown>).__ELFUI_DEVTOOLS_GLOBAL_HOOK__ = {
+      emitRuntimeEvent: (event: Record<string, unknown>) => events.push(event)
+    };
+    const Child = defineTestElement("devtools-teleport-child");
+    const childTag = ensureCustomElement(Child);
+    const Root = defineTestElement("devtools-teleport-parent", undefined, () =>
+      teleport("#target", false, () => document.createElement(childTag))
+    );
+    const app = createApp(Root);
+
+    app.mount("#app");
+    await Promise.resolve();
+
+    const mounts = events
+      .filter((event) => event.type === "component:mount")
+      .map((event) => event.component as { id: string; parentId: string | null; tag: string });
+    const parent = mounts.find((component) => component.tag.includes("teleport-parent"));
+    const child = mounts.find((component) => component.tag.includes("teleport-child"));
+    expect(child?.parentId).toBe(parent?.id);
+
+    app.unmount();
+    document.querySelector("#target")?.replaceChildren();
+    await Promise.resolve();
+  });
+
+  it("keeps a cached component under its logical owner", async () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    const events: Array<Record<string, unknown>> = [];
+    (globalThis as Record<string, unknown>).__ELFUI_DEVTOOLS_GLOBAL_HOOK__ = {
+      emitRuntimeEvent: (event: Record<string, unknown>) => events.push(event)
+    };
+    const Child = defineTestElement("devtools-cached-child");
+    const childTag = ensureCustomElement(Child);
+    const Root = defineTestElement("devtools-cache-owner", undefined, () =>
+      keepAlive(
+        () => "cached",
+        () => document.createElement(childTag)
+      )
+    );
+    const app = createApp(Root);
+
+    app.mount("#app");
+    await Promise.resolve();
+
+    const mounts = events
+      .filter((event) => event.type === "component:mount")
+      .map((event) => event.component as { id: string; parentId: string | null; tag: string });
+    const parent = mounts.find((component) => component.tag.includes("cache-owner"));
+    const child = mounts.find((component) => component.tag.includes("cached-child"));
+    expect(child?.parentId).toBe(parent?.id);
+
+    app.unmount();
+    await Promise.resolve();
   });
 
   it("mounts a root component with root props", () => {

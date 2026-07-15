@@ -5,6 +5,7 @@
 // 实例 mount/unmount/update 时顺序调用对应数组。
 
 import {
+  createDevtoolsComponentId,
   emitDevtoolsRuntimeEvent,
   hasDevtoolsRuntimeHook,
   type ElfUIDevtoolsDebugState
@@ -100,7 +101,16 @@ export const createInstance = (
   errorCapturedHooks: [],
   activatedHooks: [],
   deactivatedHooks: [],
-  devtools: { props: {}, setup: {}, exposed: {} }
+  devtools: {
+    id: createDevtoolsComponentId(),
+    appId: null,
+    parentId: null,
+    parentHost: null,
+    children: new Set(),
+    props: {},
+    setup: {},
+    exposed: {}
+  }
 });
 
 /** 调用一组钩子，错误隔离 */

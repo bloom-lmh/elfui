@@ -2,8 +2,14 @@ export const ELFUI_DEVTOOLS_GLOBAL_HOOK = "__ELFUI_DEVTOOLS_GLOBAL_HOOK__";
 
 const APP_ID_KEY: unique symbol = Symbol.for("elfui.app.id") as never;
 const INSTANCE_KEY: unique symbol = Symbol.for("elfui.instance") as never;
+const LOGICAL_PARENT_KEY: unique symbol = Symbol.for("elfui.devtools.logical-parent") as never;
 
 export interface ElfUIDevtoolsDebugState {
+  id: string;
+  appId: string | null;
+  parentId: string | null;
+  parentHost: WeakRef<HTMLElement> | null;
+  children: Set<string>;
   props: Record<string, unknown>;
   setup: Record<string, unknown>;
   exposed: Record<string, unknown>;
@@ -18,8 +24,10 @@ export interface ElfUIDevtoolsSourceLocation {
 }
 
 export interface ElfUIDevtoolsComponentRegistration {
+  id: string;
   host: HTMLElement;
   appId: string | null;
+  parentId: string | null;
   parentHost: HTMLElement | null;
   tag: string;
   displayName: string;
@@ -56,6 +64,7 @@ interface ElfUIDevtoolsRuntimeHook {
 }
 
 let nextAppId = 1;
+let nextComponentId = 1;
 
 const getHook = (): ElfUIDevtoolsRuntimeHook | null => {
   if (!__DEV__) return null;
@@ -64,11 +73,15 @@ const getHook = (): ElfUIDevtoolsRuntimeHook | null => {
 };
 
 const parentNode = (node: Node): Node | null => {
+  const logicalParent = (node as unknown as Record<symbol, unknown>)[LOGICAL_PARENT_KEY];
+  if (logicalParent instanceof HTMLElement) return logicalParent;
   if (node.parentNode) return node.parentNode;
   return node instanceof ShadowRoot ? node.host : null;
 };
 
 export const createDevtoolsAppId = (): string => `elfui-app:${nextAppId++}`;
+
+export const createDevtoolsComponentId = (): string => `elfui-component:${nextComponentId++}`;
 
 export const attachDevtoolsAppId = (host: HTMLElement, appId: string): void => {
   if (!__DEV__) return;
@@ -99,6 +112,45 @@ export const findDevtoolsParentHost = (host: HTMLElement): HTMLElement | null =>
     current = parentNode(current);
   }
   return null;
+};
+
+export const attachDevtoolsLogicalParent = (node: Node, parentHost: HTMLElement | null): void => {
+  if (!__DEV__ || !parentHost) return;
+  const roots = node instanceof DocumentFragment ? Array.from(node.childNodes) : [node];
+  for (const root of roots) {
+    (root as unknown as Record<symbol, unknown>)[LOGICAL_PARENT_KEY] = parentHost;
+  }
+};
+
+interface DevtoolsComponentOwner {
+  host: HTMLElement;
+  devtools: ElfUIDevtoolsDebugState;
+}
+
+const readDevtoolsOwner = (host: HTMLElement | null): DevtoolsComponentOwner | null => {
+  if (!host) return null;
+  return (
+    ((host as unknown as Record<symbol, unknown>)[INSTANCE_KEY] as
+      | DevtoolsComponentOwner
+      | undefined) ?? null
+  );
+};
+
+export const connectDevtoolsComponent = (owner: DevtoolsComponentOwner): void => {
+  if (!__DEV__) return;
+  const parentHost = findDevtoolsParentHost(owner.host);
+  const parent = readDevtoolsOwner(parentHost);
+  owner.devtools.parentId = parent?.devtools.id ?? null;
+  owner.devtools.parentHost = parentHost ? new WeakRef(parentHost) : null;
+  owner.devtools.appId = parent?.devtools.appId ?? getDevtoolsAppId(owner.host);
+  parent?.devtools.children.add(owner.devtools.id);
+};
+
+export const disconnectDevtoolsComponent = (owner: DevtoolsComponentOwner): void => {
+  if (!__DEV__) return;
+  const parentHost = owner.devtools.parentHost?.deref() ?? null;
+  readDevtoolsOwner(parentHost)?.devtools.children.delete(owner.devtools.id);
+  owner.devtools.parentHost = null;
 };
 
 export const hasDevtoolsRuntimeHook = (): boolean =>

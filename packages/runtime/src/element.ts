@@ -25,7 +25,11 @@ import {
 } from "./form-control";
 import { attachInstanceToHost } from "./inject";
 import { callHooks, createInstance, setCurrentInstance, type ComponentInstance } from "./lifecycle";
-import { emitDevtoolsRuntimeEvent, findDevtoolsParentHost, getDevtoolsAppId } from "./devtools";
+import {
+  connectDevtoolsComponent,
+  disconnectDevtoolsComponent,
+  emitDevtoolsRuntimeEvent
+} from "./devtools";
 
 /** Prop 选项 */
 export interface PropOption<T = unknown> {
@@ -192,6 +196,7 @@ export const defineCustomElement = (
         this.__instance = instance;
         // 把 instance 挂到 host 上，以便 inject 能沿父链查找
         attachInstanceToHost(this, instance);
+        if (__DEV__) connectDevtoolsComponent(instance);
 
         scope.run(() => {
           // 同步 attribute 到 prop
@@ -372,6 +377,8 @@ export const defineCustomElement = (
           instance.isMounted = true;
           callHooks(instance.mountedHooks);
           if (__DEV__) {
+            const hostRef = new WeakRef(this);
+            const instanceRef = new WeakRef(instance);
             const source = (
               this.constructor as typeof HTMLElement & {
                 __elfSource?: {
@@ -386,20 +393,25 @@ export const defineCustomElement = (
             emitDevtoolsRuntimeEvent({
               type: "component:mount",
               component: {
+                id: instance.devtools.id,
                 host: this,
-                appId: getDevtoolsAppId(this),
-                parentHost: findDevtoolsParentHost(this),
+                appId: instance.devtools.appId,
+                parentId: instance.devtools.parentId,
+                parentHost: instance.devtools.parentHost?.deref() ?? null,
                 tag: definition.tag,
                 displayName: definition.tag,
                 shadowMode: definition.shadow === false ? "none" : (definition.shadow ?? "open"),
                 ...(source ? { source } : {}),
-                props: () => instance.devtools.props,
+                props: () => instanceRef.deref()?.devtools.props ?? {},
                 attrs: () =>
                   Object.fromEntries(
-                    Array.from(this.attributes, (attribute) => [attribute.name, attribute.value])
+                    Array.from(hostRef.deref()?.attributes ?? [], (attribute) => [
+                      attribute.name,
+                      attribute.value
+                    ])
                   ),
-                setup: () => instance.devtools.setup,
-                exposed: () => instance.devtools.exposed
+                setup: () => instanceRef.deref()?.devtools.setup ?? {},
+                exposed: () => instanceRef.deref()?.devtools.exposed ?? {}
               }
             });
           }
@@ -435,7 +447,10 @@ export const defineCustomElement = (
         }
         this.__scope?.stop();
         if (this.__instance) callHooks(this.__instance.unmountedHooks);
-        if (__DEV__) emitDevtoolsRuntimeEvent({ type: "component:unmount", host: this });
+        if (__DEV__) {
+          emitDevtoolsRuntimeEvent({ type: "component:unmount", host: this });
+          if (this.__instance) disconnectDevtoolsComponent(this.__instance);
+        }
         disposeHostAttrs(this);
         this.__mounted = false;
 
