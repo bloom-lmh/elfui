@@ -247,8 +247,8 @@ const modelValueCoercion = (mods: readonly string[], valueExpr: string): string 
 
 const escapeStr = (s: string): string => JSON.stringify(s);
 
-const bindingDebug = (loc: SourceLoc): string =>
-  `{ source: { line: ${loc.start.line}, column: ${loc.start.column} } }`;
+const bindingDebug = (loc: SourceLoc, name?: string): string =>
+  `{ ${name ? `name: ${escapeStr(name)}, ` : ""}source: { line: ${loc.start.line}, column: ${loc.start.column} } }`;
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -430,7 +430,7 @@ const genMemo = (node: ElementNode, dir: DirectiveNode, ctx: CodegenContext): st
   const clean = stripDirective(node, "memo");
   const deps = `(${wrapGetter(dir.exp, ctx)})(${currentCtx(ctx)})`;
   const render = `() => ${genElement(clean, ctx)}`;
-  return `(() => { const __anchor = mark(); const __frag = document.createDocumentFragment(); __frag.appendChild(__anchor); let __prev; let __key = 0; const __render = ${render}; branch(__anchor, () => { const __next = ${deps}; if (__prev && __prev.length === __next.length && __prev.every((__v, __i) => __v === __next[__i])) return __key; __prev = __next; __key = __key === 0 ? 1 : 0; return __key; }, [__render, __render], true); return __frag; })()`;
+  return `(() => { const __anchor = mark(); const __frag = document.createDocumentFragment(); __frag.appendChild(__anchor); let __prev; let __key = 0; const __render = ${render}; branch(__anchor, () => { const __next = ${deps}; if (__prev && __prev.length === __next.length && __prev.every((__v, __i) => __v === __next[__i])) return __key; __prev = __next; __key = __key === 0 ? 1 : 0; return __key; }, [__render, __render], true, ${bindingDebug(dir.expLoc ?? dir.loc, "v-memo")}); return __frag; })()`;
 };
 
 const stripDirective = (node: ElementNode, name: string): ElementNode => ({
@@ -538,7 +538,7 @@ const genDirective = (elVar: string, d: DirectiveNode, ctx: CodegenContext): str
       return genModelDirective(elVar, d, ctx);
     case "show": {
       use(ctx, "show");
-      return `show(${elVar}, () => (${wrapGetter(d.exp, ctx)})(${currentCtx(ctx)}))`;
+      return `show(${elVar}, () => (${wrapGetter(d.exp, ctx)})(${currentCtx(ctx)}), ${bindingDebug(d.expLoc ?? d.loc, "v-show")})`;
     }
     case "text": {
       use(ctx, "text");
@@ -588,14 +588,15 @@ const genModelDirective = (elVar: string, d: DirectiveNode, ctx: CodegenContext)
   const syncMultipleSelect =
     `if (${selectEl}.multiple) { queueMicrotask(() => { const __values = __get(); ` +
     `if (Array.isArray(__values)) { for (const __option of Array.from(${selectEl}.options)) { __option.selected = __values.includes(__option.value); } } }); }`;
+  const debug = bindingDebug(d.expLoc ?? d.loc, "v-model");
 
   return (
     `(() => { const __get = ${getter}; const __set = ${setter}; const __tag = ${elVar}.tagName.toLowerCase(); ` +
-    `if (__tag === "input" && ${inputEl}.type === "checkbox") { prop(${elVar}, "checked", () => Boolean(__get())); on(${elVar}, "change", (${renderEventParam(ctx, "__e")}) => { const __target = ${inputTarget}; __set(${currentCtx(ctx)}, __target.checked); }); return; } ` +
-    `if (__tag === "input" && ${inputEl}.type === "radio") { prop(${elVar}, "checked", () => __get() === ${inputEl}.value); on(${elVar}, "change", (${renderEventParam(ctx, "__e")}) => { const __target = ${inputTarget}; if (__target.checked) __set(${currentCtx(ctx)}, __target.value); }); return; } ` +
-    `if (__tag.includes("-")) { prop(${elVar}, ${escapeStr(propName)}, () => __get()); on(${elVar}, ${escapeStr(customEventName)}, (${renderEventParam(ctx, "__e")}) => { ${customDetail} ${nativeCoercion} __set(${currentCtx(ctx)}, __v); }); return; } ` +
-    `if (__tag === "select") { prop(${elVar}, "value", () => __get() ?? ""); ${syncMultipleSelect} on(${elVar}, "change", (${renderEventParam(ctx, "__e")}) => { const __target = ${selectTarget}; let __v${ctx.expressionMode === "scope" ? ": unknown" : ""}; if (__target.multiple) { __v = Array.from(${selectOptions}.selectedOptions).map((__option) => __option.value); } else { __v = __target.value; } ${nativeCoercion} __set(${currentCtx(ctx)}, __v); }); return; } ` +
-    `prop(${elVar}, "value", () => __get() ?? ""); on(${elVar}, ${escapeStr(lazyEvent)}, (${renderEventParam(ctx, "__e")}) => { const __target = ${inputTarget}; let __v${ctx.expressionMode === "scope" ? ": unknown" : ""} = __target.value; ${nativeCoercion} __set(${currentCtx(ctx)}, __v); }); })()`
+    `if (__tag === "input" && ${inputEl}.type === "checkbox") { prop(${elVar}, "checked", () => Boolean(__get()), ${debug}); on(${elVar}, "change", (${renderEventParam(ctx, "__e")}) => { const __target = ${inputTarget}; __set(${currentCtx(ctx)}, __target.checked); }); return; } ` +
+    `if (__tag === "input" && ${inputEl}.type === "radio") { prop(${elVar}, "checked", () => __get() === ${inputEl}.value, ${debug}); on(${elVar}, "change", (${renderEventParam(ctx, "__e")}) => { const __target = ${inputTarget}; if (__target.checked) __set(${currentCtx(ctx)}, __target.value); }); return; } ` +
+    `if (__tag.includes("-")) { prop(${elVar}, ${escapeStr(propName)}, () => __get(), ${debug}); on(${elVar}, ${escapeStr(customEventName)}, (${renderEventParam(ctx, "__e")}) => { ${customDetail} ${nativeCoercion} __set(${currentCtx(ctx)}, __v); }); return; } ` +
+    `if (__tag === "select") { prop(${elVar}, "value", () => __get() ?? "", ${debug}); ${syncMultipleSelect} on(${elVar}, "change", (${renderEventParam(ctx, "__e")}) => { const __target = ${selectTarget}; let __v${ctx.expressionMode === "scope" ? ": unknown" : ""}; if (__target.multiple) { __v = Array.from(${selectOptions}.selectedOptions).map((__option) => __option.value); } else { __v = __target.value; } ${nativeCoercion} __set(${currentCtx(ctx)}, __v); }); return; } ` +
+    `prop(${elVar}, "value", () => __get() ?? "", ${debug}); on(${elVar}, ${escapeStr(lazyEvent)}, (${renderEventParam(ctx, "__e")}) => { const __target = ${inputTarget}; let __v${ctx.expressionMode === "scope" ? ": unknown" : ""} = __target.value; ${nativeCoercion} __set(${currentCtx(ctx)}, __v); }); })()`
   );
 };
 
@@ -673,7 +674,8 @@ const genIfChainBlock = (
     )
     .join(" ");
 
-  return `(() => { const __anchor = mark("v-if"); const __frag = document.createDocumentFragment(); __frag.appendChild(__anchor); branch(__anchor, () => { ${matcher} return -1; }, [${renderers}]); return __frag; })()`;
+  const firstIf = getIf(branches[0]!.node);
+  return `(() => { const __anchor = mark("v-if"); const __frag = document.createDocumentFragment(); __frag.appendChild(__anchor); branch(__anchor, () => { ${matcher} return -1; }, [${renderers}], false, ${bindingDebug(firstIf.expLoc ?? firstIf.loc, "v-if")}); return __frag; })()`;
 };
 
 const stripIfDirs = (node: ElementNode): ElementNode => ({
@@ -731,7 +733,7 @@ const genFor = (node: ElementNode, dir: DirectiveNode, ctx: CodegenContext): str
     withCtxName(ctx, childCtx, () => genPlain(cloned, ctx))
   );
 
-  return `(() => { const __anchor = mark("v-for"); const __frag = document.createDocumentFragment(); __frag.appendChild(__anchor); list(__anchor, () => { const __v = (${wrapGetter(source, ctx)})(${parentCtx}); if (Array.isArray(__v)) return __v; if (__v && typeof __v === "object") return Object.values(__v); if (typeof __v === "number") return Array.from({length: __v}, (_, i) => i + 1); return []; }, ${keyGetter}, (${renderListParams(ctx)}) => { const ${childCtx} = { ...${parentCtx}, state: ${stateSpread} }; return ${renderChild}; }); return __frag; })()`;
+  return `(() => { const __anchor = mark("v-for"); const __frag = document.createDocumentFragment(); __frag.appendChild(__anchor); list(__anchor, () => { const __v = (${wrapGetter(source, ctx)})(${parentCtx}); if (Array.isArray(__v)) return __v; if (__v && typeof __v === "object") return Object.values(__v); if (typeof __v === "number") return Array.from({length: __v}, (_, i) => i + 1); return []; }, ${keyGetter}, (${renderListParams(ctx)}) => { const ${childCtx} = { ...${parentCtx}, state: ${stateSpread} }; return ${renderChild}; }, ${bindingDebug(dir.expLoc ?? dir.loc, "v-for")}); return __frag; })()`;
 };
 
 // ---------- 内置组件 ----------

@@ -15,6 +15,22 @@
 
 import { effectScope, useEffect } from "@elfui/reactivity";
 
+import type { BindingDebugInfo } from "./bindings";
+
+const controlFlowEffect = (
+  fn: () => void,
+  fallbackName: string,
+  debug?: BindingDebugInfo
+): void => {
+  useEffect(fn, {
+    debug: {
+      kind: "binding",
+      name: debug?.name ?? fallbackName,
+      ...(debug?.source ? { source: debug.source } : {})
+    }
+  });
+};
+
 /** 创建一个用作锚的注释节点 */
 export const mark = (label: string = ""): Comment => document.createComment(label);
 
@@ -41,7 +57,8 @@ export const branch = (
   anchor: Comment,
   keyGetter: () => number,
   branches: RenderBlock[],
-  freeze = false
+  freeze = false,
+  debug?: BindingDebugInfo
 ): void => {
   let currentKey = -2;
   let currentNodes: Node[] = [];
@@ -58,7 +75,7 @@ export const branch = (
     }
   };
 
-  useEffect(() => {
+  const updateBranch = (): void => {
     const key = keyGetter();
     if (key === currentKey) return;
     cleanup();
@@ -84,7 +101,8 @@ export const branch = (
       currentNodes = [node];
     }
     anchor.parentNode?.insertBefore(node, anchor);
-  });
+  };
+  controlFlowEffect(updateBranch, "branch", debug);
 };
 
 // ---------- list (v-for) ----------
@@ -190,11 +208,12 @@ export const list = <T>(
   anchor: Comment,
   itemsGetter: () => readonly T[],
   keyGetter: ListKeyGetter<T>,
-  render: ListRender<T>
+  render: ListRender<T>,
+  debug?: BindingDebugInfo
 ): void => {
   let prev: ListItem<T>[] = [];
 
-  useEffect(() => {
+  const updateList = (): void => {
     const raw = itemsGetter();
     // 显式建立长度追踪（让 push / 删除等数组变更也能被 effect 感知）
     const newItems: T[] = [];
@@ -305,18 +324,23 @@ export const list = <T>(
     }
 
     prev = next as ListItem<T>[];
-  });
+  };
+  controlFlowEffect(updateList, "list", debug);
 };
 
 // ---------- show (v-show) ----------
 
 /** v-show：通过 style.display 切换显示，不卸载节点 */
-export const show = (el: Element, getter: () => unknown): void => {
+export const show = (el: Element, getter: () => unknown, debug?: BindingDebugInfo): void => {
   const styled = el as HTMLElement | SVGElement;
   // 记录原始 display（可能是 inline-block / flex 等）
   const original = styled.style.display === "none" ? "" : styled.style.display;
-  useEffect(() => {
-    const v = getter();
-    styled.style.display = v ? original : "none";
-  });
+  controlFlowEffect(
+    () => {
+      const v = getter();
+      styled.style.display = v ? original : "none";
+    },
+    "show",
+    debug
+  );
 };

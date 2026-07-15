@@ -48,6 +48,17 @@ describe("B3.6 codegen", () => {
     expect(code).toContain("source: { line: 3, column: 16 }");
   });
 
+  it("为 v-model 与控制流生成具名 binding 元数据", () => {
+    const { code } = codegen(
+      `<input v-model="value" />\n<p v-show="visible">x</p>\n<div v-if="visible">y</div>\n<li v-for="item in items">{{ item }}</li>`
+    );
+
+    expect(code).toMatch(/name: "v-model", source: \{ line: 1, column: \d+ \}/);
+    expect(code).toMatch(/name: "v-show", source: \{ line: 2, column: \d+ \}/);
+    expect(code).toMatch(/name: "v-if", source: \{ line: 3, column: \d+ \}/);
+    expect(code).toMatch(/name: "v-for", source: \{ line: 4, column: \d+ \}/);
+  });
+
   it("插值绑定可执行", async () => {
     const { code, helpers } = codegen(`<p>{{ msg }}</p>`);
     const render = evalCode(code, helpers);

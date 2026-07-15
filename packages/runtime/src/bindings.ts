@@ -18,6 +18,7 @@ import { useEffect, type ReactivityEffectDebugInfo } from "@elfui/reactivity";
 import { getCurrentInstance, runWithUpdateHooks } from "./lifecycle";
 
 export interface BindingDebugInfo {
+  name?: string;
   source?: { line: number; column: number };
 }
 
@@ -25,7 +26,7 @@ const bindEffect = (fn: () => void, name: string, debug?: BindingDebugInfo): voi
   const instance = getCurrentInstance();
   const effectDebug: ReactivityEffectDebugInfo = {
     kind: "binding",
-    name,
+    name: debug?.name ?? name,
     ...(debug?.source ? { source: debug.source } : {})
   };
   useEffect(

@@ -429,7 +429,8 @@ const createMemoBlock = (node: ElementNode, dir: DirectiveNode, ctx: RenderCtx):
       return key;
     },
     [render, render],
-    true
+    true,
+    bindingDebug(dir.expLoc ?? dir.loc, "v-memo")
   );
   return frag;
 };
@@ -1245,7 +1246,7 @@ const applyDirective = (el: Element, d: DirectiveNode, ctx: RenderCtx): void => 
     }
     case "show": {
       const getter = makeGetter(d.exp, directiveMeta("v-show", d));
-      show(el as HTMLElement, () => getter(ctx));
+      show(el as HTMLElement, () => getter(ctx), bindingDebug(d.expLoc ?? d.loc, "v-show"));
       break;
     }
     case "text": {
@@ -1351,6 +1352,9 @@ const createIfChainBlock = (
         ctx
       )
   );
+  const firstIf = branches[0]?.node.props.find(
+    (prop): prop is DirectiveNode => prop.type === AttrTypes.DIRECTIVE && prop.name === "if"
+  );
 
   branch(
     anchor,
@@ -1362,7 +1366,9 @@ const createIfChainBlock = (
       }
       return -1;
     },
-    renderers
+    renderers,
+    false,
+    bindingDebug(firstIf?.expLoc ?? firstIf?.loc, "v-if")
   );
 
   return frag;
@@ -1443,7 +1449,8 @@ const createForBlock = (node: ElementNode, dir: DirectiveNode, ctx: RenderCtx): 
         props: node.props.filter((p) => !(p.type === AttrTypes.DIRECTIVE && p.name === "for"))
       };
       return createPlainElement(cloned, childCtx);
-    }
+    },
+    bindingDebug(dir.expLoc ?? dir.loc, "v-for")
   );
 
   return frag;
@@ -1454,6 +1461,7 @@ const createForBlock = (node: ElementNode, dir: DirectiveNode, ctx: RenderCtx): 
 const applyVModel = (el: Element, d: DirectiveNode, ctx: RenderCtx): void => {
   const getter = makeGetter(d.exp, directiveMeta("v-model", d));
   const setter = makeSetter(d.exp, directiveMeta("v-model", d));
+  const debug = bindingDebug(d.expLoc ?? d.loc, "v-model");
 
   const tag = el.tagName.toLowerCase();
   const isCheckbox = tag === "input" && (el as HTMLInputElement).type === "checkbox";
@@ -1463,7 +1471,7 @@ const applyVModel = (el: Element, d: DirectiveNode, ctx: RenderCtx): void => {
   const isCustomElement = tag.includes("-");
 
   if (isCheckbox) {
-    prop(el, "checked", () => Boolean(getter(ctx)));
+    prop(el, "checked", () => Boolean(getter(ctx)), debug);
     on(el, "change", (e) => {
       setter(ctx, (e.target as HTMLInputElement).checked);
     });
@@ -1471,7 +1479,7 @@ const applyVModel = (el: Element, d: DirectiveNode, ctx: RenderCtx): void => {
   }
 
   if (isRadio) {
-    prop(el, "checked", () => getter(ctx) === (el as HTMLInputElement).value);
+    prop(el, "checked", () => getter(ctx) === (el as HTMLInputElement).value, debug);
     on(el, "change", (e) => {
       const target = e.target as HTMLInputElement;
       if (target.checked) setter(ctx, target.value);
@@ -1484,7 +1492,7 @@ const applyVModel = (el: Element, d: DirectiveNode, ctx: RenderCtx): void => {
     // 命名参数 v-model:foo 等价于 prop="foo" + event="update:foo"
     const propName = d.arg ? templateAttrToProp(d.arg) : "modelValue";
     const eventName = `update:${propName}`;
-    prop(el, propName, () => getter(ctx));
+    prop(el, propName, () => getter(ctx), debug);
     el.addEventListener(eventName, (e) => {
       const ce = e as CustomEvent;
       let v: unknown = ce.detail;
@@ -1498,7 +1506,7 @@ const applyVModel = (el: Element, d: DirectiveNode, ctx: RenderCtx): void => {
   if (isSelect) {
     const select = el as HTMLSelectElement;
     // select 默认 / multiple
-    prop(el, "value", () => getter(ctx) ?? "");
+    prop(el, "value", () => getter(ctx) ?? "", debug);
     on(el, "change", (e) => {
       const target = e.target as HTMLSelectElement;
       let v: unknown;
@@ -1529,7 +1537,7 @@ const applyVModel = (el: Element, d: DirectiveNode, ctx: RenderCtx): void => {
   }
 
   // 默认：文本输入 / textarea
-  prop(el, "value", () => getter(ctx) ?? "");
+  prop(el, "value", () => getter(ctx) ?? "", debug);
   const eventName = d.modifiers.includes("lazy") ? "change" : "input";
   on(el, eventName, (e) => {
     const target = e.target as HTMLInputElement;
@@ -1561,9 +1569,15 @@ const expressionMeta = (kind: string, loc: SourceLoc | undefined): RuntimeExpres
 });
 
 const bindingDebug = (
-  loc: SourceLoc | undefined
-): { source: { line: number; column: number } } | undefined =>
-  loc ? { source: { line: loc.start.line, column: loc.start.column } } : undefined;
+  loc: SourceLoc | undefined,
+  name?: string
+): { name?: string; source: { line: number; column: number } } | undefined =>
+  loc
+    ? {
+        ...(name ? { name } : {}),
+        source: { line: loc.start.line, column: loc.start.column }
+      }
+    : undefined;
 
 const directiveMeta = (kind: string, directive: DirectiveNode): RuntimeExpressionMeta =>
   expressionMeta(kind, directive.expLoc ?? directive.loc);
