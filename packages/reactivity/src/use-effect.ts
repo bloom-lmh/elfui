@@ -12,6 +12,7 @@
 // 处理 cleanup、scheduler 等用户关心的东西；effect() 是底层原语。
 
 import type { ReactiveEffect } from "./effect";
+import type { ReactivityEffectDebugInfo } from "./devtools";
 import { effect as createEffect, stop as stopEffect } from "./effect";
 import { queueJob, type SchedulerJob } from "./scheduler";
 
@@ -24,6 +25,8 @@ export interface UseEffectOptions {
   flush?: "sync" | "pre" | "post";
   /** stop 时调用一次 */
   onStop?: () => void;
+  /** DevTools 中显示的 effect/binding 名称及模板位置。 */
+  debug?: ReactivityEffectDebugInfo;
 }
 
 export interface EffectStopHandle {
@@ -72,12 +75,19 @@ export const useEffect = (fn: EffectFn, options: UseEffectOptions = {}): EffectS
           runner.effect.run();
         }) as SchedulerJob);
 
-  const effectOptions: { scheduler?: () => void; onStop?: () => void } = {};
+  const effectOptions: {
+    scheduler?: () => void;
+    onStop?: () => void;
+    debug?: ReactivityEffectDebugInfo;
+  } = {};
   if (scheduler) {
     effectOptions.scheduler = () => queueJob(scheduler);
   }
   if (options.onStop) {
     effectOptions.onStop = options.onStop;
+  }
+  if (options.debug) {
+    effectOptions.debug = options.debug;
   }
   const runner = createEffect(runWithCleanup, effectOptions);
 

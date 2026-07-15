@@ -13,15 +13,27 @@
 // - cls(el, getter)：class 合并（string / object / array）
 // - sty(el, getter)：style 合并（string / object）
 
-import { useEffect } from "@elfui/reactivity";
+import { useEffect, type ReactivityEffectDebugInfo } from "@elfui/reactivity";
 
 import { getCurrentInstance, runWithUpdateHooks } from "./lifecycle";
 
-const bindEffect = (fn: () => void): void => {
+export interface BindingDebugInfo {
+  source?: { line: number; column: number };
+}
+
+const bindEffect = (fn: () => void, name: string, debug?: BindingDebugInfo): void => {
   const instance = getCurrentInstance();
-  useEffect(() => {
-    runWithUpdateHooks(instance, fn);
-  });
+  const effectDebug: ReactivityEffectDebugInfo = {
+    kind: "binding",
+    name,
+    ...(debug?.source ? { source: debug.source } : {})
+  };
+  useEffect(
+    () => {
+      runWithUpdateHooks(instance, fn);
+    },
+    { debug: effectDebug }
+  );
 };
 
 const camel = (s: string): string => s.replace(/-(\w)/g, (_, c: string) => c.toUpperCase());
@@ -32,11 +44,15 @@ const customElementPropKey = (el: Element, key: string): string => {
 };
 
 /** 动态文本节点：node 必须是 Text 节点 */
-export const text = (node: Text, getter: () => unknown): void => {
-  bindEffect(() => {
-    const v = getter();
-    node.data = v == null ? "" : String(v);
-  });
+export const text = (node: Text, getter: () => unknown, debug?: BindingDebugInfo): void => {
+  bindEffect(
+    () => {
+      const v = getter();
+      node.data = v == null ? "" : String(v);
+    },
+    "text",
+    debug
+  );
 };
 
 /** HTML attribute：用 setAttribute / removeAttribute
@@ -45,28 +61,46 @@ export const text = (node: Text, getter: () => unknown): void => {
  *  自动改用 property 写入（el[key] = v）。这是 Web Components 的常见
  *  约定 —— 简单值走 attribute，复杂值走 property。
  */
-export const attr = (el: Element, key: string, getter: () => unknown): void => {
-  bindEffect(() => {
-    const v = getter();
-    // 复杂类型：写 property
-    if (v !== null && (typeof v === "object" || typeof v === "function")) {
-      (el as unknown as Record<string, unknown>)[customElementPropKey(el, key)] = v;
-      return;
-    }
-    if (v == null || v === false) {
-      el.removeAttribute(key);
-    } else {
-      el.setAttribute(key, v === true ? "" : String(v));
-    }
-  });
+export const attr = (
+  el: Element,
+  key: string,
+  getter: () => unknown,
+  debug?: BindingDebugInfo
+): void => {
+  bindEffect(
+    () => {
+      const v = getter();
+      // 复杂类型：写 property
+      if (v !== null && (typeof v === "object" || typeof v === "function")) {
+        (el as unknown as Record<string, unknown>)[customElementPropKey(el, key)] = v;
+        return;
+      }
+      if (v == null || v === false) {
+        el.removeAttribute(key);
+      } else {
+        el.setAttribute(key, v === true ? "" : String(v));
+      }
+    },
+    `attr:${key}`,
+    debug
+  );
 };
 
 /** DOM property：el[key] = value */
-export const prop = (el: Element, key: string, getter: () => unknown): void => {
-  bindEffect(() => {
-    const v = getter();
-    (el as unknown as Record<string, unknown>)[customElementPropKey(el, key)] = v;
-  });
+export const prop = (
+  el: Element,
+  key: string,
+  getter: () => unknown,
+  debug?: BindingDebugInfo
+): void => {
+  bindEffect(
+    () => {
+      const v = getter();
+      (el as unknown as Record<string, unknown>)[customElementPropKey(el, key)] = v;
+    },
+    `prop:${key}`,
+    debug
+  );
 };
 
 /** 事件监听 */
@@ -103,18 +137,22 @@ const normalizeClass = (value: ClassValue): string => {
 };
 
 /** class 绑定：合并多种形态 */
-export const cls = (el: Element, getter: () => ClassValue): void => {
+export const cls = (el: Element, getter: () => ClassValue, debug?: BindingDebugInfo): void => {
   // 记录组件直接写在标签上的静态 class，更新时与动态部分合并
   const staticClass = el.getAttribute("class") ?? "";
-  bindEffect(() => {
-    const dynamic = normalizeClass(getter());
-    const merged = staticClass ? `${staticClass} ${dynamic}`.trim() : dynamic;
-    if (merged) {
-      el.setAttribute("class", merged);
-    } else {
-      el.removeAttribute("class");
-    }
-  });
+  bindEffect(
+    () => {
+      const dynamic = normalizeClass(getter());
+      const merged = staticClass ? `${staticClass} ${dynamic}`.trim() : dynamic;
+      if (merged) {
+        el.setAttribute("class", merged);
+      } else {
+        el.removeAttribute("class");
+      }
+    },
+    "class",
+    debug
+  );
 };
 
 // ---------- style ----------
@@ -145,31 +183,39 @@ const normalizeStyle = (value: StyleValue): string => {
 const kebab = (s: string): string => s.replace(/([A-Z])/g, "-$1").toLowerCase();
 
 /** style 绑定 */
-export const sty = (el: Element, getter: () => StyleValue): void => {
-  bindEffect(() => {
-    const v = normalizeStyle(getter());
-    if (v) {
-      el.setAttribute("style", v);
-    } else {
-      el.removeAttribute("style");
-    }
-  });
+export const sty = (el: Element, getter: () => StyleValue, debug?: BindingDebugInfo): void => {
+  bindEffect(
+    () => {
+      const v = normalizeStyle(getter());
+      if (v) {
+        el.setAttribute("style", v);
+      } else {
+        el.removeAttribute("style");
+      }
+    },
+    "style",
+    debug
+  );
 };
 
 /** L3.9: v-bind="obj" — 把 obj 的每个 key 用响应式方式同步到 element */
-export const bindObject = (el: Element, getter: () => unknown): void => {
+export const bindObject = (el: Element, getter: () => unknown, debug?: BindingDebugInfo): void => {
   let prev: Record<string, unknown> = {};
-  bindEffect(() => {
-    const v = getter();
-    const obj = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
-    for (const k in prev) {
-      if (!(k in obj)) writeObjAttr(el, k, undefined, true);
-    }
-    for (const k in obj) {
-      writeObjAttr(el, k, obj[k], false);
-    }
-    prev = obj;
-  });
+  bindEffect(
+    () => {
+      const v = getter();
+      const obj = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
+      for (const k in prev) {
+        if (!(k in obj)) writeObjAttr(el, k, undefined, true);
+      }
+      for (const k in obj) {
+        writeObjAttr(el, k, obj[k], false);
+      }
+      prev = obj;
+    },
+    "bind-object",
+    debug
+  );
 };
 
 const writeObjAttr = (el: Element, k: string, val: unknown, removal: boolean): void => {
@@ -193,19 +239,23 @@ const writeObjAttr = (el: Element, k: string, val: unknown, removal: boolean): v
 };
 
 /** L3.9: v-on="obj" — 把 obj 的每个 key 注册为事件监听，对象变化时增删 */
-export const onObject = (el: Element, getter: () => unknown): void => {
+export const onObject = (el: Element, getter: () => unknown, debug?: BindingDebugInfo): void => {
   let prev: Record<string, EventListener> = {};
-  bindEffect(() => {
-    const v = getter();
-    const obj = (v && typeof v === "object" ? v : {}) as Record<string, EventListener>;
-    for (const k in prev) {
-      if (obj[k] !== prev[k]) el.removeEventListener(k, prev[k]!);
-    }
-    for (const k in obj) {
-      if (typeof obj[k] === "function" && obj[k] !== prev[k]) {
-        el.addEventListener(k, obj[k]!);
+  bindEffect(
+    () => {
+      const v = getter();
+      const obj = (v && typeof v === "object" ? v : {}) as Record<string, EventListener>;
+      for (const k in prev) {
+        if (obj[k] !== prev[k]) el.removeEventListener(k, prev[k]!);
       }
-    }
-    prev = { ...obj };
-  });
+      for (const k in obj) {
+        if (typeof obj[k] === "function" && obj[k] !== prev[k]) {
+          el.addEventListener(k, obj[k]!);
+        }
+      }
+      prev = { ...obj };
+    },
+    "on-object",
+    debug
+  );
 };

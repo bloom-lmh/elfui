@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useRef } from "@elfui/reactivity";
 
+import { text } from "../bindings";
+import { setDevtoolsComponentContext } from "../devtools";
 import { createInstance, runWithUpdateHooks } from "../lifecycle";
 
 describe("development DevTools hook", () => {
   afterEach(() => {
     delete (globalThis as Record<string, unknown>).__ELFUI_DEVTOOLS_GLOBAL_HOOK__;
+    setDevtoolsComponentContext(null);
   });
 
   it("coalesces binding updates for one component in a microtask", async () => {
@@ -25,5 +29,33 @@ describe("development DevTools hook", () => {
     await Promise.resolve();
     expect(emitRuntimeEvent).toHaveBeenCalledTimes(1);
     expect(emitRuntimeEvent).toHaveBeenCalledWith({ type: "component:update", host });
+  });
+
+  it("attaches binding kind and template location to reactive effects", () => {
+    const events: Array<Record<string, unknown>> = [];
+    (globalThis as Record<string, unknown>).__ELFUI_DEVTOOLS_GLOBAL_HOOK__ = {
+      emitReactivityEvent: (event: Record<string, unknown>) => events.push(event)
+    };
+    setDevtoolsComponentContext("elfui-component:binding");
+    const count = useRef(0, "count");
+    const node = document.createTextNode("");
+    text(node, () => count.value, { source: { line: 3, column: 7 } });
+    setDevtoolsComponentContext(null);
+
+    count.value = 1;
+
+    expect(events[0]).toMatchObject({
+      type: "reactivity:trigger",
+      effects: [
+        {
+          componentId: "elfui-component:binding",
+          debug: {
+            kind: "binding",
+            name: "text",
+            source: { line: 3, column: 7 }
+          }
+        }
+      ]
+    });
   });
 });

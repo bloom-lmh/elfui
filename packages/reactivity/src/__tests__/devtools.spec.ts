@@ -72,4 +72,21 @@ describe("reactivity devtools instrumentation", () => {
     ).toEqual(expect.arrayContaining([triggers[0]!.id, triggers[1]!.id]));
     stop();
   });
+
+  it("does not create payloads while timeline recording is paused", () => {
+    const events: Array<Record<string, unknown>> = [];
+    (globalThis as Record<string, unknown>).__ELFUI_DEVTOOLS_GLOBAL_HOOK__ = {
+      isTimelineRecording: () => false,
+      emitReactivityEvent: (event: Record<string, unknown>) => events.push(event)
+    };
+    const count = useRef(0, "count");
+    const stop = useEffect(() => {
+      void count.value;
+    });
+
+    count.value = 1;
+
+    expect(events).toEqual([]);
+    stop();
+  });
 });

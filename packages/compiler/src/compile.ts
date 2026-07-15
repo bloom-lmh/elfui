@@ -339,7 +339,7 @@ const createText = (node: TextNode): Text => document.createTextNode(node.conten
 const createInterpolation = (node: InterpolationNode, ctx: RenderCtx): Text => {
   const t = document.createTextNode("");
   const getter = makeGetter(node.content, expressionMeta("interpolation", node.contentLoc));
-  text(t, () => getter(ctx));
+  text(t, () => getter(ctx), bindingDebug(node.contentLoc));
   return t;
 };
 
@@ -1125,6 +1125,7 @@ const applyAttribute = (el: Element, p: AttributeNode, ctx: RenderCtx): void => 
 };
 
 const applyDirective = (el: Element, d: DirectiveNode, ctx: RenderCtx): void => {
+  const debug = bindingDebug(d.expLoc ?? d.loc);
   // 动态参数：v-bind:[key] / v-on:[event] / @[event] / :[key]
   // 把 d.argDynamic 当作表达式求值得到字符串作为 arg
   const dynArgGetter: (() => string) | null = d.argDynamic
@@ -1164,33 +1165,46 @@ const applyDirective = (el: Element, d: DirectiveNode, ctx: RenderCtx): void => 
           }
         };
         // 借 attr 原语跑一次 effect（取它做 marker，返回 null 不改 marker）
-        attr(el, "data-elf-dyn-bind-marker", () => {
-          const k = dynArgGetter();
-          if (lastKey && lastKey !== k) {
-            // 清掉旧 key
-            el.removeAttribute(lastKey);
-          }
-          lastKey = k;
-          if (k) prevSetter(k, getter(ctx));
-          return null;
-        });
+        attr(
+          el,
+          "data-elf-dyn-bind-marker",
+          () => {
+            const k = dynArgGetter();
+            if (lastKey && lastKey !== k) {
+              // 清掉旧 key
+              el.removeAttribute(lastKey);
+            }
+            lastKey = k;
+            if (k) prevSetter(k, getter(ctx));
+            return null;
+          },
+          debug
+        );
         return;
       }
 
       const arg = d.arg;
       if (!arg) {
         // v-bind="obj" 形式：用 effect 跟踪 obj 的字段并展开
-        bindObject(el, () => getter(ctx));
+        bindObject(el, () => getter(ctx), debug);
         return;
       }
       if (arg === "class") {
-        cls(el, () => getter(ctx) as Parameters<typeof cls>[1] extends () => infer R ? R : never);
+        cls(
+          el,
+          () => getter(ctx) as Parameters<typeof cls>[1] extends () => infer R ? R : never,
+          debug
+        );
       } else if (arg === "style") {
-        sty(el, () => getter(ctx) as Parameters<typeof sty>[1] extends () => infer R ? R : never);
+        sty(
+          el,
+          () => getter(ctx) as Parameters<typeof sty>[1] extends () => infer R ? R : never,
+          debug
+        );
       } else if (d.modifiers.includes("prop")) {
-        prop(el, arg, () => getter(ctx));
+        prop(el, arg, () => getter(ctx), debug);
       } else {
-        attr(el, arg, () => getter(ctx));
+        attr(el, arg, () => getter(ctx), debug);
       }
       break;
     }
@@ -1201,24 +1215,29 @@ const applyDirective = (el: Element, d: DirectiveNode, ctx: RenderCtx): void => 
       if (dynArgGetter) {
         // 动态事件名：维护 lastEvent，名字变化时 remove + add
         let lastEvent: string | null = null;
-        attr(el, "data-elf-dyn-on-marker", () => {
-          const ev = dynArgGetter();
-          if (lastEvent === ev) return null;
-          if (lastEvent) {
-            el.removeEventListener(lastEvent, wrapped, opts);
-          }
-          if (ev) {
-            el.addEventListener(ev, wrapped, opts);
-          }
-          lastEvent = ev;
-          return null;
-        });
+        attr(
+          el,
+          "data-elf-dyn-on-marker",
+          () => {
+            const ev = dynArgGetter();
+            if (lastEvent === ev) return null;
+            if (lastEvent) {
+              el.removeEventListener(lastEvent, wrapped, opts);
+            }
+            if (ev) {
+              el.addEventListener(ev, wrapped, opts);
+            }
+            lastEvent = ev;
+            return null;
+          },
+          debug
+        );
         return;
       }
       const event = d.arg;
       if (!event) {
         // v-on="obj" 对象形态：把 { click: fn, input: fn } 全部挂上
-        onObject(el, () => makeGetter(d.exp, directiveMeta("v-on object", d))(ctx));
+        onObject(el, () => makeGetter(d.exp, directiveMeta("v-on object", d))(ctx), debug);
         return;
       }
       on(el, event, wrapped, opts);
@@ -1231,13 +1250,13 @@ const applyDirective = (el: Element, d: DirectiveNode, ctx: RenderCtx): void => 
     }
     case "text": {
       const getter = makeGetter(d.exp, directiveMeta("v-text", d));
-      text(document.createTextNode(""), () => getter(ctx)); // 占位
+      text(document.createTextNode(""), () => getter(ctx), debug); // 占位
       // v-text：实际需要清空子节点并设置 textContent
       // 这里简化为直接设 textContent（用 useEffect 由 text 包装会更精确）
       const tn = document.createTextNode("");
       el.textContent = "";
       el.appendChild(tn);
-      text(tn, () => getter(ctx));
+      text(tn, () => getter(ctx), debug);
       break;
     }
     case "html": {
@@ -1250,10 +1269,15 @@ const applyDirective = (el: Element, d: DirectiveNode, ctx: RenderCtx): void => 
         el.innerHTML = v == null ? "" : String(v);
       };
       // 借用绑定原语注册 effect
-      attr(el, "data-elf-html-marker", () => {
-        fn();
-        return null;
-      });
+      attr(
+        el,
+        "data-elf-html-marker",
+        () => {
+          fn();
+          return null;
+        },
+        debug
+      );
       break;
     }
     case "model": {
@@ -1535,6 +1559,11 @@ const expressionMeta = (kind: string, loc: SourceLoc | undefined): RuntimeExpres
   kind,
   ...(loc ? { loc } : {})
 });
+
+const bindingDebug = (
+  loc: SourceLoc | undefined
+): { source: { line: number; column: number } } | undefined =>
+  loc ? { source: { line: loc.start.line, column: loc.start.column } } : undefined;
 
 const directiveMeta = (kind: string, directive: DirectiveNode): RuntimeExpressionMeta =>
   expressionMeta(kind, directive.expLoc ?? directive.loc);

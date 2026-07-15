@@ -273,6 +273,7 @@
       { "name": "ReactiveEffect", "kind": ["type", "value"] },
       { "name": "ReactiveEffectOptions", "kind": ["type"] },
       { "name": "ReactiveEffectRunner", "kind": ["type"] },
+      { "name": "ReactivityEffectDebugInfo", "kind": ["type"] },
       { "name": "readonly", "kind": ["value"] },
       { "name": "ReadonlyComputed", "kind": ["type"] },
       { "name": "ReadonlyRef", "kind": ["type"] },

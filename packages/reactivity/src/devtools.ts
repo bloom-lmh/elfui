@@ -12,7 +12,17 @@ export interface ReactivityTriggerEvent {
   targetId: string;
   targetName?: string;
   key: string;
-  effects: Array<{ effectId: string; componentId: string | null }>;
+  effects: Array<{
+    effectId: string;
+    componentId: string | null;
+    debug?: ReactivityEffectDebugInfo;
+  }>;
+}
+
+export interface ReactivityEffectDebugInfo {
+  kind: "binding" | "computed" | "watch" | "effect" | string;
+  name?: string;
+  source?: { line: number; column: number };
 }
 
 export interface ReactivityEffectEvent {
@@ -20,6 +30,7 @@ export interface ReactivityEffectEvent {
   triggerId: string;
   effectId: string;
   componentId: string | null;
+  debug?: ReactivityEffectDebugInfo;
   duration: number;
 }
 
@@ -27,6 +38,7 @@ export type ReactivityDevtoolsEvent = ReactivityTriggerEvent | ReactivityEffectE
 
 interface ReactivityDevtoolsHook {
   emitReactivityEvent?(event: ReactivityDevtoolsEvent): void;
+  isTimelineRecording?(): boolean;
 }
 
 const targetIds = new WeakMap<object, string>();
@@ -80,7 +92,13 @@ export const emitReactivityTrigger = (
   key: unknown,
   effects: readonly ReactiveEffect[]
 ): string | null => {
-  if (!__DEV__ || typeof getHook()?.emitReactivityEvent !== "function") return null;
+  const hook = getHook();
+  if (
+    !__DEV__ ||
+    typeof hook?.emitReactivityEvent !== "function" ||
+    hook.isTimelineRecording?.() === false
+  )
+    return null;
   let targetId = targetIds.get(target);
   if (!targetId) {
     targetId = `elfui-target:${nextTargetId++}`;
@@ -97,7 +115,8 @@ export const emitReactivityTrigger = (
     key: keyText(key),
     effects: effects.map((effect) => ({
       effectId: effect.devtoolsId,
-      componentId: effect.devtoolsComponentId
+      componentId: effect.devtoolsComponentId,
+      ...(effect.devtoolsDebug ? { debug: effect.devtoolsDebug } : {})
     }))
   });
   return id;
@@ -118,10 +137,18 @@ export const emitReactivityEffect = (
   triggerId: string,
   effectId: string,
   componentId: string | null,
+  debug: ReactivityEffectDebugInfo | undefined,
   duration: number
 ): void => {
   if (!__DEV__) return;
-  emit({ type: "reactivity:effect", triggerId, effectId, componentId, duration });
+  emit({
+    type: "reactivity:effect",
+    triggerId,
+    effectId,
+    componentId,
+    ...(debug ? { debug } : {}),
+    duration
+  });
 };
 
 export const reactivityNow = (): number =>

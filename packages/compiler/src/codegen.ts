@@ -25,8 +25,10 @@ import {
   type AttributeNode,
   type DirectiveNode,
   type ElementNode,
+  type InterpolationNode,
   type ParserOptions,
   type RootNode,
+  type SourceLoc,
   type TemplateChildNode,
   type TextNode
 } from "@elfui/compiler-template";
@@ -245,6 +247,9 @@ const modelValueCoercion = (mods: readonly string[], valueExpr: string): string 
 
 const escapeStr = (s: string): string => JSON.stringify(s);
 
+const bindingDebug = (loc: SourceLoc): string =>
+  `{ source: { line: ${loc.start.line}, column: ${loc.start.column} } }`;
+
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 const SVG_TAGS = new Set([
@@ -376,7 +381,8 @@ const genNode = (node: TemplateChildNode, ctx: CodegenContext): string => {
     case NodeTypes.INTERPOLATION: {
       use(ctx, "text");
       const t = fresh(ctx, "t");
-      return `(() => { const ${t} = document.createTextNode(""); text(${t}, () => (${wrapGetter((node as { content: string }).content, ctx)})(${currentCtx(ctx)})); return ${t}; })()`;
+      const interpolation = node as InterpolationNode;
+      return `(() => { const ${t} = document.createTextNode(""); text(${t}, () => (${wrapGetter(interpolation.content, ctx)})(${currentCtx(ctx)}), ${bindingDebug(interpolation.contentLoc)}); return ${t}; })()`;
     }
     case NodeTypes.COMMENT:
       return `document.createComment(${escapeStr((node as { content: string }).content)})`;
@@ -498,20 +504,20 @@ const genDirective = (elVar: string, d: DirectiveNode, ctx: CodegenContext): str
       if (!arg) {
         // v-bind="obj"
         use(ctx, "bindObject");
-        return `bindObject(${elVar}, ${getter})`;
+        return `bindObject(${elVar}, ${getter}, ${bindingDebug(d.expLoc ?? d.loc)})`;
       }
       if (arg === "class") {
         use(ctx, "cls");
-        return `cls(${elVar}, ${getter})`;
+        return `cls(${elVar}, ${getter}, ${bindingDebug(d.expLoc ?? d.loc)})`;
       } else if (arg === "style") {
         use(ctx, "sty");
-        return `sty(${elVar}, ${getter})`;
+        return `sty(${elVar}, ${getter}, ${bindingDebug(d.expLoc ?? d.loc)})`;
       } else if (d.modifiers.includes("prop")) {
         use(ctx, "prop");
-        return `prop(${elVar}, ${escapeStr(arg)}, ${getter})`;
+        return `prop(${elVar}, ${escapeStr(arg)}, ${getter}, ${bindingDebug(d.expLoc ?? d.loc)})`;
       } else {
         use(ctx, "attr");
-        return `attr(${elVar}, ${escapeStr(arg)}, ${getter})`;
+        return `attr(${elVar}, ${escapeStr(arg)}, ${getter}, ${bindingDebug(d.expLoc ?? d.loc)})`;
       }
     }
     case "on": {
@@ -520,7 +526,7 @@ const genDirective = (elVar: string, d: DirectiveNode, ctx: CodegenContext): str
         // v-on="obj"
         use(ctx, "onObject");
         const getter = `() => (${wrapGetter(d.exp, ctx)})(${currentCtx(ctx)})`;
-        return `onObject(${elVar}, ${getter})`;
+        return `onObject(${elVar}, ${getter}, ${bindingDebug(d.expLoc ?? d.loc)})`;
       }
       use(ctx, "on");
       const handler = `(${wrapEvent(d.exp, ctx)})`;
@@ -537,11 +543,11 @@ const genDirective = (elVar: string, d: DirectiveNode, ctx: CodegenContext): str
     case "text": {
       use(ctx, "text");
       const t = fresh(ctx, "t");
-      return `(() => { ${elVar}.textContent = ""; const ${t} = document.createTextNode(""); ${elVar}.appendChild(${t}); text(${t}, () => (${wrapGetter(d.exp, ctx)})(${currentCtx(ctx)})); })()`;
+      return `(() => { ${elVar}.textContent = ""; const ${t} = document.createTextNode(""); ${elVar}.appendChild(${t}); text(${t}, () => (${wrapGetter(d.exp, ctx)})(${currentCtx(ctx)}), ${bindingDebug(d.expLoc ?? d.loc)}); })()`;
     }
     case "html": {
       use(ctx, "attr");
-      return `attr(${elVar}, "data-elf-html-marker", () => { const __v = (${wrapGetter(d.exp, ctx)})(${currentCtx(ctx)}); ${elVar}.innerHTML = __v == null ? "" : String(__v); return null; })`;
+      return `attr(${elVar}, "data-elf-html-marker", () => { const __v = (${wrapGetter(d.exp, ctx)})(${currentCtx(ctx)}); ${elVar}.innerHTML = __v == null ? "" : String(__v); return null; }, ${bindingDebug(d.expLoc ?? d.loc)})`;
     }
     // v-if / v-else-if / v-else / v-for 在更高层处理，落到这里的是单独 v-if
     case "if":

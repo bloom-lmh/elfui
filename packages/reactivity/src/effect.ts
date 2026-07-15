@@ -20,6 +20,7 @@ import {
   reactivityNow,
   withReactivityTrigger
 } from "./devtools";
+import type { ReactivityEffectDebugInfo } from "./devtools";
 import { recordEffectScope } from "./scope";
 
 export type Dep = Set<ReactiveEffect>;
@@ -32,6 +33,8 @@ export interface ReactiveEffectOptions {
   scheduler?: EffectScheduler;
   /** stop() 之后调用一次 */
   onStop?: () => void;
+  /** DevTools 调试元数据；仅开发构建读取。 */
+  debug?: ReactivityEffectDebugInfo;
 }
 
 export interface ReactiveEffectRunner<T = unknown> {
@@ -49,13 +52,16 @@ export class ReactiveEffect<T = unknown> {
   public onStop?: (() => void) | undefined;
   public readonly devtoolsId = __DEV__ ? createReactivityEffectId() : "";
   public readonly devtoolsComponentId = __DEV__ ? getReactivityComponentContext() : null;
+  public readonly devtoolsDebug: ReactivityEffectDebugInfo | undefined;
   public devtoolsTriggerId: string | null = null;
   private parent: ReactiveEffect | undefined;
 
   public constructor(
     private readonly fn: () => T,
-    public scheduler?: EffectScheduler | undefined
+    public scheduler?: EffectScheduler | undefined,
+    debug?: ReactivityEffectDebugInfo
   ) {
+    this.devtoolsDebug = __DEV__ ? debug : undefined;
     recordEffectScope(this);
   }
 
@@ -80,6 +86,7 @@ export class ReactiveEffect<T = unknown> {
           triggerId,
           this.devtoolsId,
           this.devtoolsComponentId,
+          this.devtoolsDebug,
           Math.max(0, reactivityNow() - startedAt)
         );
       }
@@ -136,7 +143,7 @@ export const effect = <T = unknown>(
   fn: () => T,
   options: ReactiveEffectOptions = {}
 ): ReactiveEffectRunner<T> => {
-  const reactiveEffect = new ReactiveEffect<T>(fn, options.scheduler);
+  const reactiveEffect = new ReactiveEffect<T>(fn, options.scheduler, options.debug);
 
   if (options.onStop) {
     reactiveEffect.onStop = options.onStop;

@@ -41,6 +41,13 @@ describe("B3.6 codegen", () => {
     expect(helpers).toContain("text");
   });
 
+  it("为动态 binding 生成模板行列元数据", () => {
+    const { code } = codegen(`<div>\n  {{ msg }}\n  <span :title="msg">x</span>\n</div>`);
+
+    expect(code).toContain("source: { line: 2, column: 5 }");
+    expect(code).toContain("source: { line: 3, column: 16 }");
+  });
+
   it("插值绑定可执行", async () => {
     const { code, helpers } = codegen(`<p>{{ msg }}</p>`);
     const render = evalCode(code, helpers);

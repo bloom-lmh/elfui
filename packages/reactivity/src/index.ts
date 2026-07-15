@@ -87,3 +87,5 @@ export {
 } from "./scope";
 
 export { isProxy, readonly, useShallowReactive, useShallowRef } from "./readonly";
+
+export type { ReactivityEffectDebugInfo } from "./devtools";
