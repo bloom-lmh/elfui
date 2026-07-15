@@ -197,6 +197,8 @@ interface InternalCompiledComponent extends MacroCompiledComponent {
   renderName: string;
   renderCode: string;
   renderHelpers: string[];
+  sourceStart: number;
+  sourceEnd: number;
 }
 
 interface ModelMacro {
@@ -426,6 +428,8 @@ export const compileMacroComponent = (
       renderName,
       renderCode: render.code,
       renderHelpers: render.helpers,
+      sourceStart: template.sourceStart,
+      sourceEnd: template.sourceEnd,
       ...(template.localName ? { localName: template.localName } : {}),
       ...(template.exportMode ? { exportMode: template.exportMode } : {}),
       ...(template.propsType ? { propsType: template.propsType } : {}),
@@ -2423,12 +2427,25 @@ const renderComponent = (component: InternalCompiledComponent, state: TransformS
   const slotsType = component.slotsType ?? "__ElfSlots";
   const generics = `<${propsType}, ${emitsType}, ${slotsType}>`;
   const code = `__elfDefineComponent${generics}({ ${fields.join(", ")} })`;
+  const withSource = (reference: string): string => {
+    const start = state.sourceFile.getLineAndCharacterOfPosition(component.sourceStart);
+    const end = state.sourceFile.getLineAndCharacterOfPosition(component.sourceEnd);
+    const file = state.filename.replace(/\?.*$/u, "").replace(/\\/g, "/");
+    const source = JSON.stringify({
+      file,
+      line: start.line + 1,
+      column: start.character + 1,
+      endLine: end.line + 1,
+      endColumn: end.character + 1
+    });
+    return `if (__DEV__) Object.defineProperty(${reference}, "__elfSource", { value: ${source}, configurable: true });`;
+  };
 
   if (component.exportName === "default") {
     if (component.localName) {
-      return `const ${component.localName} = ${code};\nexport default ${component.localName};`;
+      return `const ${component.localName} = ${code};\n${withSource(component.localName)}\nexport default ${component.localName};`;
     }
-    return `const __elfDefaultComponent = ${code};\nexport default __elfDefaultComponent;`;
+    return `const __elfDefaultComponent = ${code};\n${withSource("__elfDefaultComponent")}\nexport default __elfDefaultComponent;`;
   }
 
   if (component.localName && component.exportMode === "separate") {
@@ -2436,10 +2453,10 @@ const renderComponent = (component: InternalCompiledComponent, state: TransformS
       component.localName === component.exportName
         ? component.localName
         : `${component.localName} as ${component.exportName}`;
-    return `const ${component.localName} = ${code};\nexport { ${exportClause} };`;
+    return `const ${component.localName} = ${code};\n${withSource(component.localName)}\nexport { ${exportClause} };`;
   }
 
-  return `export const ${component.exportName} = ${code};`;
+  return `export const ${component.exportName} = ${code};\n${withSource(component.exportName)}`;
 };
 
 const buildMetadata = (
