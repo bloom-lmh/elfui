@@ -1,4 +1,5 @@
 import * as ts from "typescript";
+import path from "node:path";
 
 import {
   compileMacroComponent,
@@ -45,11 +46,14 @@ export interface ElfUIMacroPluginOptions extends MacroComponentCompileOptions {
   strictDiagnostics?: boolean;
   /** 默认 false：避免 Vite transform 为每个组件同步创建 TS Program；类型检查交给独立 check / 语言服务。 */
   templateTypeCheck?: boolean;
+  /** 稳定 sourceId 的基准目录；默认使用 Vite resolved config root。 */
+  projectRoot?: string;
 }
 
 export interface MinimalVitePlugin {
   name: string;
   enforce?: "pre" | "post";
+  configResolved?(config: { root: string }): void;
   transform?(code: string, id: string): { code: string; map: ElfSourceMap | null } | null;
 }
 
@@ -72,10 +76,14 @@ export const elfuiMacroPlugin = (options: ElfUIMacroPluginOptions = {}): Minimal
   const exclude = options.exclude;
   const macroImport = options.macroImport ?? DEFAULT_MACRO_IMPORT;
   const pragmaEnabled = options.pragma ?? true;
+  let projectRoot = options.projectRoot ?? process.cwd();
 
   return {
     name: "elfui:macro-component",
     enforce: "pre",
+    configResolved(config) {
+      if (!options.projectRoot) projectRoot = config.root;
+    },
     transform(code, id) {
       if (!include.test(id) || exclude?.test(id)) return null;
       const isElfFile = elfFileRE.test(id);
@@ -147,7 +155,10 @@ export const elfuiMacroPlugin = (options: ElfUIMacroPluginOptions = {}): Minimal
         }
       }
 
-      const compileOptions: MacroComponentCompileOptions = { filename: id };
+      const compileOptions: MacroComponentCompileOptions = {
+        filename: id,
+        sourceId: createStableSourceId(id, projectRoot)
+      };
       if (options.runtimeImport) compileOptions.runtimeImport = options.runtimeImport;
       if (options.tagPrefix) compileOptions.tagPrefix = options.tagPrefix;
       compileOptions.macroImport = macroImport;
@@ -169,6 +180,21 @@ export const elfuiMacroPlugin = (options: ElfUIMacroPluginOptions = {}): Minimal
       return { code: result.code, map: result.map };
     }
   };
+};
+
+const windowsPathRE = /^[A-Za-z]:[\\/]/u;
+
+export const createStableSourceId = (filename: string, projectRoot: string): string => {
+  const cleanFilename = filename.replace(/\?.*$/u, "");
+  const cleanRoot = projectRoot.replace(/\?.*$/u, "");
+  const pathApi =
+    windowsPathRE.test(cleanFilename) || windowsPathRE.test(cleanRoot) ? path.win32 : path.posix;
+  const relativeId = pathApi.relative(cleanRoot, cleanFilename);
+  const outsideRoot =
+    relativeId === ".." ||
+    relativeId.startsWith(`..${pathApi.sep}`) ||
+    pathApi.isAbsolute(relativeId);
+  return (outsideRoot ? cleanFilename : relativeId).replace(/\\/g, "/");
 };
 
 const formatPluginDiagnostic = (diagnostic: ElfDiagnostic): string =>

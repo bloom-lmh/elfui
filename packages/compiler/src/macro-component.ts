@@ -131,6 +131,8 @@ const moduleLevelDeclarationCalls = new Set(["useExtend", "useVariant"]);
 
 export interface MacroComponentCompileOptions {
   filename?: string;
+  /** 跨机器稳定的源码标识；Vite 插件使用项目根目录相对 POSIX 路径。 */
+  sourceId?: string;
   runtimeImport?: string;
   macroImport?: string;
   tagPrefix?: string;
@@ -163,6 +165,7 @@ export interface MacroComponentCompileResult {
 
 export interface MacroComponentMetadata {
   filename: string;
+  sourceId: string;
   components: MacroExportedComponentMetadata[];
   localComponents: MacroLocalComponentMetadata[];
   exposed: string[];
@@ -293,6 +296,7 @@ interface TransformState {
   source: string;
   sourceFile: ts.SourceFile;
   filename: string;
+  sourceId: string;
   runtimeImport: string;
   macroImport: string;
   tagPrefix: string;
@@ -364,6 +368,7 @@ export const compileMacroComponent = (
   options: MacroComponentCompileOptions = {}
 ): MacroComponentCompileResult => {
   const filename = options.filename ?? "component.elf.ts";
+  const sourceId = normalizeSourceId(options.sourceId ?? filename);
   const state: TransformState = {
     source,
     sourceFile: ts.createSourceFile(
@@ -374,6 +379,7 @@ export const compileMacroComponent = (
       ts.ScriptKind.TS
     ),
     filename,
+    sourceId,
     runtimeImport: options.runtimeImport ?? DEFAULT_RUNTIME_IMPORT,
     macroImport: options.macroImport ?? DEFAULT_MACRO_IMPORT,
     tagPrefix: normalizeTagPrefix(options.tagPrefix),
@@ -2225,7 +2231,8 @@ const createMacroSourceMap = (state: TransformState, code: string): ElfSourceMap
 
   let sourceCursor = 0;
   let templateCursor = 0;
-  const originalLines = generatedLines.map((line) => {
+  let activeTemplate: TemplateExport | undefined;
+  const originalPositions = generatedLines.map((line) => {
     const trimmed = line.trim();
     if (!trimmed) return null;
     const template = state.templates[templateCursor];
@@ -2234,43 +2241,65 @@ const createMacroSourceMap = (state: TransformState, code: string): ElfSourceMap
       template
     ) {
       templateCursor++;
-      return state.sourceFile.getLineAndCharacterOfPosition(template.sourceStart).line;
+      activeTemplate = template;
+      return state.sourceFile.getLineAndCharacterOfPosition(template.sourceStart);
+    }
+    const bindingSource = /source:\s*\{\s*line:\s*(\d+),\s*column:\s*(\d+)\s*\}/u.exec(trimmed);
+    if (bindingSource && activeTemplate) {
+      const relativeLine = Number(bindingSource[1]);
+      const relativeColumn = Number(bindingSource[2]);
+      const start = state.sourceFile.getLineAndCharacterOfPosition(activeTemplate.sourceStart);
+      return {
+        line: start.line + relativeLine - 1,
+        character: relativeLine === 1 ? start.character + relativeColumn - 1 : relativeColumn - 1
+      };
+    }
+    if (trimmed.includes('"__elfSource"')) {
+      const lineMatch = /"line":(\d+),"column":(\d+)/u.exec(trimmed);
+      if (lineMatch) {
+        return {
+          line: Number(lineMatch[1]) - 1,
+          character: Number(lineMatch[2]) - 1
+        };
+      }
     }
     const candidates = sourceLineByText.get(trimmed);
     if (!candidates || candidates.length === 0) return null;
     const forward = candidates.find((candidate) => candidate >= sourceCursor);
     const originalLine = forward ?? candidates[0] ?? null;
     if (originalLine !== null) sourceCursor = originalLine;
-    return originalLine;
+    return originalLine === null ? null : { line: originalLine, character: 0 };
   });
 
   return {
     version: 3,
-    file: state.filename.replace(/\\/g, "/"),
-    sources: [state.filename.replace(/\\/g, "/")],
+    file: state.sourceId,
+    sources: [state.sourceId],
     sourcesContent: [state.source],
     names: [],
-    mappings: encodeLineSourceMapMappings(originalLines)
+    mappings: encodeLineSourceMapMappings(originalPositions)
   };
 };
 
-const encodeLineSourceMapMappings = (originalLines: readonly (number | null)[]): string => {
+const encodeLineSourceMapMappings = (
+  originalPositions: readonly (ts.LineAndCharacter | null)[]
+): string => {
   let previousSource = 0;
   let previousOriginalLine = 0;
   let previousOriginalColumn = 0;
 
-  return originalLines
-    .map((originalLine) => {
-      if (originalLine === null) return "";
+  return originalPositions
+    .map((original) => {
+      if (original === null) return "";
       const segment = [
         0,
         0 - previousSource,
-        originalLine - previousOriginalLine,
-        0 - previousOriginalColumn
+        original.line - previousOriginalLine,
+        original.character - previousOriginalColumn
       ];
       previousSource = 0;
-      previousOriginalLine = originalLine;
-      previousOriginalColumn = 0;
+      previousOriginalLine = original.line;
+      previousOriginalColumn = original.character;
       return segment.map(encodeVlq).join("");
     })
     .join(";");
@@ -2430,9 +2459,8 @@ const renderComponent = (component: InternalCompiledComponent, state: TransformS
   const withSource = (reference: string): string => {
     const start = state.sourceFile.getLineAndCharacterOfPosition(component.sourceStart);
     const end = state.sourceFile.getLineAndCharacterOfPosition(component.sourceEnd);
-    const file = state.filename.replace(/\?.*$/u, "").replace(/\\/g, "/");
     const source = JSON.stringify({
-      file,
+      file: state.sourceId,
       line: start.line + 1,
       column: start.character + 1,
       endLine: end.line + 1,
@@ -2469,6 +2497,7 @@ const buildMetadata = (
 
   return {
     filename: state.filename,
+    sourceId: state.sourceId,
     components: components.map((component) => ({
       exportName: component.exportName,
       ...(component.localName ? { localName: component.localName } : {}),
@@ -2500,6 +2529,9 @@ const buildMetadata = (
     exposed: Array.from(state.exposed)
   };
 };
+
+const normalizeSourceId = (value: string): string =>
+  value.replace(/\?.*$/u, "").replace(/\\/g, "/");
 
 const resolveComponentName = (template: TemplateExport, state: TransformState): string => {
   if (template.exportName === "default") {
