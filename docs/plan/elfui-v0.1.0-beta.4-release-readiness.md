@@ -11,9 +11,9 @@
 - [x] 在当前源码与 `0.1.0-beta.3` manifests 上运行统一发布门禁。
 - [x] 执行 `pnpm release:version`，将 7 个固定版本组包统一落盘为 `0.1.0-beta.4`。
 - [x] 审阅版本落盘 diff，并重新执行 `pnpm verify:release`。
-- [ ] 提交并推送 framework 与官方文档，创建并推送 `v0.1.0-beta.4` tag。
+- [x] 提交并推送 framework 与官方文档，创建并推送 `v0.1.0-beta.4` tag。
 
-本轮发布范围为 Git 仓库；npm publish 与 registry smoke test 不作为本次 Git 发布阻塞项。
+本轮 Git 发布完成：framework 功能提交为 `b8e6781`，官方文档提交为 `e4a823e`；`main` 同步推送到 GitHub 与 Gitee，framework 使用 `v0.1.0-beta.4` 标记本次版本。npm publish 与 registry smoke test 不作为本次 Git 发布阻塞项。
 
 ## 二、目标版本
 
