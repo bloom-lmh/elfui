@@ -33,6 +33,12 @@ import {
   type TextNode
 } from "@elfui/compiler-template";
 
+import {
+  createTemplateExpressionIR,
+  type TemplateExpressionIR,
+  type TemplateValueHelper
+} from "./expression";
+
 export interface CodegenOptions extends ParserOptions {
   /** 渲染函数名（默认 "render"） */
   functionName?: string;
@@ -82,6 +88,9 @@ type Helper =
   | "bindObject"
   | "onObject"
   | "unwrapStateAccess"
+  | TemplateValueHelper
+  | "extendRenderState"
+  | "handleRuntimeError"
   | "transition"
   | "transitionGroup"
   | "keepAlive"
@@ -105,18 +114,37 @@ const use = (ctx: CodegenContext, h: Helper): Helper => {
   return h;
 };
 
-const stripStandaloneRefValue = (expr: string): string =>
-  expr.replace(/(?<!\.)\b([A-Za-z_$][\w$]*)\.value\b(?!\s*(?:[.[(]|\?\.))/g, "$1");
+const createCodegenExpression = (
+  expression: string,
+  ctx: CodegenContext,
+  stateExpression: string = "ctx.state"
+): TemplateExpressionIR => {
+  const result = createTemplateExpressionIR(expression, {
+    stateExpression,
+    castReads: ctx.expressionMode === "scope"
+  });
+  for (const helper of result.helpers) use(ctx, helper);
+  return result;
+};
+
+const transformTemplateExpression = (
+  expression: string,
+  ctx: CodegenContext,
+  stateExpression: string = "ctx.state"
+): string => createCodegenExpression(expression, ctx, stateExpression).code;
 
 const isIdentifierName = (value: string): boolean => /^[A-Za-z_$][\w$]*$/.test(value);
 
 const scopedStateAccess = (
   ctx: CodegenContext,
   stateExpr = "ctx.state",
-  propsExpr = "ctx.props"
+  propsExpr = "ctx.props",
+  referencedRoots: ReadonlySet<string> | null = null
 ): string => {
   if (ctx.expressionMode !== "scope") return "";
-  const names = Array.from(ctx.scopeNames).filter(isIdentifierName);
+  const names = Array.from(ctx.scopeNames).filter(
+    (name) => isIdentifierName(name) && (!referencedRoots || referencedRoots.has(name))
+  );
   if (names.length === 0) return "";
   use(ctx, "unwrapStateAccess");
   const sourceExpr = ctx.includePropsInScope ? `({ ...${propsExpr}, ...${stateExpr} })` : stateExpr;
@@ -133,7 +161,7 @@ const renderAnyParam = (ctx: CodegenContext, name: string): string =>
   ctx.expressionMode === "scope" ? `${name}: any` : name;
 
 const renderListParams = (ctx: CodegenContext): string =>
-  ctx.expressionMode === "scope" ? "__item: any, __index: number" : "__item, __index";
+  ctx.expressionMode === "scope" ? "__item: any, __index: any" : "__item, __index";
 
 const currentCtx = (ctx: CodegenContext): string => ctx.ctxName;
 
@@ -168,46 +196,51 @@ const withScopeNames = <T>(
 /** 把 JS 表达式安全包成 getter `(ctx) => ((with(ctx.state){return (expr)}))` */
 const wrapGetter = (expr: string, ctx: CodegenContext): string => {
   if (!expr.trim()) return "() => undefined";
-  const cleanedExpr = stripStandaloneRefValue(expr);
+  const expression = createCodegenExpression(expr, ctx);
+  const transformedExpr = expression.code;
+  use(ctx, "handleRuntimeError");
   if (ctx.expressionMode === "scope") {
-    return `((ctx: any) => { try { ${scopedStateAccess(ctx)}return (${cleanedExpr}); } catch (_e) { return undefined; } })`;
+    return `((ctx: any) => { try { ${scopedStateAccess(ctx, "ctx.state", "ctx.props", expression.referencedRoots)}return (${transformedExpr}); } catch (__e) { handleRuntimeError(__e, ctx.host, "template getter"); return undefined; } })`;
   }
   use(ctx, "unwrapStateAccess");
   return (
-    `((__exp) => (ctx) => { try { with (unwrapStateAccess(ctx.state)) { return (${cleanedExpr}); } } ` +
-    `catch (e) { return undefined; } })()`
+    `((ctx) => { try { with (unwrapStateAccess(ctx.state)) { return (${transformedExpr}); } } ` +
+    `catch (__e) { handleRuntimeError(__e, ctx.host, "template getter"); return undefined; } })`
   );
 };
 
 const wrapEvent = (expr: string, ctx: CodegenContext): string => {
   if (!expr.trim()) return "() => undefined";
+  const expression = createCodegenExpression(expr, ctx);
+  const transformedExpr = expression.code;
+  use(ctx, "handleRuntimeError");
   if (ctx.expressionMode === "scope") {
-    if (/^[\w.$]+$/.test(expr.trim())) {
+    if (expression.simpleReference) {
       return (
-        `((ctx: any, $event: Event) => { try { ${scopedStateAccess(ctx)}` +
-        `const __h = (${expr}); if (typeof __h === "function") { return __h($event); } ` +
-        `} catch (_e) {} })`
+        `((ctx: any, $event: Event) => { try { ${scopedStateAccess(ctx, "ctx.state", "ctx.props", expression.referencedRoots)}` +
+        `const __h = (${transformedExpr}); if (typeof __h === "function") { return __h($event); } ` +
+        `} catch (__e) { handleRuntimeError(__e, ctx.host, "template event"); } })`
       );
     }
-    return `((ctx: any, $event: Event) => { try { ${scopedStateAccess(ctx)}${expr}; } catch (_e) {} })`;
+    return `((ctx: any, $event: Event) => { try { ${scopedStateAccess(ctx, "ctx.state", "ctx.props", expression.referencedRoots)}${transformedExpr}; } catch (__e) { handleRuntimeError(__e, ctx.host, "template event"); } })`;
   }
   use(ctx, "unwrapStateAccess");
-  if (/^[\w.$]+$/.test(expr.trim())) {
+  if (expression.simpleReference) {
     return (
-      `((__exp) => (ctx, $event) => { try { with (unwrapStateAccess(ctx.state)) { ` +
-      `const __h = (${expr}); if (typeof __h === "function") { return __h($event); } ` +
-      `} } catch (e) {} })()`
+      `((ctx, $event) => { try { with (unwrapStateAccess(ctx.state)) { ` +
+      `const __h = (${transformedExpr}); if (typeof __h === "function") { return __h($event); } ` +
+      `} } catch (__e) { handleRuntimeError(__e, ctx.host, "template event"); } })`
     );
   }
-  return `((__exp) => (ctx, $event) => { try { with (unwrapStateAccess(ctx.state)) { ${expr}; } } catch (e) {} })()`;
+  return `((ctx, $event) => { try { with (unwrapStateAccess(ctx.state)) { ${transformedExpr}; } } catch (__e) { handleRuntimeError(__e, ctx.host, "template event"); } })`;
 };
 
 const wrapSetter = (expr: string, ctx: CodegenContext): string => {
-  const cleanedExpr = stripStandaloneRefValue(expr.trim());
-  const simple = cleanedExpr.match(/^([A-Za-z_$][\w$]*)(?:\.([A-Za-z_$][\w$]*))?$/);
-  if (simple) {
-    const root = simple[1]!;
-    const sub = simple[2];
+  const cleanedExpr = expr.trim();
+  const expression = createCodegenExpression(cleanedExpr, ctx);
+  use(ctx, "handleRuntimeError");
+  if (expression.statePath) {
+    const { root, property: sub } = expression.statePath;
     const ctxParam = renderAnyParam(ctx, "__ctx");
     const valueParam = renderAnyParam(ctx, "__v");
     const setRoot =
@@ -218,15 +251,15 @@ const wrapSetter = (expr: string, ctx: CodegenContext): string => {
       `const __target = __ctx.state[${escapeStr(root)}]; ` +
       `if (__target && typeof __target === "object") { __target[${escapeStr(sub ?? "")}] = __v; } ` +
       `else { __ctx.state[${escapeStr(root)}] = { [${escapeStr(sub ?? "")}]: __v }; }`;
-    return `(${ctxParam}, ${valueParam}) => { ${sub ? setSub : setRoot} }`;
+    return `(${ctxParam}, ${valueParam}) => { try { ${sub ? setSub : setRoot} } catch (__e) { handleRuntimeError(__e, __ctx.host, "template setter"); } }`;
   }
 
   const ctxParam = renderAnyParam(ctx, "__ctx");
   const valueParam = renderAnyParam(ctx, "__v");
   if (ctx.expressionMode === "scope") {
-    return `(${ctxParam}, ${valueParam}) => { try { ${scopedStateAccess(ctx, "__ctx.state", "__ctx.props")}${cleanedExpr} = __v; } catch (_e) {} }`;
+    return `(${ctxParam}, ${valueParam}) => { try { ${scopedStateAccess(ctx, "__ctx.state", "__ctx.props", expression.referencedRoots)}${cleanedExpr} = __v; } catch (__e) { handleRuntimeError(__e, __ctx.host, "template setter"); } }`;
   }
-  return `(${ctxParam}, ${valueParam}) => { try { with (__ctx.state) { ${cleanedExpr} = __v; } } catch (e) {} }`;
+  return `(${ctxParam}, ${valueParam}) => { try { with (__ctx.state) { ${cleanedExpr} = __v; } } catch (__e) { handleRuntimeError(__e, __ctx.host, "template setter"); } }`;
 };
 
 const castElement = (ctx: CodegenContext, expr: string, type: string): string =>
@@ -562,7 +595,7 @@ const genDirective = (elVar: string, d: DirectiveNode, ctx: CodegenContext): str
       use(ctx, "applyCustomDirective");
       use(ctx, "resolveDirective");
       const modMap = `{ ${d.modifiers.map((m) => `${escapeStr(m)}: true`).join(", ")} }`;
-      return `(() => { const __def = resolveDirective(${escapeStr(d.name)}, undefined, ${currentCtx(ctx)}.$host); if (__def) { applyCustomDirective(${elVar}, __def, () => (${wrapGetter(d.exp, ctx)})(${currentCtx(ctx)}), ${d.arg ? escapeStr(d.arg) : "undefined"}, ${modMap}); } })()`;
+      return `(() => { const __def = resolveDirective(${escapeStr(d.name)}, undefined, ${currentCtx(ctx)}.host); if (__def) { applyCustomDirective(${elVar}, __def, () => (${wrapGetter(d.exp, ctx)})(${currentCtx(ctx)}), ${d.arg ? escapeStr(d.arg) : "undefined"}, ${modMap}, ${currentCtx(ctx)}.host); } })()`;
     }
   }
 };
@@ -715,19 +748,21 @@ const genFor = (node: ElementNode, dir: DirectiveNode, ctx: CodegenContext): str
 
   // child 渲染时需要把 itemName / indexName 注入 ctx.state 副本
   const parentCtx = currentCtx(ctx);
+  use(ctx, "handleRuntimeError");
+  use(ctx, "extendRenderState");
   const stateSpread = indexName
-    ? `{...${parentCtx}.state, ${itemName}: __item, ${indexName}: __index}`
-    : `{...${parentCtx}.state, ${itemName}: __item}`;
+    ? `extendRenderState(${parentCtx}.state, { ${itemName}: __item, ${indexName}: __index })`
+    : `extendRenderState(${parentCtx}.state, { ${itemName}: __item })`;
 
-  const keyGetter =
-    ctx.expressionMode === "scope"
-      ? withScopeNames(ctx, [itemName, indexName], () => {
-          const scopedState = indexName
-            ? `({ ...${parentCtx}.state, ${itemName}: __item, ${indexName}: __index })`
-            : `({ ...${parentCtx}.state, ${itemName}: __item })`;
-          return `(${renderListParams(ctx)}) => { try { ${scopedStateAccess(ctx, scopedState, `${parentCtx}.props`)}return (${stripStandaloneRefValue(keyExpr)}); } catch (_e) { return __index; } }`;
-        })
-      : `(${renderListParams(ctx)}) => { try { with ({...${parentCtx}.state, ${itemName}: __item${indexName ? `, ${indexName}: __index` : ""}}) { return (${keyExpr}); } } catch (e) { return __index; } }`;
+  const keyState = fresh(ctx, "state");
+  const keyGetter = withScopeNames(ctx, [itemName, indexName], () => {
+    const transformedKeyExpr = transformTemplateExpression(keyExpr, ctx, keyState);
+    if (ctx.expressionMode === "scope") {
+      return `(${renderListParams(ctx)}) => { const ${keyState} = ${stateSpread}; try { ${scopedStateAccess(ctx, keyState, `${parentCtx}.props`)}return (${transformedKeyExpr}); } catch (__e) { handleRuntimeError(__e, ${parentCtx}.host, "template list key"); return __index; } }`;
+    }
+    use(ctx, "unwrapStateAccess");
+    return `(${renderListParams(ctx)}) => { const ${keyState} = ${stateSpread}; try { with (unwrapStateAccess(${keyState})) { return (${transformedKeyExpr}); } } catch (__e) { handleRuntimeError(__e, ${parentCtx}.host, "template list key"); return __index; } }`;
+  });
   const childCtx = fresh(ctx, "ctx");
   const renderChild = withScopeNames(ctx, [itemName, indexName], () =>
     withCtxName(ctx, childCtx, () => genPlain(cloned, ctx))
@@ -912,25 +947,28 @@ const genSuspense = (node: ElementNode, ctx: CodegenContext): string => {
 
 const wrapTransitionHookStatic = (expr: string, ctx: CodegenContext): string => {
   if (!expr.trim()) return "() => undefined";
+  const expression = createCodegenExpression(expr, ctx);
+  const transformedExpr = expression.code;
+  use(ctx, "handleRuntimeError");
   if (ctx.expressionMode === "scope") {
-    if (/^[\w.$]+$/.test(expr.trim())) {
+    if (expression.simpleReference) {
       return (
-        `((ctx: any, el: Element, done: () => void) => { try { ${scopedStateAccess(ctx)}` +
-        `const __h = (${expr}); if (typeof __h === "function") { return __h(el, done); } ` +
-        `} catch (_e) {} })`
+        `((ctx: any, el: Element, done: () => void) => { try { ${scopedStateAccess(ctx, "ctx.state", "ctx.props", expression.referencedRoots)}` +
+        `const __h = (${transformedExpr}); if (typeof __h === "function") { return __h(el, done); } ` +
+        `} catch (__e) { handleRuntimeError(__e, ctx.host, "template transition hook"); } })`
       );
     }
-    return `((ctx: any, el: Element, done: () => void) => { try { ${scopedStateAccess(ctx)}${expr}; } catch (_e) {} })`;
+    return `((ctx: any, el: Element, done: () => void) => { try { ${scopedStateAccess(ctx, "ctx.state", "ctx.props", expression.referencedRoots)}${transformedExpr}; } catch (__e) { handleRuntimeError(__e, ctx.host, "template transition hook"); } })`;
   }
   use(ctx, "unwrapStateAccess");
-  if (/^[\w.$]+$/.test(expr.trim())) {
+  if (expression.simpleReference) {
     return (
-      `((__exp) => (ctx, el, done) => { try { with (unwrapStateAccess(ctx.state)) { ` +
-      `const __h = (${expr}); if (typeof __h === "function") { return __h(el, done); } ` +
-      `} } catch (e) {} })()`
+      `((ctx, el, done) => { try { with (unwrapStateAccess(ctx.state)) { ` +
+      `const __h = (${transformedExpr}); if (typeof __h === "function") { return __h(el, done); } ` +
+      `} } catch (__e) { handleRuntimeError(__e, ctx.host, "template transition hook"); } })`
     );
   }
-  return `((__exp) => (ctx, $event, done) => { try { with (unwrapStateAccess(ctx.state)) { ${expr}; } } catch (e) {} })()`;
+  return `((ctx, $event, done) => { try { with (unwrapStateAccess(ctx.state)) { ${transformedExpr}; } } catch (__e) { handleRuntimeError(__e, ctx.host, "template transition hook"); } })`;
 };
 
 const genTransition = (node: ElementNode, ctx: CodegenContext): string => {
@@ -1084,6 +1122,8 @@ const genTransitionGroup = (node: ElementNode, ctx: CodegenContext): string => {
     const keyExpr = keyDir ? keyDir.exp : "__index";
 
     const parentCtx = currentCtx(ctx);
+    use(ctx, "handleRuntimeError");
+    use(ctx, "extendRenderState");
     const getItemsStr = `() => { const __v = (${wrapGetter(source, ctx)})(${parentCtx}); if (Array.isArray(__v)) return __v; if (__v && typeof __v === "object") return Object.values(__v); if (typeof __v === "number") return Array.from({length: __v}, (_, i) => i + 1); return []; }`;
 
     const cleanChild = {
@@ -1092,8 +1132,8 @@ const genTransitionGroup = (node: ElementNode, ctx: CodegenContext): string => {
     };
 
     const stateSpread = indexName
-      ? `{...${parentCtx}.state, ${itemName}: __item, ${indexName}: __index}`
-      : `{...${parentCtx}.state, ${itemName}: __item}`;
+      ? `extendRenderState(${parentCtx}.state, { ${itemName}: __item, ${indexName}: __index })`
+      : `extendRenderState(${parentCtx}.state, { ${itemName}: __item })`;
 
     const childCtx = fresh(ctx, "ctx");
     const renderChild = withScopeNames(ctx, [itemName, indexName], () =>
@@ -1104,10 +1144,14 @@ const genTransitionGroup = (node: ElementNode, ctx: CodegenContext): string => {
     const keyGetterStr =
       ctx.expressionMode === "scope"
         ? withScopeNames(ctx, [itemName, indexName], () => {
-            const cleanedKeyExpr = stripStandaloneRefValue(keyExpr);
-            return `(${renderListParams(ctx)}) => { const ${childCtx} = { ...${parentCtx}, state: ${stateSpread} }; try { ${scopedStateAccess(ctx, `${childCtx}.state`, `${childCtx}.props`)}return (${cleanedKeyExpr}); } catch (_e) { return __index; } }`;
+            const transformedKeyExpr = transformTemplateExpression(
+              keyExpr,
+              ctx,
+              `${childCtx}.state`
+            );
+            return `(${renderListParams(ctx)}) => { const ${childCtx} = { ...${parentCtx}, state: ${stateSpread} }; try { ${scopedStateAccess(ctx, `${childCtx}.state`, `${childCtx}.props`)}return (${transformedKeyExpr}); } catch (__e) { handleRuntimeError(__e, ${parentCtx}.host, "template transition-group key"); return __index; } }`;
           })
-        : `(${renderListParams(ctx)}) => { const ${childCtx} = { ...${parentCtx}, state: ${stateSpread} }; try { return ${keyDir ? `(${wrapGetter(keyExpr, ctx)})(${childCtx})` : "__index"}; } catch (e) { return __index; } }`;
+        : `(${renderListParams(ctx)}) => { const ${childCtx} = { ...${parentCtx}, state: ${stateSpread} }; try { return ${keyDir ? `(${wrapGetter(keyExpr, ctx)})(${childCtx})` : "__index"}; } catch (__e) { handleRuntimeError(__e, ${parentCtx}.host, "template transition-group key"); return __index; } }`;
 
     stmts.push(
       `transitionGroup(${elVar}, ${getItemsStr}, ${keyGetterStr}, ${renderItemStr}, ${optionsStr})`

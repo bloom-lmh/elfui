@@ -11,6 +11,7 @@
 // - onScopeDispose(fn) 在当前 scope 上注册一个 stop 时调用的回调
 // - detached：若为 true，scope 不会被父 scope 收编（独立生命周期）
 
+import { DEV as __DEV__ } from "./dev";
 import type { ReactiveEffect } from "./effect";
 
 export type EffectScopeCleanup = () => void;

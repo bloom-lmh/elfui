@@ -17,6 +17,7 @@ import { useEffect } from "@elfui/reactivity";
 
 import { getHostAttrs } from "./attrs";
 import { resolveAppConfig, warn } from "./config";
+import { DEV as __DEV__ } from "./dev";
 import { getCurrentInstance } from "./lifecycle";
 import { onBeforeUnmount, onMount } from "./lifecycle";
 

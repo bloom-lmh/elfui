@@ -137,14 +137,14 @@ export function defineProps(
 
 export function defineEmits<const T extends readonly string[]>(
   _events: T
-): (event: T[number], ...args: unknown[]) => void;
+): (event: T[number], ...args: unknown[]) => boolean;
 export function defineEmits<T extends MacroEmitMap>(): <K extends keyof T & string>(
   event: K,
   ...args: MacroEmitArgs<T[K]>
-) => void;
+) => boolean;
 export function defineEmits(
   _events?: readonly string[]
-): (event: string, ...args: unknown[]) => void {
+): (event: string, ...args: unknown[]) => boolean {
   return macroOnly("defineEmits");
 }
 

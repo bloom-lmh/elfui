@@ -13,8 +13,9 @@
 // - 同一个 .value 接口形态，但内部实现重写
 // - 内置自动解包能力，模板里直接 {{ doubled }} 不用 .value
 
-import { ReactiveEffect, isTracking } from "./effect";
 import { track, trigger } from "./dep";
+import { DEV as __DEV__ } from "./dev";
+import { ReactiveEffect, isTracking } from "./effect";
 import { READONLY_FLAG, REF_FLAG, STATE_FLAG, type Ref } from "./state";
 
 export interface ComputedGetterSetter<T> {
@@ -95,6 +96,7 @@ export function useComputed<T>(source: ComputedSource<T>): ReadonlyComputed<T> |
       trigger(token, "value");
     }
   });
+  reactiveEffect.computed = true;
 
   const computeValue = (): T => {
     if (dirty) {

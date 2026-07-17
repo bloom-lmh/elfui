@@ -1,3 +1,4 @@
+import { DEV as __DEV__ } from "./dev";
 import type { ReactiveEffect } from "./effect";
 
 const DEVTOOLS_GLOBAL_HOOK = "__ELFUI_DEVTOOLS_GLOBAL_HOOK__";

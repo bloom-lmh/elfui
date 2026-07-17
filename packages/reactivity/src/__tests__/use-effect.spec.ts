@@ -12,6 +12,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { flushSync, nextTick, useEffect, useRef, useReactive } from "../index";
+import { queueJob } from "../scheduler";
+import { effectScope } from "../scope";
 
 describe("useEffect 基础", () => {
   it("访问 state 即追踪", () => {
@@ -116,6 +118,41 @@ describe("stop 卸载", () => {
     stop();
     expect(onStop).toHaveBeenCalledTimes(1);
   });
+
+  it("effectScope.stop 会调用 useEffect cleanup", () => {
+    const cleanup = vi.fn();
+    const scope = effectScope();
+    scope.run(() => {
+      useEffect(() => cleanup);
+    });
+
+    scope.stop();
+    scope.stop();
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it("scope 停止后已排队的 effect 不会迟到重跑", async () => {
+    const count = useRef(0);
+    const runs: number[] = [];
+    const cleanup = vi.fn();
+    const scope = effectScope();
+    scope.run(() => {
+      useEffect(
+        () => {
+          runs.push(count.value);
+          return cleanup;
+        },
+        { flush: "post" }
+      );
+    });
+
+    count.set(1);
+    scope.stop();
+    await nextTick();
+
+    expect(runs).toEqual([0]);
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("调度策略", () => {
@@ -153,6 +190,23 @@ describe("调度策略", () => {
     // 三次连续写入合并为一次 flush
     expect(spy).toHaveBeenCalledTimes(2);
     expect(spy).toHaveBeenLastCalledWith(3);
+  });
+
+  it("flush: post — 在 pre 队列之后执行", async () => {
+    const count = useRef(0);
+    const order: string[] = [];
+    useEffect(
+      () => {
+        if (count.value > 0) order.push("post");
+      },
+      { flush: "post" }
+    );
+
+    count.value = 1;
+    queueJob(() => order.push("pre"));
+    await nextTick();
+
+    expect(order).toEqual(["pre", "post"]);
   });
 
   it("flushSync 包裹立即看到结果", () => {

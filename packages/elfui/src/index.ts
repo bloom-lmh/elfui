@@ -57,6 +57,7 @@ export {
 // shallowState 与 useShallowReactive 完全等价，只保留后者。
 // useState / useShallowState 已从 beta public API 移除；请迁移到 useRef / useReactive。
 export {
+  batch,
   useComputed,
   effectScope,
   getCurrentScope,
@@ -121,7 +122,9 @@ export {
   onDeactivated,
   onErrorCaptured,
   onMount,
+  onMounted,
   onUnmount,
+  onUnmounted,
   onUpdated,
   type ComponentDefinition,
   type ComponentEmitMap,
@@ -183,6 +186,8 @@ export {
   useIntersectionObserver,
   useResizeObserver,
   useScrollLock,
+  type ElementRefLike,
+  type ObserverTarget,
   type ResizeEntry,
   // formControl
   createFormControlContext,
@@ -197,6 +202,7 @@ export {
   type DefineComponentOptions,
   type ElfUIConfig,
   type EmitOptions,
+  type EventDispatchOptions,
   type FormControlContext,
   type FormControlOptions,
   type FormControlRule,

@@ -11,10 +11,11 @@
 // 与 effect()（底层）的区别：useEffect 是面向用户的高层 API，
 // 处理 cleanup、scheduler 等用户关心的东西；effect() 是底层原语。
 
-import type { ReactiveEffect } from "./effect";
 import type { ReactivityEffectDebugInfo } from "./devtools";
+import { DEV as __DEV__ } from "./dev";
+import type { ReactiveEffect } from "./effect";
 import { effect as createEffect, stop as stopEffect } from "./effect";
-import { queueJob, type SchedulerJob } from "./scheduler";
+import { queueJob, queuePostFlushJob, type SchedulerJob } from "./scheduler";
 
 export type EffectCleanup = () => void;
 export type EffectFn = () => void | EffectCleanup;
@@ -48,7 +49,7 @@ export interface EffectStopHandle {
 export const useEffect = (fn: EffectFn, options: UseEffectOptions = {}): EffectStopHandle => {
   let cleanup: EffectCleanup | undefined;
 
-  const runWithCleanup = (): void => {
+  const runCleanup = (): void => {
     if (cleanup) {
       try {
         cleanup();
@@ -60,6 +61,10 @@ export const useEffect = (fn: EffectFn, options: UseEffectOptions = {}): EffectS
         cleanup = undefined;
       }
     }
+  };
+
+  const runWithCleanup = (): void => {
+    runCleanup();
     const result = fn();
     if (typeof result === "function") {
       cleanup = result;
@@ -72,7 +77,7 @@ export const useEffect = (fn: EffectFn, options: UseEffectOptions = {}): EffectS
     flush === "sync"
       ? undefined
       : ((() => {
-          runner.effect.run();
+          if (runner.effect.active) runner.effect.run();
         }) as SchedulerJob);
 
   const effectOptions: {
@@ -81,27 +86,19 @@ export const useEffect = (fn: EffectFn, options: UseEffectOptions = {}): EffectS
     debug?: ReactivityEffectDebugInfo;
   } = {};
   if (scheduler) {
-    effectOptions.scheduler = () => queueJob(scheduler);
+    effectOptions.scheduler =
+      flush === "post" ? () => queuePostFlushJob(scheduler) : () => queueJob(scheduler);
   }
-  if (options.onStop) {
-    effectOptions.onStop = options.onStop;
-  }
+  effectOptions.onStop = () => {
+    runCleanup();
+    options.onStop?.();
+  };
   if (options.debug) {
     effectOptions.debug = options.debug;
   }
   const runner = createEffect(runWithCleanup, effectOptions);
 
   const stop: EffectStopHandle = (() => {
-    if (cleanup) {
-      try {
-        cleanup();
-      } catch (err) {
-        if (__DEV__) console.error("[useEffect] cleanup error:", err);
-        else console.error(err);
-      } finally {
-        cleanup = undefined;
-      }
-    }
     stopEffect(runner);
   }) as EffectStopHandle;
 

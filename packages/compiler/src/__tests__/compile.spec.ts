@@ -2,10 +2,10 @@
 //
 // 跑通"模板 -> render 函数 -> 真实 DOM 更新"全链路。
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useReactive, useRef } from "@elfui/reactivity";
-import { defineCustomElement, onActivated, onDeactivated } from "@elfui/runtime";
+import { defineCustomElement, onActivated, onDeactivated, onErrorCaptured } from "@elfui/runtime";
 
 import { compile } from "../index";
 
@@ -15,7 +15,7 @@ const setupCtx = (state: Record<string, unknown> = {}) => {
   return {
     state,
     props: {},
-    emit: () => {},
+    emit: () => true,
     host,
     shadow: null,
     cleanup: () => document.body.removeChild(host)
@@ -77,6 +77,17 @@ describe("基础渲染", () => {
     ctx.cleanup();
   });
 
+  it("插值结束符不会被字符串、模板字符串和嵌套对象提前截断", () => {
+    const render = compile(
+      '<p>{{ "}}" }}|{{ `before }} ${name} after` }}|{{ ({ value: "ok" }).value }}</p>'
+    );
+    const ctx = setupCtx({ name: "elfui" });
+    ctx.host.appendChild(render(ctx));
+
+    expect(ctx.host.querySelector("p")?.textContent).toBe("}}|before }} elfui after|ok");
+    ctx.cleanup();
+  });
+
   it("不会把响应式对象自己的 value 字段链误剥离", () => {
     const item = useReactive({
       value: { label: "real-value" },
@@ -86,6 +97,39 @@ describe("基础渲染", () => {
     const ctx = setupCtx({ item });
     ctx.host.appendChild(render(ctx));
     expect(ctx.host.querySelector("span")?.textContent).toBe("real-value");
+    ctx.cleanup();
+  });
+
+  it("同时保留字符串、普通对象字段和 Ref 的 value 语义", () => {
+    const item = useReactive({ value: "object-value" });
+    const count = useRef(1);
+    const render = compile(
+      '<p>{{ "foo.value" }}|{{ item.value }}|{{ count.value }}|{{ item?.value }}</p>'
+    );
+    const ctx = setupCtx({ item, count });
+    ctx.host.appendChild(render(ctx));
+
+    expect(ctx.host.querySelector("p")?.textContent).toBe("foo.value|object-value|1|object-value");
+
+    item.value = "next-object";
+    count.value = 2;
+    expect(ctx.host.querySelector("p")?.textContent).toBe("foo.value|next-object|2|next-object");
+    ctx.cleanup();
+  });
+
+  it("事件赋值会区分 Ref value 与普通对象 value", () => {
+    const item = useReactive({ value: "before" });
+    const count = useRef(1);
+    const render = compile(
+      `<button @click="count.value = count.value + 1, item.value = 'after'">update</button>`
+    );
+    const ctx = setupCtx({ item, count });
+    ctx.host.appendChild(render(ctx));
+
+    ctx.host.querySelector("button")?.click();
+
+    expect(count.value).toBe(2);
+    expect(item.value).toBe("after");
     ctx.cleanup();
   });
 
@@ -114,6 +158,39 @@ describe("基础渲染", () => {
     } finally {
       console.error = originalError;
     }
+  });
+
+  it("运行时编译的 getter 和事件错误进入组件错误链", () => {
+    const tag = `elf-runtime-error-${Math.random().toString(36).slice(2, 8)}`;
+    const captured: string[] = [];
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const render = compile('<button @click="failEvent">{{ failGetter() }}</button>');
+
+    defineCustomElement({
+      tag,
+      setup: () => {
+        onErrorCaptured((error) => {
+          captured.push(error instanceof Error ? error.message : String(error));
+          return false;
+        });
+        return {
+          failGetter: () => {
+            throw new Error("runtime getter boom");
+          },
+          failEvent: () => {
+            throw new Error("runtime event boom");
+          }
+        };
+      },
+      render: (ctx) => render(ctx as unknown as Parameters<typeof render>[0])
+    });
+
+    const el = document.createElement(tag);
+    document.body.appendChild(el);
+    (el.shadowRoot ?? el).querySelector("button")?.dispatchEvent(new Event("click"));
+
+    expect(captured).toEqual(["runtime getter boom", "runtime event boom"]);
+    expect(consoleError).not.toHaveBeenCalled();
   });
 
   it("PascalCase 本地组件会解析为真实 custom element tag 并按需注册", () => {
@@ -174,6 +251,26 @@ describe("属性绑定", () => {
     ctx.host.appendChild(render(ctx));
     expect(ctx.host.querySelector("p")?.getAttribute("style")).toContain("font-size: 14px");
     expect(ctx.host.querySelector("p")?.getAttribute("style")).toContain("color: red");
+    ctx.cleanup();
+  });
+
+  it(":style 与静态 style 合并并恢复被覆盖的属性", () => {
+    const tone = useRef<string | null>("blue");
+    const render = compile(
+      '<p style="color: red; padding: 4px" :style="{ color: tone, opacity: 1 }">x</p>'
+    );
+    const ctx = setupCtx({ tone });
+    ctx.host.appendChild(render(ctx));
+    const paragraph = ctx.host.querySelector("p") as HTMLParagraphElement;
+
+    expect(paragraph.style.color).toBe("blue");
+    expect(paragraph.style.padding).toBe("4px");
+    expect(paragraph.style.opacity).toBe("1");
+
+    tone.value = null;
+    expect(paragraph.style.color).toBe("red");
+    expect(paragraph.style.padding).toBe("4px");
+    expect(paragraph.style.opacity).toBe("1");
     ctx.cleanup();
   });
 });
@@ -267,6 +364,30 @@ describe("事件", () => {
     ctx.host.appendChild(render(ctx));
     ctx.host.querySelector("button")?.dispatchEvent(new Event("click"));
     expect(clickedType.value).toBe("click");
+    ctx.cleanup();
+  });
+
+  it("运行时编译事件会 batch 同一 binding 的多次写入", () => {
+    const count = useRef(0);
+    const rendered: number[] = [];
+    const render = compile('<button @click="increment">{{ label() }}</button>');
+    const ctx = setupCtx({
+      count,
+      increment: () => {
+        count.value = 1;
+        count.value = 2;
+      },
+      label: () => {
+        rendered.push(count.value);
+        return count.value;
+      }
+    });
+    ctx.host.appendChild(render(ctx));
+
+    ctx.host.querySelector("button")?.dispatchEvent(new Event("click"));
+
+    expect(rendered).toEqual([0, 2]);
+    expect(ctx.host.querySelector("button")?.textContent).toBe("2");
     ctx.cleanup();
   });
 
@@ -445,6 +566,29 @@ describe("v-model", () => {
     inp.value = "world";
     inp.dispatchEvent(new Event("input"));
     expect(value.value).toBe("world");
+    ctx.cleanup();
+  });
+
+  it("显式 value 的 v-model 会区分 Ref 与普通对象字段", () => {
+    const text = useRef("ref-before");
+    const item = useReactive({ value: "object-before" });
+    const render = compile(
+      '<div><input id="ref" v-model="text.value" /><input id="object" v-model="item.value" /></div>'
+    );
+    const ctx = setupCtx({ text, item });
+    ctx.host.appendChild(render(ctx));
+    const refInput = ctx.host.querySelector("#ref") as HTMLInputElement;
+    const objectInput = ctx.host.querySelector("#object") as HTMLInputElement;
+
+    expect(refInput.value).toBe("ref-before");
+    expect(objectInput.value).toBe("object-before");
+    refInput.value = "ref-after";
+    objectInput.value = "object-after";
+    refInput.dispatchEvent(new Event("input"));
+    objectInput.dispatchEvent(new Event("input"));
+
+    expect(text.value).toBe("ref-after");
+    expect(item.value).toBe("object-after");
     ctx.cleanup();
   });
 

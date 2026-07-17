@@ -1,0 +1,31 @@
+name: Browser Integration Matrix
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "41 2 * * 4"
+
+permissions:
+  contents: read
+
+jobs:
+  browser-matrix:
+    name: Chromium, Firefox, WebKit and stress integrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CHROME_PATH: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install Firefox and WebKit system dependencies and browsers
+        run: pnpm exec playwright-core install --with-deps firefox webkit
+      - run: pnpm verify:browser-matrix
+      - run: pnpm verify:integrations:chromium

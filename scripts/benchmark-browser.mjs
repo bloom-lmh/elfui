@@ -3,9 +3,9 @@ import { build } from "esbuild";
 import { Buffer } from "node:buffer";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
@@ -39,7 +39,8 @@ const aliasPlugin = {
 
 const entry = `
 import { effectScope, useRef } from "@elfui/reactivity";
-import { list, mark, text } from "@elfui/runtime/internal";
+import { defineCustomElement } from "@elfui/runtime";
+import { applyCustomDirective, list, mark, on, text } from "@elfui/runtime/internal";
 
 const makeItems = (count, salt = 0) =>
   Array.from({ length: count }, (_, id) => ({ id, label: "Item " + (id + salt) }));
@@ -53,6 +54,16 @@ const swapEdges = (items) => {
   }
   return next;
 };
+
+defineCustomElement({
+  tag: "elf-browser-bench-shadow",
+  styles: [":host{display:block}span{color:var(--elf-bench-color,black)}"],
+  render() {
+    const span = document.createElement("span");
+    span.textContent = "shadow";
+    return span;
+  }
+});
 
 globalThis.__elfBrowserBench = {
   helloMount(count) {
@@ -83,11 +94,12 @@ globalThis.__elfBrowserBench = {
         (item) => item.id,
         (item) => {
           const row = document.createElement("div");
-          row.textContent = item.label;
+          row.textContent = item.peek().label;
           return row;
         }
       );
     });
+    if (root.querySelectorAll("div").length !== count) throw new Error("list create failed");
     scope.stop();
     root.remove();
   },
@@ -105,7 +117,7 @@ globalThis.__elfBrowserBench = {
         (item) => item.id,
         (item) => {
           const row = document.createElement("div");
-          row.textContent = item.label;
+          row.textContent = item.peek().label;
           return row;
         }
       );
@@ -130,7 +142,7 @@ globalThis.__elfBrowserBench = {
           const row = document.createElement("div");
           const label = document.createTextNode("");
           row.appendChild(label);
-          text(label, () => item.label);
+          text(label, () => item.value.label);
           return row;
         }
       );
@@ -138,8 +150,105 @@ globalThis.__elfBrowserBench = {
     for (let i = 0; i < items.value.length; i += 10) {
       items.value[i].label = items.value[i].label + "!";
     }
+    if (!root.querySelector("div")?.textContent?.endsWith("!")) {
+      throw new Error("list update failed");
+    }
     scope.stop();
     root.remove();
+  },
+  listSameKey(count) {
+    const scope = effectScope(true);
+    const root = document.createElement("main");
+    const anchor = mark("browser-list-same-key");
+    const items = useRef(makeItems(count));
+    root.appendChild(anchor);
+    document.body.appendChild(root);
+    scope.run(() => {
+      list(
+        anchor,
+        () => items.value,
+        (item) => item.id,
+        (item) => {
+          const row = document.createElement("div");
+          const label = document.createTextNode("");
+          row.appendChild(label);
+          text(label, () => item.value.label);
+          return row;
+        }
+      );
+    });
+    items.set(makeItems(count, 10000));
+    if (root.querySelector("div")?.textContent !== "Item 10000") {
+      throw new Error("same-key replacement failed");
+    }
+    scope.stop();
+    root.remove();
+  },
+  tableUpdate(rows, columns) {
+    const scope = effectScope(true);
+    const values = Array.from({ length: rows }, (_, row) => useRef(row));
+    const table = document.createElement("table");
+    const body = document.createElement("tbody");
+    table.appendChild(body);
+    scope.run(() => {
+      for (let row = 0; row < rows; row++) {
+        const tr = document.createElement("tr");
+        for (let column = 0; column < columns; column++) {
+          const td = document.createElement("td");
+          const value = document.createTextNode("");
+          td.appendChild(value);
+          text(value, () => values[row].value + ":" + column);
+          tr.appendChild(td);
+        }
+        body.appendChild(tr);
+      }
+    });
+    document.body.appendChild(table);
+    for (let row = 0; row < rows; row += 10) values[row].set(values[row].peek() + 1000);
+    if (body.rows[0]?.cells[0]?.textContent !== "1000:0") throw new Error("table update failed");
+    scope.stop();
+    table.remove();
+  },
+  async directiveUpdate(count) {
+    const scope = effectScope(true);
+    const root = document.createElement("main");
+    const values = Array.from({ length: count }, (_, index) => useRef(index));
+    let mounted = 0;
+    let updated = 0;
+    document.body.appendChild(root);
+    scope.run(() => {
+      for (let index = 0; index < count; index++) {
+        const el = document.createElement("div");
+        root.appendChild(el);
+        applyCustomDirective(
+          el,
+          {
+            mounted() { mounted++; },
+            updated() { updated++; }
+          },
+          () => values[index].value
+        );
+      }
+    });
+    await Promise.resolve();
+    for (const value of values) value.set(value.peek() + 1);
+    if (mounted !== count || updated !== count) throw new Error("directive update failed");
+    scope.stop();
+    root.remove();
+  },
+  async shadowMount(count) {
+    const root = document.createElement("main");
+    const fragment = document.createDocumentFragment();
+    for (let i = 0; i < count; i++) {
+      fragment.appendChild(document.createElement("elf-browser-bench-shadow"));
+    }
+    root.appendChild(fragment);
+    document.body.appendChild(root);
+    await Promise.resolve();
+    const first = root.firstElementChild;
+    if (!first?.shadowRoot?.querySelector("span")) throw new Error("shadow mount failed");
+    root.remove();
+    await Promise.resolve();
   },
   eventDispatch(count) {
     const scope = effectScope(true);
@@ -149,12 +258,16 @@ globalThis.__elfBrowserBench = {
     const label = document.createTextNode("");
     button.appendChild(label);
     scope.run(() => text(label, () => clicks.value));
-    button.addEventListener("click", () => clicks.set(clicks.peek() + 1));
+    const dispose = on(button, "click", () => {
+      clicks.set(clicks.peek() + 1);
+      clicks.set(clicks.peek() + 1);
+    });
     root.appendChild(button);
     document.body.appendChild(root);
     for (let i = 0; i < count; i++) {
       button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     }
+    dispose();
     scope.stop();
     root.remove();
   },
@@ -197,6 +310,10 @@ const chromeCandidates =
       ]
     : [
         process.env.CHROME_PATH,
+        "/usr/bin/google-chrome",
+        "/usr/bin/google-chrome-stable",
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser",
         "google-chrome",
         "google-chrome-stable",
         "chromium",
@@ -222,14 +339,14 @@ const median = (values) => {
   return sorted[Math.floor(sorted.length / 2)] || 0;
 };
 const encode = (value) => btoa(unescape(encodeURIComponent(JSON.stringify(value))));
-const runCase = (label, fn, params, options = {}) => {
+const runCase = async (label, fn, params, options = {}) => {
   const warmup = options.warmup || 1;
   const iterations = options.iterations || 5;
   const samples = [];
   for (let i = 0; i < warmup + iterations; i++) {
     document.body.replaceChildren();
     const startedAt = performance.now();
-    globalThis.__elfBrowserBench[fn](...params);
+    await globalThis.__elfBrowserBench[fn](...params);
     const duration = performance.now() - startedAt;
     if (i >= warmup) samples.push(duration);
   }
@@ -241,15 +358,19 @@ const runCase = (label, fn, params, options = {}) => {
     max: Math.max(...samples)
   };
 };
-(() => {
+(async () => {
   try {
-    const results = [
-      runCase("hello mount 300", "helloMount", [300]),
-      runCase("list create 1k", "listCreate", [1000]),
-      runCase("list swap 1k", "listSwap", [1000]),
-      runCase("list update 1k", "listUpdate", [1000]),
-      runCase("event dispatch 1k", "eventDispatch", [1000])
-    ];
+    const results = [];
+    results.push(await runCase("hello mount 300", "helloMount", [300]));
+    results.push(await runCase("list create 1k", "listCreate", [1000]));
+    results.push(await runCase("list create 10k", "listCreate", [10000], { iterations: 3 }));
+    results.push(await runCase("list swap 1k", "listSwap", [1000]));
+    results.push(await runCase("list update 1k", "listUpdate", [1000]));
+    results.push(await runCase("list same-key 1k", "listSameKey", [1000]));
+    results.push(await runCase("table partial update 1k cells", "tableUpdate", [100, 10]));
+    results.push(await runCase("directive mount/update 500", "directiveUpdate", [500]));
+    results.push(await runCase("shadow components 1k", "shadowMount", [1000], { iterations: 3 }));
+    results.push(await runCase("event dispatch 1k", "eventDispatch", [1000]));
     const memory = globalThis.__elfBrowserBench.memoryRelease(500, 5);
     const payload = {
       userAgent: navigator.userAgent,
@@ -317,10 +438,11 @@ const { results, memory } = payload;
 const formatMs = (value) => `${value.toFixed(2)} ms`;
 const reportPath = readArg("report");
 if (reportPath) {
+  const resolvedReportPath = resolve(root, reportPath);
   const lines = [
     "# ElfUI Browser Benchmark",
     "",
-    `> Generated by \`npm run benchmark:browser\` on ${payload.generatedAt}.`,
+    `> Generated by \`pnpm benchmark:browser\` on ${payload.generatedAt}.`,
     "",
     "| Case | Median | Min | Max |",
     "| --- | ---: | ---: | ---: |"
@@ -337,13 +459,14 @@ if (reportPath) {
     `retained: ${((memory.retained ?? 0) / 1024).toFixed(2)} KB`
   );
   lines.push("");
-  await writeFile(resolve(root, reportPath), lines.join("\\n"), "utf8");
+  await mkdir(dirname(resolvedReportPath), { recursive: true });
+  await writeFile(resolvedReportPath, lines.join("\n"), "utf8");
 }
 
 if (hasArg("json")) {
   console.log(JSON.stringify(payload, null, 2));
 } else {
-  console.log("\\nElfUI browser benchmark\\n");
+  console.log("\nElfUI browser benchmark\n");
   for (const result of results) {
     console.log(`${result.label}: median ${formatMs(result.median)}`);
   }

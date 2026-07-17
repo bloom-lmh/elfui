@@ -16,7 +16,7 @@ const renderToHost = (template: string, state: Record<string, unknown>): HTMLEle
   const node = fn({
     state,
     props: {},
-    emit: () => {},
+    emit: () => true,
     host,
     shadow: null
   });

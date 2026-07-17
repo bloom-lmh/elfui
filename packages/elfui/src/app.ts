@@ -11,7 +11,7 @@ import {
   emitDevtoolsRuntimeEvent
 } from "@elfui/runtime/internal";
 
-declare const __DEV__: boolean;
+import { DEV as __DEV__ } from "./dev";
 
 export type AppMountTarget = string | Element;
 export type AppRootProps = Record<string, unknown>;
@@ -114,23 +114,29 @@ export const createApp = <RootComponent extends ElfElementConstructor>(
       if (mountCalled) {
         throw createAppError("ELF_APP_ALREADY_MOUNTED");
       }
-      mountCalled = true;
 
       const container = resolveMountTarget(target);
-      const tag = ensureCustomElement(rootComponent);
-      const instance = document.createElement(tag) as InstanceType<RootComponent>;
-      attachAppContext(instance, provides, appConfig, directives);
-      if (__DEV__) {
-        attachDevtoolsAppId(instance, devtoolsAppId);
-        emitDevtoolsRuntimeEvent({
-          type: "app:mount",
-          app: { id: devtoolsAppId, label: tag, root: instance }
-        });
+      mountCalled = true;
+      try {
+        const tag = ensureCustomElement(rootComponent);
+        const instance = document.createElement(tag) as InstanceType<RootComponent>;
+        attachAppContext(instance, provides, appConfig, directives);
+        if (__DEV__) {
+          attachDevtoolsAppId(instance, devtoolsAppId);
+          emitDevtoolsRuntimeEvent({
+            type: "app:mount",
+            app: { id: devtoolsAppId, label: tag, root: instance }
+          });
+        }
+        Object.assign(instance, rootProps);
+        container.replaceChildren(instance);
+        rootInstance = instance;
+        return instance;
+      } catch (error) {
+        mountCalled = false;
+        rootInstance = null;
+        throw error;
       }
-      Object.assign(instance, rootProps);
-      container.replaceChildren(instance);
-      rootInstance = instance;
-      return instance;
     },
 
     unmount(): void {

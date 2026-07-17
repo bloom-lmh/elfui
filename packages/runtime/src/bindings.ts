@@ -13,7 +13,7 @@
 // - cls(el, getter)：class 合并（string / object / array）
 // - sty(el, getter)：style 合并（string / object）
 
-import { useEffect, type ReactivityEffectDebugInfo } from "@elfui/reactivity";
+import { batch, useEffect, type ReactivityEffectDebugInfo } from "@elfui/reactivity";
 
 import { getCurrentInstance, runWithUpdateHooks } from "./lifecycle";
 
@@ -105,13 +105,20 @@ export const prop = (
 };
 
 /** 事件监听 */
+const batchedEventListener = (handler: EventListener): EventListener =>
+  function (this: Element, event: Event): void {
+    batch(() => handler.call(this, event));
+  };
+
 export const on = (
   el: Element,
   event: string,
   handler: EventListener,
   options?: boolean | AddEventListenerOptions
-): void => {
-  el.addEventListener(event, handler, options);
+): (() => void) => {
+  const listener = batchedEventListener(handler);
+  el.addEventListener(event, listener, options);
+  return () => el.removeEventListener(event, listener, options);
 };
 
 // ---------- class ----------
@@ -165,34 +172,174 @@ export type StyleValue =
   | undefined
   | null;
 
-const normalizeStyle = (value: StyleValue): string => {
-  if (value == null) return "";
-  if (typeof value === "string") return value;
-  if (Array.isArray(value)) {
-    return value.map(normalizeStyle).filter(Boolean).join("; ");
-  }
-  // object: { color: "red", fontSize: 12 }
-  const parts: string[] = [];
-  for (const k in value) {
-    const v = (value as Record<string, string | number | undefined | null>)[k];
-    if (v == null) continue;
-    parts.push(`${kebab(k)}: ${typeof v === "number" ? `${v}px` : v}`);
-  }
-  return parts.join("; ");
+const kebab = (s: string): string => s.replace(/([A-Z])/g, "-$1").toLowerCase();
+
+interface StyleDeclarationValue {
+  value: string;
+  priority: string;
+}
+
+const unitlessStyleProperties = new Set([
+  "animation-iteration-count",
+  "border-image-outset",
+  "border-image-slice",
+  "border-image-width",
+  "column-count",
+  "fill-opacity",
+  "flex",
+  "flex-grow",
+  "flex-shrink",
+  "flood-opacity",
+  "font-weight",
+  "grid-area",
+  "grid-column",
+  "grid-column-end",
+  "grid-column-start",
+  "grid-row",
+  "grid-row-end",
+  "grid-row-start",
+  "line-clamp",
+  "line-height",
+  "opacity",
+  "order",
+  "orphans",
+  "scale",
+  "stop-opacity",
+  "stroke-dasharray",
+  "stroke-dashoffset",
+  "stroke-miterlimit",
+  "stroke-opacity",
+  "stroke-width",
+  "tab-size",
+  "widows",
+  "z-index",
+  "zoom"
+]);
+
+const stylePropertyName = (key: string): string => {
+  if (key.startsWith("--")) return key;
+  if (key === "cssFloat") return "float";
+  return kebab(key);
 };
 
-const kebab = (s: string): string => s.replace(/([A-Z])/g, "-$1").toLowerCase();
+const isUnitlessStyleProperty = (key: string): boolean =>
+  unitlessStyleProperties.has(key) ||
+  unitlessStyleProperties.has(key.replace(/^-(?:webkit|moz|ms|o)-/, ""));
+
+const stylePropertyValue = (key: string, value: string | number): StyleDeclarationValue => {
+  if (typeof value === "number") {
+    return {
+      value: key.startsWith("--") || isUnitlessStyleProperty(key) ? String(value) : `${value}px`,
+      priority: ""
+    };
+  }
+  const important = /\s*!important\s*$/i.test(value);
+  return {
+    value: important ? value.replace(/\s*!important\s*$/i, "") : value,
+    priority: important ? "important" : ""
+  };
+};
+
+const readStyleDeclaration = (style: CSSStyleDeclaration): Map<string, StyleDeclarationValue> => {
+  const declarations = new Map<string, StyleDeclarationValue>();
+  for (let i = 0; i < style.length; i++) {
+    const key = style.item(i);
+    declarations.set(key, {
+      value: style.getPropertyValue(key),
+      priority: style.getPropertyPriority(key)
+    });
+  }
+  return declarations;
+};
+
+const normalizeStyle = (
+  value: StyleValue,
+  declarations: Map<string, StyleDeclarationValue>,
+  parse: (cssText: string) => Map<string, StyleDeclarationValue>
+): void => {
+  if (value == null) return;
+  if (typeof value === "string") {
+    for (const [key, declaration] of parse(value)) declarations.set(key, declaration);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) normalizeStyle(entry, declarations, parse);
+    return;
+  }
+  for (const rawKey in value) {
+    const rawValue = value[rawKey];
+    if (rawValue == null) continue;
+    const key = stylePropertyName(rawKey);
+    declarations.set(key, stylePropertyValue(key, rawValue));
+  }
+};
+
+const serializeStyle = (el: Element, value: StyleValue): string => {
+  if (typeof value === "string") return value;
+  const parser = el.ownerDocument.createElement("div").style;
+  const declarations = new Map<string, StyleDeclarationValue>();
+  normalizeStyle(value, declarations, (cssText) => {
+    parser.cssText = cssText;
+    return readStyleDeclaration(parser);
+  });
+  return [...declarations]
+    .map(
+      ([key, declaration]) =>
+        `${key}: ${declaration.value}${declaration.priority ? " !important" : ""}`
+    )
+    .join("; ");
+};
 
 /** style 绑定 */
 export const sty = (el: Element, getter: () => StyleValue, debug?: BindingDebugInfo): void => {
+  const style = (el as Element & { style?: CSSStyleDeclaration }).style;
+  if (!style) {
+    bindEffect(
+      () => {
+        const cssText = serializeStyle(el, getter());
+        if (cssText) el.setAttribute("style", cssText);
+        else el.removeAttribute("style");
+      },
+      "style",
+      debug
+    );
+    return;
+  }
+
+  const staticDeclarations = readStyleDeclaration(style);
+  const parser = el.ownerDocument.createElement("div").style;
+  const parse = (cssText: string): Map<string, StyleDeclarationValue> => {
+    parser.cssText = cssText;
+    return readStyleDeclaration(parser);
+  };
+  let previous = new Map<string, StyleDeclarationValue>();
   bindEffect(
     () => {
-      const v = normalizeStyle(getter());
-      if (v) {
-        el.setAttribute("style", v);
-      } else {
-        el.removeAttribute("style");
+      const next = new Map<string, StyleDeclarationValue>();
+      normalizeStyle(getter(), next, parse);
+
+      for (const key of previous.keys()) {
+        if (next.has(key)) continue;
+        const declaration = staticDeclarations.get(key);
+        if (declaration) style.setProperty(key, declaration.value, declaration.priority);
+        else style.removeProperty(key);
       }
+
+      for (const [key, declaration] of next) {
+        const current = previous.get(key);
+        if (
+          current?.value === declaration.value &&
+          current.priority === declaration.priority &&
+          style.getPropertyValue(key) === declaration.value &&
+          style.getPropertyPriority(key) === declaration.priority
+        ) {
+          continue;
+        }
+        style.setProperty(key, declaration.value, declaration.priority);
+      }
+
+      previous = next;
+      if (style.length === 0) el.removeAttribute("style");
     },
     "style",
     debug
@@ -229,7 +376,7 @@ const writeObjAttr = (el: Element, k: string, val: unknown, removal: boolean): v
     return;
   }
   if (k === "style") {
-    el.setAttribute("style", typeof val === "string" ? val : normalizeStyle(val as StyleValue));
+    el.setAttribute("style", serializeStyle(el, val as StyleValue));
     return;
   }
   if (typeof val === "object" || typeof val === "function") {
@@ -241,20 +388,24 @@ const writeObjAttr = (el: Element, k: string, val: unknown, removal: boolean): v
 
 /** L3.9: v-on="obj" — 把 obj 的每个 key 注册为事件监听，对象变化时增删 */
 export const onObject = (el: Element, getter: () => unknown, debug?: BindingDebugInfo): void => {
-  let prev: Record<string, EventListener> = {};
+  let prev: Record<string, { source: EventListener; listener: EventListener }> = {};
   bindEffect(
     () => {
       const v = getter();
       const obj = (v && typeof v === "object" ? v : {}) as Record<string, EventListener>;
+      const next: Record<string, { source: EventListener; listener: EventListener }> = {};
       for (const k in prev) {
-        if (obj[k] !== prev[k]) el.removeEventListener(k, prev[k]!);
+        if (obj[k] !== prev[k]?.source) el.removeEventListener(k, prev[k]!.listener);
       }
       for (const k in obj) {
-        if (typeof obj[k] === "function" && obj[k] !== prev[k]) {
-          el.addEventListener(k, obj[k]!);
-        }
+        const source = obj[k];
+        if (typeof source !== "function") continue;
+        const listener =
+          prev[k]?.source === source ? prev[k]!.listener : batchedEventListener(source);
+        if (listener !== prev[k]?.listener) el.addEventListener(k, listener);
+        next[k] = { source, listener };
       }
-      prev = { ...obj };
+      prev = next;
     },
     "on-object",
     debug

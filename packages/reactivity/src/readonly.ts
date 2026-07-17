@@ -10,6 +10,7 @@
 
 import { isObject } from "@elfui/shared";
 
+import { DEV as __DEV__ } from "./dev";
 import { track, trigger } from "./dep";
 import {
   COLLECTION_ITERATE_KEY,

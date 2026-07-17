@@ -1,6 +1,6 @@
 ﻿// L3.9: bindObject / onObject 单测
 
-import { useReactive } from "@elfui/reactivity";
+import { effect, useReactive, useRef } from "@elfui/reactivity";
 import { describe, expect, it, vi } from "vitest";
 
 import { bindObject, onObject } from "../bindings";
@@ -82,5 +82,22 @@ describe("onObject — v-on='obj'", () => {
     expect(() => {
       onObject(el, () => ({ click: 42 as unknown as EventListener }));
     }).not.toThrow();
+  });
+
+  it("对象事件处理器同样自动 batch", () => {
+    const count = useRef(0);
+    const values: number[] = [];
+    const el = document.createElement("button");
+    effect(() => values.push(count.value));
+    onObject(el, () => ({
+      click: () => {
+        count.value = 1;
+        count.value = 2;
+      }
+    }));
+
+    el.dispatchEvent(new MouseEvent("click"));
+
+    expect(values).toEqual([0, 2]);
   });
 });

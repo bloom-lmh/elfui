@@ -25,14 +25,8 @@ const withJsExtension = (specifier) => {
   return `${specifier}.js`;
 };
 
-const devFallback = "globalThis.__DEV__ ??= true;\n";
-
-const ensureDevFallback = (file, code) => {
-  if (!file.endsWith(".js")) return code;
-  if (!/\b__DEV__\b/.test(code)) return code;
-  if (code.startsWith(devFallback)) return code;
-  return `${devFallback}${code}`;
-};
+const removeLegacyDevFallback = (code) =>
+  code.replace(/^globalThis\.__DEV__ \?\?= true;\r?\n/u, "");
 
 const rewriteImports = (code) =>
   code
@@ -72,7 +66,7 @@ for (const packageDir of packageDirs) {
   const files = await walk(distDir);
   for (const file of files) {
     const source = await readFile(file, "utf8");
-    const next = ensureDevFallback(file, rewriteImports(source));
+    const next = rewriteImports(removeLegacyDevFallback(source));
     if (next !== source) {
       await writeFile(file, next);
     }

@@ -11,6 +11,7 @@ import {
   setDevtoolsComponentContext,
   type ElfUIDevtoolsDebugState
 } from "./devtools";
+import { DEV as __DEV__ } from "./dev";
 
 export type LifecycleHook = () => void;
 export type AttributeChangedHook = (
@@ -27,10 +28,13 @@ export type ErrorCapturedHook = (
 export interface ComponentInstance {
   host: HTMLElement;
   shadow: ShadowRoot | null;
+  parent: ComponentInstance | null;
   /** formControl=true 时由 element 注入，供组合式 helper 读取 */
   form?: unknown;
   isMounted: boolean;
   isUnmounted: boolean;
+  /** 由组件 host 注入，统一转发 setup/render/lifecycle 错误。 */
+  handleError?: (error: unknown, info: string) => void;
   beforeMountHooks: LifecycleHook[];
   mountedHooks: LifecycleHook[];
   beforeUnmountHooks: LifecycleHook[];
@@ -71,9 +75,13 @@ const inject =
   };
 
 export const onMount = inject("mountedHooks");
+/** Vue 风格兼容别名；与 onMount 注册到同一生命周期队列。 */
+export const onMounted = onMount;
 export const onBeforeMount = inject("beforeMountHooks");
 export const onBeforeUnmount = inject("beforeUnmountHooks");
 export const onUnmount = inject("unmountedHooks");
+/** Vue 风格兼容别名；与 onUnmount 注册到同一生命周期队列。 */
+export const onUnmounted = onUnmount;
 export const onBeforeUpdate = inject("beforeUpdateHooks");
 export const onUpdated = inject("updatedHooks");
 export const onAttributeChanged = inject("attrChangedHooks");
@@ -86,10 +94,12 @@ export const onDeactivated = inject("deactivatedHooks");
 /** 创建一个空实例骨架 */
 export const createInstance = (
   host: HTMLElement,
-  shadow: ShadowRoot | null
+  shadow: ShadowRoot | null,
+  parent: ComponentInstance | null = null
 ): ComponentInstance => ({
   host,
   shadow,
+  parent,
   form: undefined,
   isMounted: false,
   isUnmounted: false,
@@ -116,13 +126,30 @@ export const createInstance = (
 });
 
 /** 调用一组钩子，错误隔离 */
-export const callHooks = (hooks: LifecycleHook[]): void => {
+export const callHooks = (
+  hooks: LifecycleHook[],
+  instance?: ComponentInstance,
+  info: string = "component lifecycle hook"
+): void => {
+  const reportError = (error: unknown): void => {
+    if (instance?.handleError) instance.handleError(error, info);
+    else if (__DEV__) console.error("[lifecycle] hook error:", error);
+    else console.error(error);
+  };
+
   for (const fn of hooks) {
     try {
-      fn();
+      const result = fn() as unknown;
+      if (
+        result !== null &&
+        result !== undefined &&
+        (typeof result === "object" || typeof result === "function") &&
+        typeof (result as { then?: unknown }).then === "function"
+      ) {
+        void Promise.resolve(result).catch(reportError);
+      }
     } catch (err) {
-      if (__DEV__) console.error("[lifecycle] hook error:", err);
-      else console.error(err);
+      reportError(err);
     }
   }
 };
@@ -150,7 +177,7 @@ export const runWithUpdateHooks = (
   const shouldSchedule = !pendingUpdatedInstances.has(instance);
   if (shouldSchedule) {
     pendingUpdatedInstances.add(instance);
-    callHooks(instance.beforeUpdateHooks);
+    callHooks(instance.beforeUpdateHooks, instance, "component beforeUpdate hook");
   }
 
   try {
@@ -160,7 +187,7 @@ export const runWithUpdateHooks = (
       queueMicrotask(() => {
         pendingUpdatedInstances.delete(instance);
         if (!instance.isUnmounted) {
-          callHooks(instance.updatedHooks);
+          callHooks(instance.updatedHooks, instance, "component updated hook");
           if (collectDevtoolsUpdate) {
             emitDevtoolsRuntimeEvent({ type: "component:update", host: instance.host });
           }

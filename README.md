@@ -174,12 +174,18 @@ export const SaveField = defineHtml(html`
 `);
 ```
 
+When a Boolean prop is supplied as a Custom Element attribute, an absent attribute uses the default; an empty value, `"true"`, or the attribute's own name becomes `true`; `"false"` and other strings become `false`. For dynamic booleans, prefer property binding or remove the attribute when the value is `false`.
+
+Object, array, and function values passed as properties from native code or another framework retain their host-owned reference identity. Replacing the whole property remains reactive, but ElfUI does not convert the host-owned object or array into a new deep reactive Proxy.
+
+Basic Props declared in the same file only need one type declaration. `defineProps<Props>()` generates runtime converters for `string/number/boolean`, arrays, objects, functions, and same-kind literal unions, and uses `?` to infer optional properties. Continue to use `defineProps<Props>({ ... })` for defaults, imported or generic types, and mixed unions. Unsafe inference produces an `ELF_MACRO_PROPS_RUNTIME_TYPE` or `ELF_MACRO_PROP_RUNTIME_TYPE` warning instead of guessing.
+
 ## ⚡ Reactivity
 
 Use `useRef` for primitives or replaceable values, and `useReactive` for objects, arrays, and collections:
 
 ```ts
-import { useComputed, useEffect, useReactive, useRef } from "@elfui/core";
+import { batch, useComputed, useEffect, useReactive, useRef } from "@elfui/core";
 
 const count = useRef(1);
 const user = useReactive({ name: "Elf", online: true });
@@ -188,7 +194,14 @@ const doubled = useComputed(() => count.value * 2);
 useEffect(() => {
   document.title = `${user.name}: ${doubled.value}`;
 });
+
+batch(() => {
+  count.value++;
+  user.online = false;
+});
 ```
+
+`batch()` defers and deduplicates synchronous effects until the outermost batch completes. Compiled template event handlers create this boundary automatically.
 
 | API                         | Purpose                                                        |
 | --------------------------- | -------------------------------------------------------------- |
@@ -197,31 +210,40 @@ useEffect(() => {
 | `useComputed()`             | Create lazy derived state                                      |
 | `useEffect()`               | Track dependencies and manage side effects and cleanup         |
 | `watch()` / `watchEffect()` | Observe explicit sources or automatically tracked dependencies |
+| `batch()`                   | Group synchronous writes into one effect notification          |
 
 ## 🔄 Component lifecycle
 
 ```ts
-import { onMount, onUnmount } from "@elfui/core";
+import { onMounted, onUnmounted } from "@elfui/core";
 
-onMount(() => {
+onMounted(() => {
   console.log("component mounted");
 });
 
-onUnmount(() => {
+onUnmounted(() => {
   console.log("component unmounted");
 });
 ```
 
-| Phase                    | Hooks                          |
-| ------------------------ | ------------------------------ |
-| Before and after mount   | `onBeforeMount`, `onMount`     |
-| Before and after update  | `onBeforeUpdate`, `onUpdated`  |
-| Before and after unmount | `onBeforeUnmount`, `onUnmount` |
-| Attribute changes        | `onAttributeChanged`           |
-| Cache activation         | `onActivated`, `onDeactivated` |
-| Error capture            | `onErrorCaptured`              |
+| Phase                    | Hooks                            |
+| ------------------------ | -------------------------------- |
+| Before and after mount   | `onBeforeMount`, `onMounted`     |
+| Before and after update  | `onBeforeUpdate`, `onUpdated`    |
+| Before and after unmount | `onBeforeUnmount`, `onUnmounted` |
+| Attribute changes        | `onAttributeChanged`             |
+| Cache activation         | `onActivated`, `onDeactivated`   |
+| Error capture            | `onErrorCaptured`                |
 
-Register lifecycle hooks synchronously at component setup time. Use `useEventListener` or `onUnmount` for listeners, observers, and other disposable resources.
+Register lifecycle hooks synchronously at component setup time. When `onMounted` runs, the final DOM and template refs are available, so Canvas, observers, and other DOM-owning integrations can initialize safely; release them in `onUnmounted`. A lifecycle hook may return a Promise: ElfUI does not block mount or unmount timing, but routes Promise rejections through `onErrorCaptured` and the app `errorHandler`. The existing `onMount` and `onUnmount` names remain fully compatible aliases.
+
+### External tools and host frameworks
+
+ElfUI does not bundle charting, editor, WebGL, overlay, or host-framework adapters. Integrations use platform contracts instead: initialize DOM-owning tools in `onMounted`, dispose them in `onUnmounted`, and pass live template refs directly to `useResizeObserver` / `useIntersectionObserver` when size or visibility must follow a changing target.
+
+The release gate exercises real integrations for DOM ownership, Canvas charts, SVG/WebGL, overlays and portals, native observers/listeners, Worker/WASM resources, asynchronous races, and repeated mount/unmount cleanup. It also runs the same Custom Element contract in native DOM, React, Vue, Svelte, and Angular: host-owned object/array/function properties keep identity; Custom Events, slots, Shadow DOM styling, focus, form participation, keyed reuse, and teardown retain platform semantics.
+
+See the official documentation's **Integration** section for generic recipes and host-framework boundaries. These test-only tools and frameworks remain workspace development dependencies and are not included in ElfUI's published dependency graph.
 
 ## 🎨 Styling
 
@@ -328,7 +350,23 @@ export const Form = defineHtml(html`
 `);
 ```
 
-Templates support event modifiers such as `.stop`, `.prevent`, `.once`, `.capture`, and `.passive`. Events declared with `defineEmits()` are exposed as standard Custom Events.
+Templates support event modifiers such as `.stop`, `.prevent`, `.once`, `.capture`, and `.passive`. Events declared with `defineEmits()` are exposed as standard Custom Events. One argument becomes `detail` directly, while multiple arguments become an array; `bubbles`, `composed`, and `cancelable` default to `false`.
+
+Configure a specific component event when it needs to cross a Shadow DOM boundary or be cancelable. `emit()` returns the boolean result of `dispatchEvent()`:
+
+```ts
+defineOptions({
+  emitOptions: {
+    events: {
+      save: { bubbles: true, composed: true, cancelable: true }
+    }
+  }
+});
+
+const accepted = emit("save", value);
+```
+
+Enable `bubbles/composed` only for events that intentionally participate in DOM propagation, so internal component events do not escape their boundary accidentally.
 
 ## 🚦 Applications
 
@@ -350,7 +388,7 @@ app.config.errorHandler = (error) => console.error(error);
 app.mount("#app");
 ```
 
-You can create multiple applications on the same page. Each application can mount once and can later be removed with `app.unmount()`.
+You can create multiple applications on the same page. Each application can mount successfully once and can later be removed with `app.unmount()`. If an invalid selector, a missing target, or mount preparation causes the attempt to fail, fix the cause and retry `mount()` on the same application.
 
 ## 🧱 Built-in components
 
@@ -401,6 +439,18 @@ ElfUI outputs ES2022 and standard Custom Elements. It requires:
 
 Use currently supported Chrome, Edge, Firefox, and Safari releases. Older browsers require syntax transpilation by the application build and, when necessary, Web Components polyfills.
 
+### SSR and registration boundaries
+
+ElfUI currently provides these support levels:
+
+- **Node/SSR imports: supported.** `@elfui/*` packages and compiled component modules can load without `window`, `document`, `HTMLElement`, or `customElements`. The server receives a metadata-only placeholder constructor; the client bundle evaluates the module again and creates the real Custom Element.
+- **SSR markup: host shell only.** A server may output `<elf-user-card>...</elf-user-card>`, but ElfUI does not currently render component templates into server-side Shadow DOM.
+- **Hydration: not supported yet.** Once upgraded, the Custom Element renders through its client component logic and does not hydrate server-produced component internals. Treat ElfUI components as client-only islands when the host application relies on hydration.
+
+Module-level `defineCustomElement()` / `defineComponent()` calls are SSR-safe, while `createApp().mount()`, DOM creation, and explicit registration must run on the client. Invalid registration reports `ELF_CUSTOM_ELEMENTS_UNAVAILABLE`; attempting to register a server placeholder reports `ELF_SSR_PLACEHOLDER`.
+
+The Custom Element registry is a page-global namespace. Re-registering the same constructor is idempotent, while assigning a different constructor to an occupied tag throws `ELF_CUSTOM_ELEMENT_CONFLICT` instead of silently retaining the old implementation. Applications and libraries should use a stable unique prefix. Macro projects configure it with `elfuiMacroPlugin({ tagPrefix: "acme" })`; handwritten components use prefixed `name` / `tag` values directly. For centralized registration, set `register: false` and call `registerComponents()` from the client entry.
+
 ## 🌱 Ecosystem
 
 | Project                                                                  | Purpose                                             |
@@ -424,7 +474,7 @@ pnpm verify
 pnpm verify:publish
 ```
 
-`pnpm verify` runs boundary checks, formatting, linting, type checking, builds, unit tests, and template type checks. `pnpm verify:publish` installs and verifies the actual npm tarballs.
+`pnpm verify` runs boundary checks, formatting, linting, type checking, builds, unit tests, and template type checks. `pnpm verify:publish` creates a temporary consumer from the actual npm tarballs and verifies ESM, SSR imports, types, exports, tree shaking, and esbuild, Rollup, and Vite builds.
 
 ## 🤝 Contributing
 

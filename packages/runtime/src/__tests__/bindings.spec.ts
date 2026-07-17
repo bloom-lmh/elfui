@@ -2,9 +2,9 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { useRef } from "@elfui/reactivity";
+import { effect, useRef } from "@elfui/reactivity";
 
-import { attr, cls, on, prop, sty, text } from "../bindings";
+import { attr, cls, on, prop, sty, text, type StyleValue } from "../bindings";
 
 describe("text", () => {
   it("基础文本绑定", () => {
@@ -113,6 +113,35 @@ describe("on", () => {
     btn.dispatchEvent(new Event("click"));
     expect(handler).toHaveBeenCalledTimes(1);
   });
+
+  it("事件回调中的多次写入自动 batch", () => {
+    const btn = document.createElement("button");
+    const count = useRef(0);
+    const values: number[] = [];
+    effect(() => values.push(count.value));
+    on(btn, "click", () => {
+      count.value = 1;
+      count.value = 2;
+    });
+
+    btn.dispatchEvent(new Event("click"));
+
+    expect(values).toEqual([0, 2]);
+  });
+
+  it("返回 disposer 并保留 listener this", () => {
+    const btn = document.createElement("button");
+    let receivedThis: unknown;
+    const dispose = on(btn, "click", function (this: Element) {
+      receivedThis = this;
+    });
+
+    btn.dispatchEvent(new Event("click"));
+    dispose();
+    btn.dispatchEvent(new Event("click"));
+
+    expect(receivedThis).toBe(btn);
+  });
 });
 
 describe("cls", () => {
@@ -152,16 +181,18 @@ describe("sty", () => {
     const el = document.createElement("div");
     const s = useRef("color: red");
     sty(el, () => s.value);
-    expect(el.getAttribute("style")).toBe("color: red");
+    expect(el.style.color).toBe("red");
   });
 
   it("对象 style - camelCase 转 kebab", () => {
     const el = document.createElement("div");
     const fz = useRef(14);
     sty(el, () => ({ color: "red", fontSize: fz.value }));
-    expect(el.getAttribute("style")).toBe("color: red; font-size: 14px");
+    expect(el.style.color).toBe("red");
+    expect(el.style.fontSize).toBe("14px");
     fz.value = 16;
-    expect(el.getAttribute("style")).toBe("color: red; font-size: 16px");
+    expect(el.style.color).toBe("red");
+    expect(el.style.fontSize).toBe("16px");
   });
 
   it("空 style 移除属性", () => {
@@ -171,5 +202,59 @@ describe("sty", () => {
     expect(el.hasAttribute("style")).toBe(true);
     s.value = null;
     expect(el.hasAttribute("style")).toBe(false);
+  });
+
+  it("保留静态 style，并在动态属性撤销后恢复静态值", () => {
+    const el = document.createElement("div");
+    el.setAttribute("style", "color: red; padding: 4px");
+    const dynamic = useRef<StyleValue>({ color: "blue", marginTop: 8 });
+
+    sty(el, () => dynamic.value);
+    expect(el.style.color).toBe("blue");
+    expect(el.style.padding).toBe("4px");
+    expect(el.style.marginTop).toBe("8px");
+
+    dynamic.value = { opacity: 0.5 };
+    expect(el.style.color).toBe("red");
+    expect(el.style.padding).toBe("4px");
+    expect(el.style.marginTop).toBe("");
+    expect(el.style.opacity).toBe("0.5");
+  });
+
+  it("unitless number 与 CSS 自定义属性不追加 px", () => {
+    const el = document.createElement("div");
+    sty(el, () => ({
+      opacity: 0.5,
+      zIndex: 2,
+      lineHeight: 1.4,
+      WebkitLineClamp: 2,
+      "--columns": 3
+    }));
+
+    expect(el.style.opacity).toBe("0.5");
+    expect(el.style.zIndex).toBe("2");
+    expect(el.style.lineHeight).toBe("1.4");
+    expect(el.style.getPropertyValue("-webkit-line-clamp")).toBe("2");
+    expect(el.style.getPropertyValue("--columns")).toBe("3");
+  });
+
+  it("只写入发生变化的动态属性", () => {
+    const el = document.createElement("div");
+    const size = useRef(12);
+    sty(el, () => ({ color: "red", fontSize: size.value }));
+    const setProperty = vi.spyOn(el.style, "setProperty");
+
+    size.value = 18;
+
+    expect(setProperty).toHaveBeenCalledTimes(1);
+    expect(setProperty).toHaveBeenCalledWith("font-size", "18px", "");
+  });
+
+  it("支持 !important，并由后出现的数组项覆盖同名属性", () => {
+    const el = document.createElement("div");
+    sty(el, () => ["color: red", { color: "blue !important" }]);
+
+    expect(el.style.color).toBe("blue");
+    expect(el.style.getPropertyPriority("color")).toBe("important");
   });
 });

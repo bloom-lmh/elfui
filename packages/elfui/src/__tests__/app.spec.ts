@@ -8,6 +8,9 @@ import {
   ensureCustomElement,
   inject,
   keepAlive,
+  onActivated,
+  onDeactivated,
+  onMounted,
   onUnmount,
   resetDirectives,
   teleport,
@@ -245,6 +248,40 @@ describe("createApp", () => {
     expect(() => app.mount("#b")).toThrow("[ELF_APP_ALREADY_MOUNTED]");
   });
 
+  it("allows mount to retry after target resolution fails", () => {
+    const Root = defineTestElement("retry-mount");
+    const app = createApp(Root);
+
+    expect(() => app.mount("[")).toThrow("[ELF_APP_INVALID_SELECTOR]");
+    expect(() => app.mount("#missing")).toThrow("[ELF_APP_TARGET_NOT_FOUND]");
+
+    const container = document.createElement("div");
+    container.id = "app";
+    document.body.appendChild(container);
+    const instance = app.mount("#app");
+
+    expect(container.firstElementChild).toBe(instance);
+    expect(() => app.mount(container)).toThrow("[ELF_APP_ALREADY_MOUNTED]");
+  });
+
+  it("allows mount to retry after root instance preparation fails", () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    const Root = defineTestElement("retry-preparation");
+    Object.defineProperty(Root.prototype, "blocked", {
+      configurable: true,
+      set: () => {
+        throw new Error("root prop failed");
+      }
+    });
+    const app = createApp(Root, { blocked: true });
+
+    expect(() => app.mount("#app")).toThrow("root prop failed");
+
+    delete (Root.prototype as unknown as Record<string, unknown>).blocked;
+    const instance = app.mount("#app");
+    expect(document.querySelector("#app")?.firstElementChild).toBe(instance);
+  });
+
   it("unmounts the root component and triggers lifecycle cleanup", async () => {
     document.body.innerHTML = '<div id="app"></div>';
     const cleanup = vi.fn();
@@ -260,6 +297,122 @@ describe("createApp", () => {
 
     expect(document.querySelector("#app")?.children.length).toBe(0);
     expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it("App unmount 会释放 KeepAlive 的活动项和非活动缓存项", async () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    const key = useRef("a");
+    const counts = new Map<
+      string,
+      { mounted: number; activated: number; deactivated: number; unmounted: number }
+    >();
+    const getCounts = (name: string) => {
+      let value = counts.get(name);
+      if (!value) {
+        value = { mounted: 0, activated: 0, deactivated: 0, unmounted: 0 };
+        counts.set(name, value);
+      }
+      return value;
+    };
+    const Child = defineTestElement("keep-alive-child", (_props, ctx) => {
+      const name = ctx.host.dataset.key!;
+      const current = getCounts(name);
+      onMounted(() => current.mounted++);
+      onActivated(() => current.activated++);
+      onDeactivated(() => current.deactivated++);
+      onUnmount(() => current.unmounted++);
+      return {};
+    });
+    const childTag = ensureCustomElement(Child);
+    const Root = defineTestElement("keep-alive-root", undefined, () =>
+      keepAlive(
+        () => key.value,
+        (name) => {
+          const child = document.createElement(childTag);
+          child.dataset.key = name;
+          return child;
+        }
+      )
+    );
+    const app = createApp(Root);
+
+    app.mount("#app");
+    await Promise.resolve();
+    await Promise.resolve();
+    key.set("b");
+    await Promise.resolve();
+    await Promise.resolve();
+    key.set("a");
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(getCounts("a")).toEqual({
+      mounted: 1,
+      activated: 2,
+      deactivated: 1,
+      unmounted: 0
+    });
+    expect(getCounts("b")).toEqual({
+      mounted: 1,
+      activated: 1,
+      deactivated: 1,
+      unmounted: 0
+    });
+
+    app.unmount();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(getCounts("a")).toEqual({
+      mounted: 1,
+      activated: 2,
+      deactivated: 2,
+      unmounted: 1
+    });
+    expect(getCounts("b")).toEqual({
+      mounted: 1,
+      activated: 1,
+      deactivated: 1,
+      unmounted: 1
+    });
+  });
+
+  it("KeepAlive LRU 淘汰会完整卸载被缓存的组件", async () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    const key = useRef("a");
+    const unmounted: string[] = [];
+    const Child = defineTestElement("keep-alive-lru-child", (_props, ctx) => {
+      const name = ctx.host.dataset.key!;
+      onUnmount(() => unmounted.push(name));
+      return {};
+    });
+    const childTag = ensureCustomElement(Child);
+    const Root = defineTestElement("keep-alive-lru-root", undefined, () =>
+      keepAlive(
+        () => key.value,
+        (name) => {
+          const child = document.createElement(childTag);
+          child.dataset.key = name;
+          return child;
+        },
+        { max: 1 }
+      )
+    );
+    const app = createApp(Root);
+
+    app.mount("#app");
+    await Promise.resolve();
+    key.set("b");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(unmounted).toEqual(["a"]);
+
+    app.unmount();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(unmounted).toEqual(["a", "b"]);
   });
 
   it("makes app-level provides visible to the root component", () => {
@@ -315,6 +468,28 @@ describe("createApp", () => {
     expect(handler).toHaveBeenCalledWith(error, "component setup/render");
   });
 
+  it("uses app.config.errorHandler for lifecycle hook errors", () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    const error = new Error("mounted boom");
+    const handler = vi.fn();
+    const Root = defineTestElement(
+      "lifecycle-error",
+      () => {
+        onMounted(() => {
+          throw error;
+        });
+        return {};
+      },
+      () => document.createElement("div")
+    );
+
+    const app = createApp(Root);
+    app.config.errorHandler = handler;
+    app.mount("#app");
+
+    expect(handler).toHaveBeenCalledWith(error, "component mounted hook");
+  });
+
   it("exposes app globalProperties to setup and the template context", () => {
     document.body.innerHTML = '<div id="app"></div>';
     const Root = defineTestElement(
@@ -361,5 +536,46 @@ describe("createApp", () => {
 
     expect(resolveDirective("mark", undefined, firstRoot)).toBe(first);
     expect(resolveDirective("mark", undefined, secondRoot)).toBe(second);
+  });
+
+  it("keeps config, provides, directives and plugin installation isolated across apps", () => {
+    document.body.innerHTML = '<div id="a"></div><div id="b"></div>';
+    const key = Symbol("shared-app-key");
+    const firstDirective = { mounted: vi.fn() };
+    const secondDirective = { mounted: vi.fn() };
+    const installs: ElfUIApp[] = [];
+    const plugin = (app: ElfUIApp) => installs.push(app);
+    const Root = defineTestElement(
+      "isolated-roots",
+      (_props, ctx) => ({
+        appName: String(ctx.config.globalProperties.appName),
+        injected: String(inject(key, "missing"))
+      }),
+      (ctx) => {
+        const output = document.createElement("output");
+        output.textContent = `${ctx.state.appName}:${ctx.state.injected}`;
+        return output;
+      }
+    );
+    const firstApp = createApp(Root)
+      .use(plugin)
+      .provide(key, "first-provide")
+      .directive("mark", firstDirective);
+    const secondApp = createApp(Root)
+      .use(plugin)
+      .provide(key, "second-provide")
+      .directive("mark", secondDirective);
+    firstApp.config.globalProperties.appName = "first-config";
+    secondApp.config.globalProperties.appName = "second-config";
+
+    const firstRoot = firstApp.mount("#a");
+    const secondRoot = secondApp.mount("#b");
+
+    expect(document.querySelector("#a")?.textContent).toBe("first-config:first-provide");
+    expect(document.querySelector("#b")?.textContent).toBe("second-config:second-provide");
+    expect(resolveDirective("mark", undefined, firstRoot)).toBe(firstDirective);
+    expect(resolveDirective("mark", undefined, secondRoot)).toBe(secondDirective);
+    expect(installs).toEqual([firstApp, secondApp]);
+    expect(firstApp.config.globalProperties).not.toBe(secondApp.config.globalProperties);
   });
 });

@@ -12,7 +12,9 @@ export {
   onDeactivated,
   onErrorCaptured,
   onMount,
+  onMounted,
   onUnmount,
+  onUnmounted,
   onUpdated,
   type AttributeChangedHook,
   type ErrorCapturedHook,
@@ -83,6 +85,8 @@ export {
   useIntersectionObserver,
   useResizeObserver,
   useScrollLock,
+  type ElementRefLike,
+  type ObserverTarget,
   type ResizeEntry
 } from "./hooks-advanced";
 
@@ -109,6 +113,7 @@ export {
   type DefineCustomElementOptions,
   type ElfElementConstructor,
   type EmitOptions,
+  type EventDispatchOptions,
   type PropOption,
   type PropsOptions,
   type PropType,

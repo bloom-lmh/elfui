@@ -12,6 +12,7 @@
 // 实现：每个组件实例（lifecycle.ts 的 ComponentInstance）增加 provides Map。
 // 我们用 host element 上挂一个 symbol 属性指回 instance，inject 时上溯查找。
 
+import { DEV as __DEV__ } from "./dev";
 import { getCurrentInstance, type ComponentInstance } from "./lifecycle";
 
 /** 类型化注入键 */
@@ -38,9 +39,34 @@ export const attachInstanceToHost = (host: HTMLElement, instance: ComponentInsta
   (host as unknown as Record<symbol, unknown>)[INSTANCE_KEY] = instance;
 };
 
+/** 完整卸载后解除 host 与旧实例的关联。 */
+export const detachInstanceFromHost = (host: HTMLElement, instance: ComponentInstance): void => {
+  const target = host as unknown as Record<symbol, unknown>;
+  if (target[INSTANCE_KEY] === instance) {
+    delete target[INSTANCE_KEY];
+  }
+};
+
 /** 从 host 取出已附加的组件实例（KeepAlive 等内部使用） */
 export const getInstanceFromHost = (host: HTMLElement): ComponentInstance | null => {
   return readInstanceFromHost(host);
+};
+
+/** 沿真实 DOM / ShadowRoot 链查找最近的父组件实例。 */
+export const findParentInstance = (host: HTMLElement): ComponentInstance | null => {
+  let current: Node | null = host.parentNode;
+  while (current) {
+    const instance = readInstanceFromHost(current);
+    if (instance && !instance.isUnmounted) return instance;
+    if (current.parentNode) {
+      current = current.parentNode;
+    } else if (current.nodeType === 11 && "host" in current) {
+      current = (current as ShadowRoot).host;
+    } else {
+      current = null;
+    }
+  }
+  return null;
 };
 
 /** 从 host 取出 instance */

@@ -12,6 +12,7 @@
 // - track：把当前 active effect 加入指定 Dep
 // - trigger：通知 Dep 中的所有 effect 重跑（或调度）
 
+import { DEV as __DEV__ } from "./dev";
 import {
   createReactivityEffectId,
   emitReactivityEffect,
@@ -48,6 +49,8 @@ const trackStack: boolean[] = [];
 
 export class ReactiveEffect<T = unknown> {
   public active = true;
+  /** computed effect 必须在普通订阅者前失效，避免 batch flush 读到旧缓存。 */
+  public computed = false;
   public deps: Dep[] = [];
   public onStop?: (() => void) | undefined;
   public readonly devtoolsId = __DEV__ ? createReactivityEffectId() : "";
@@ -183,16 +186,63 @@ export const triggerEffects = (dep: Dep, debug?: { target: object; key: unknown 
 
   for (const reactiveEffect of effects) {
     if (triggerId) reactiveEffect.devtoolsTriggerId = triggerId;
-    if (triggerId) {
-      withReactivityTrigger(triggerId, () => {
-        if (reactiveEffect.scheduler) reactiveEffect.scheduler();
-        else reactiveEffect.run();
-      });
-    } else if (reactiveEffect.scheduler) {
-      reactiveEffect.scheduler();
+    if (batchDepth > 0 || isFlushingBatch) {
+      (reactiveEffect.computed ? batchedComputedEffects : batchedEffects).add(reactiveEffect);
     } else {
-      reactiveEffect.run();
+      runTriggeredEffect(reactiveEffect, triggerId);
     }
+  }
+};
+
+let batchDepth = 0;
+let isFlushingBatch = false;
+const batchedComputedEffects = new Set<ReactiveEffect>();
+const batchedEffects = new Set<ReactiveEffect>();
+
+const runTriggeredEffect = (reactiveEffect: ReactiveEffect, triggerId: string | null): void => {
+  const run = (): void => {
+    if (reactiveEffect.scheduler) reactiveEffect.scheduler();
+    else reactiveEffect.run();
+  };
+  if (triggerId) withReactivityTrigger(triggerId, run);
+  else run();
+};
+
+const flushEffectSet = (effects: Set<ReactiveEffect>): void => {
+  if (effects.size === 0) return;
+  const pending = Array.from(effects);
+  effects.clear();
+  for (const reactiveEffect of pending) {
+    if (!reactiveEffect.active) continue;
+    runTriggeredEffect(reactiveEffect, reactiveEffect.devtoolsTriggerId);
+  }
+};
+
+/** 立即排空 batch effect；主要供 batch 结束和 flushSync 逃生口调用。 */
+export const flushBatchedEffects = (): void => {
+  if (isFlushingBatch) return;
+  isFlushingBatch = true;
+  try {
+    while (batchedComputedEffects.size > 0 || batchedEffects.size > 0) {
+      // computed scheduler 会继续把下游订阅者加入普通 effect 队列。
+      flushEffectSet(batchedComputedEffects);
+      flushEffectSet(batchedEffects);
+    }
+  } finally {
+    isFlushingBatch = false;
+  }
+};
+
+/**
+ * 把同步 state 写入合并为一次 effect 通知。支持嵌套，并在回调抛错时可靠恢复状态。
+ */
+export const batch = <T>(fn: () => T): T => {
+  batchDepth++;
+  try {
+    return fn();
+  } finally {
+    batchDepth--;
+    if (batchDepth === 0) flushBatchedEffects();
   }
 };
 

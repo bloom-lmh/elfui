@@ -1,3 +1,5 @@
+import { DEV as __DEV__ } from "./dev";
+
 export const ELFUI_DEVTOOLS_GLOBAL_HOOK = "__ELFUI_DEVTOOLS_GLOBAL_HOOK__";
 
 const APP_ID_KEY: unique symbol = Symbol.for("elfui.app.id") as never;

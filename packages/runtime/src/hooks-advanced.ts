@@ -3,7 +3,7 @@
 import { useEffect } from "@elfui/reactivity";
 
 import { useEventListener } from "./hooks";
-import { onBeforeUnmount, onMount } from "./lifecycle";
+import { onBeforeUnmount, onMount, onMounted } from "./lifecycle";
 
 /** 获取容器内所有可聚焦元素 */
 const FOCUSABLE = [
@@ -112,28 +112,91 @@ export interface ResizeEntry {
   target: Element;
 }
 
+/** Observer 可接受的只读元素引用，兼容 useRef 和 useTemplateRef。 */
+export interface ElementRefLike<T extends Element = Element> {
+  readonly value: T | null | undefined;
+}
+
+/** DOM observer 的目标：元素、元素引用或响应式 getter。 */
+export type ObserverTarget<T extends Element = Element> =
+  | T
+  | ElementRefLike<T>
+  | (() => T | null | undefined)
+  | null
+  | undefined;
+
+interface ElementObserver {
+  observe(target: Element): void;
+  disconnect(): void;
+}
+
+const isElement = <T extends Element>(value: unknown): value is T =>
+  typeof value === "object" && value !== null && (value as { nodeType?: unknown }).nodeType === 1;
+
+const resolveObserverTarget = <T extends Element>(target: ObserverTarget<T>): T | null => {
+  const value =
+    typeof target === "function" ? target() : isElement<T>(target) ? target : target?.value;
+  return isElement<T>(value) ? value : null;
+};
+
+const useElementObserver = <T extends Element>(
+  target: ObserverTarget<T>,
+  create: (target: T, isActive: () => boolean) => ElementObserver | null
+): void => {
+  let mounted = false;
+  let active: { target: T; observer: ElementObserver } | null = null;
+
+  const disconnect = (): void => {
+    if (!active) return;
+    const { observer } = active;
+    active = null;
+    observer.disconnect();
+  };
+
+  const syncTarget = (): void => {
+    const nextTarget = resolveObserverTarget(target);
+    if (!mounted || nextTarget === active?.target) return;
+
+    disconnect();
+    if (!nextTarget) return;
+
+    let nextObserver: ElementObserver | null = null;
+    nextObserver = create(
+      nextTarget,
+      () => active?.observer === nextObserver && active.target === nextTarget
+    );
+    if (!nextObserver) return;
+
+    active = { target: nextTarget, observer: nextObserver };
+    nextObserver.observe(nextTarget);
+  };
+
+  // setup 阶段先建立响应式依赖；mounted 时 DOM/ref 已稳定，再开始观察。
+  useEffect(syncTarget);
+  onMounted(() => {
+    mounted = true;
+    syncTarget();
+  });
+  onBeforeUnmount(() => {
+    mounted = false;
+    disconnect();
+  });
+};
+
 export const useResizeObserver = (
-  target: Element | null | undefined,
+  target: ObserverTarget,
   callback: (entry: ResizeEntry) => void
 ): void => {
-  if (!target) return;
-  if (typeof ResizeObserver === "undefined") return;
-
-  let observer: ResizeObserver | null = null;
-
-  onMount(() => {
-    observer = new ResizeObserver((entries) => {
+  useElementObserver(target, (observedTarget, isActive) => {
+    if (typeof globalThis.ResizeObserver === "undefined") return null;
+    return new globalThis.ResizeObserver((entries) => {
+      if (!isActive()) return;
       for (const entry of entries) {
+        if (entry.target !== observedTarget) continue;
         const rect = entry.contentRect;
         callback({ width: rect.width, height: rect.height, target: entry.target });
       }
     });
-    observer.observe(target);
-  });
-
-  onBeforeUnmount(() => {
-    observer?.disconnect();
-    observer = null;
   });
 };
 
@@ -142,24 +205,17 @@ export const useResizeObserver = (
  *   useIntersectionObserver(img, (entry) => { if (entry.isIntersecting) load() })
  */
 export const useIntersectionObserver = (
-  target: Element | null | undefined,
+  target: ObserverTarget,
   callback: (entry: IntersectionObserverEntry) => void,
   options?: IntersectionObserverInit
 ): void => {
-  if (!target) return;
-  if (typeof IntersectionObserver === "undefined") return;
-
-  let observer: IntersectionObserver | null = null;
-
-  onMount(() => {
-    observer = new IntersectionObserver((entries) => {
-      for (const entry of entries) callback(entry);
+  useElementObserver(target, (observedTarget, isActive) => {
+    if (typeof globalThis.IntersectionObserver === "undefined") return null;
+    return new globalThis.IntersectionObserver((entries) => {
+      if (!isActive()) return;
+      for (const entry of entries) {
+        if (entry.target === observedTarget) callback(entry);
+      }
     }, options);
-    observer.observe(target);
-  });
-
-  onBeforeUnmount(() => {
-    observer?.disconnect();
-    observer = null;
   });
 };

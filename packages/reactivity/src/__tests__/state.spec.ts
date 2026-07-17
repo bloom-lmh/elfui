@@ -111,6 +111,74 @@ describe("useRef 对象", () => {
     list.push(4);
     expect(list.length).toBe(4);
     expect(list[3]).toBe(4);
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(spy).toHaveBeenLastCalledWith(4);
+  });
+
+  it.each([
+    ["push", [1], (list: number[]) => list.push(2)],
+    ["pop", [1, 2], (list: number[]) => list.pop()],
+    ["shift", [1, 2], (list: number[]) => list.shift()],
+    ["unshift", [1], (list: number[]) => list.unshift(0)],
+    ["splice", [1, 2, 3], (list: number[]) => list.splice(1, 1, 4, 5)],
+    ["sort", [3, 1, 2], (list: number[]) => list.sort()],
+    ["reverse", [1, 2, 3], (list: number[]) => list.reverse()],
+    ["fill", [1, 2, 3], (list: number[]) => list.fill(0, 1)],
+    ["copyWithin", [1, 2, 3], (list: number[]) => list.copyWithin(1, 0, 1)]
+  ])("数组原地方法 %s 每次只触发一轮 effect", (_name, initial, mutate) => {
+    const list = useReactive([...initial]);
+    const spy = vi.fn();
+    effect(() => {
+      spy(list.join(","));
+    });
+
+    mutate(list);
+
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(spy).toHaveBeenLastCalledWith(list.join(","));
+  });
+
+  it("新增索引会合并索引与 length 的重复依赖", () => {
+    const list = useReactive<number[]>([1]);
+    const spy = vi.fn();
+    effect(() => {
+      spy(`${list.length}:${list[1] ?? "missing"}`);
+    });
+
+    list[1] = 2;
+
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(spy).toHaveBeenLastCalledWith("2:2");
+  });
+
+  it("缩短 length 会通知 length 和被删除索引并去重", () => {
+    const list = useReactive([1, 2, 3]);
+    const removedIndex = vi.fn();
+    const retainedIndex = vi.fn();
+    effect(() => {
+      removedIndex(`${list.length}:${list[2] ?? "missing"}`);
+    });
+    effect(() => {
+      retainedIndex(list[0]);
+    });
+
+    list.length = 1;
+
+    expect(removedIndex).toHaveBeenCalledTimes(2);
+    expect(removedIndex).toHaveBeenLastCalledWith("1:missing");
+    expect(retainedIndex).toHaveBeenCalledTimes(1);
+  });
+
+  it("数组的普通自定义属性不会触发 length 依赖", () => {
+    const list = useReactive<number[]>([1]);
+    const spy = vi.fn();
+    effect(() => {
+      spy(list.length);
+    });
+
+    (list as number[] & { meta?: string }).meta = "ready";
+
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 
   it("整体替换：useReactive 用 Object.assign", () => {

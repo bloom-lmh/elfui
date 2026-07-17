@@ -13,24 +13,52 @@
 // - definition 由 createComponent() 链式 builder 收集
 // - props / setup / template-render / styles / formAssociated 等都通过 definition 传入
 
-import { effectScope, isRef, isState, useReactive, useRef } from "@elfui/reactivity";
+import {
+  effectScope,
+  isRef,
+  isState,
+  useReactive,
+  useShallowRef,
+  type useRef
+} from "@elfui/reactivity";
 
 import { getHostAttrs, disposeHostAttrs } from "./attrs";
-import { ELF_KEEP_ALIVE_FLAG } from "./builtin";
+import { DEV as __DEV__ } from "./dev";
+import { ELF_KEEP_ALIVE_FLAG, ELF_KEEP_ALIVE_RELEASE } from "./builtin";
 import { resolveAppConfig, type ElfUIConfig } from "./config";
+import { handleRuntimeError } from "./error";
 import {
   createFormControlContext,
   type FormControlContext,
   type FormControlOptions
 } from "./form-control";
-import { attachInstanceToHost } from "./inject";
-import { callHooks, createInstance, setCurrentInstance, type ComponentInstance } from "./lifecycle";
+import { attachInstanceToHost, detachInstanceFromHost, findParentInstance } from "./inject";
+import { clearTemplateRefs } from "./template-ref";
+import {
+  callHooks,
+  createInstance,
+  getCurrentInstance,
+  setCurrentInstance,
+  type ComponentInstance
+} from "./lifecycle";
 import {
   connectDevtoolsComponent,
   disconnectDevtoolsComponent,
   emitDevtoolsRuntimeEvent,
   withDevtoolsComponentContext
 } from "./devtools";
+import {
+  buildRenderCtx,
+  coerceAttr,
+  createEmit,
+  createPropsProxy,
+  findUnsetupParent,
+  injectStyles,
+  kebab,
+  normalizeProps,
+  resolveDefault,
+  resolveLocalComponent
+} from "./element-helpers";
 
 /** Prop 选项 */
 export interface PropOption<T = unknown> {
@@ -67,7 +95,7 @@ export type SetupFn = (
 ) => Record<string, unknown> | void | Promise<Record<string, unknown> | void>;
 
 export interface SetupContext {
-  emit(event: string, ...args: unknown[]): void;
+  emit(event: string, ...args: unknown[]): boolean;
   host: HTMLElement;
   shadow: ShadowRoot | null;
   attrs: Readonly<Record<string, string>>;
@@ -86,7 +114,7 @@ export interface RenderContext {
   /** 原始 props */
   props: Record<string, unknown>;
   /** 工具：emit / host / shadow */
-  emit(event: string, ...args: unknown[]): void;
+  emit(event: string, ...args: unknown[]): boolean;
   host: HTMLElement;
   shadow: ShadowRoot | null;
   /** 局部自定义指令注册表（来自 definition.directives）；编译器解析 v-* 时优先于全局 */
@@ -95,13 +123,24 @@ export interface RenderContext {
   components?: ComponentDefinition["components"];
 }
 
-export interface EmitOptions {
+export interface EventDispatchOptions {
+  /** 事件是否沿 DOM 树冒泡；默认 false。 */
+  bubbles?: boolean;
+  /** 事件是否可由 preventDefault() 取消；默认 false。 */
+  cancelable?: boolean;
+  /** 事件是否能穿过 Shadow DOM 边界；默认 false。 */
+  composed?: boolean;
+}
+
+export interface EmitOptions extends EventDispatchOptions {
   /**
    * 是否把单参数事件直接写入 CustomEvent.detail。
    * 默认 true：ctx.emit("change", value) -> detail === value；
    * 设为 false 时兼容旧语义：detail 始终为参数数组。
    */
   rawDetail?: boolean;
+  /** 按事件名覆盖组件级 dispatch 选项。 */
+  events?: Readonly<Record<string, EventDispatchOptions>>;
 }
 
 export interface ComponentDefinition {
@@ -152,13 +191,38 @@ export interface DefineCustomElementOptions {
   register?: boolean;
 }
 
+type SSRPlaceholderConstructor = ElfElementConstructor & {
+  readonly __elfSSRPlaceholder: true;
+};
+
+const createSSRPlaceholder = (definition: ComponentDefinition): SSRPlaceholderConstructor => {
+  class ElfSSRPlaceholder {}
+
+  const placeholder = ElfSSRPlaceholder as unknown as SSRPlaceholderConstructor;
+  Object.defineProperties(placeholder, {
+    __elfDefinition: { value: definition },
+    __elfSSRPlaceholder: { value: true }
+  });
+  return placeholder;
+};
+
 /** 把 definition 转成原生 CustomElementConstructor */
 export const defineCustomElement = (
   definition: ComponentDefinition,
   options: DefineCustomElementOptions = {}
 ): ElfElementConstructor => {
+  // SSR evaluates compiled component modules too. Return a metadata-only constructor so package
+  // and component imports remain safe; the browser bundle evaluates the same module again with
+  // HTMLElement available and receives the real Custom Element constructor.
+  if (typeof HTMLElement === "undefined") {
+    return createSSRPlaceholder(definition);
+  }
+
   const propEntries = normalizeProps(definition.props ?? {});
-  const observedAttrs = propEntries.map(([key]) => kebab(key));
+  const propsByAttribute = new Map(
+    propEntries.map(([key, option]) => [kebab(key), { key, option }] as const)
+  );
+  const observedAttrs = Array.from(propsByAttribute.keys());
 
   class ElfElement extends HTMLElement {
     public static observedAttributes = observedAttrs;
@@ -167,8 +231,12 @@ export const defineCustomElement = (
     private __scope: ReturnType<typeof effectScope> | null = null;
     private __instance: ComponentInstance | null = null;
     private __propStates: Map<string, ReturnType<typeof useRef>> = new Map();
+    private __preMountPropValues = new Map<string, unknown>();
     private __shadow: ShadowRoot | null = null;
     private __mounted = false;
+    private __stylesInjected = false;
+    private __renderedNodes: Node[] = [];
+    private __mountVersion = 0;
     public __setupDone = false;
     public __pendingChildren: (() => void)[] = [];
 
@@ -182,72 +250,88 @@ export const defineCustomElement = (
       // 初始化 prop states 为默认值
       for (const [key, opt] of propEntries) {
         const def = resolveDefault(opt);
-        this.__propStates.set(key, useRef(def, `prop:${key}`));
+        // Props are shallow by contract: replacing a property is reactive, while objects and
+        // arrays retain the identity owned by a native/framework host.
+        this.__propStates.set(key, useShallowRef(def));
+      }
+      // Host frameworks such as React decide whether to assign a Custom Element value as a
+      // property by checking the freshly constructed element. Expose accessors now rather than
+      // waiting for connectedCallback, while retaining pre-mount values so they can win over
+      // initial attributes deterministically.
+      for (const [key] of propEntries) {
+        let upgradedValue: unknown;
+        let hasUpgradedValue = false;
+        if (Object.prototype.hasOwnProperty.call(this, key)) {
+          upgradedValue = (this as unknown as Record<string, unknown>)[key];
+          hasUpgradedValue = true;
+          delete (this as unknown as Record<string, unknown>)[key];
+        }
+        Object.defineProperty(this, key, {
+          get: () => {
+            const state = this.__propStates.get(key);
+            if (!state) return undefined;
+            if (isRef(state)) return (state as { peek: () => unknown }).peek();
+            return state;
+          },
+          set: (value: unknown) => {
+            if (!this.__mounted) this.__preMountPropValues.set(key, value);
+            if (isState(value)) {
+              this.__propStates.set(key, value as unknown as ReturnType<typeof useRef>);
+              return;
+            }
+            const state = this.__propStates.get(key);
+            if (state && isRef(state)) {
+              (state as { set: (nextValue: unknown) => unknown }).set(value);
+            }
+          },
+          enumerable: true,
+          configurable: true
+        });
+        if (hasUpgradedValue) {
+          (this as unknown as Record<string, unknown>)[key] = upgradedValue;
+        }
       }
     }
 
     public connectedCallback(): void {
+      (this as unknown as Record<symbol, unknown>)[ELF_KEEP_ALIVE_RELEASE] = undefined;
       if (this.__mounted) return;
       this.__mounted = true;
+      const mountVersion = ++this.__mountVersion;
 
       const start = () => {
+        if (!this.isConnected || !this.__mounted || mountVersion !== this.__mountVersion) return;
         const scope = effectScope(true);
         this.__scope = scope;
-        const instance = createInstance(this, this.__shadow);
+        const instance = createInstance(
+          this,
+          this.__shadow,
+          findParentInstance(this) ?? getCurrentInstance()
+        );
         this.__instance = instance;
+        instance.handleError = (error, info) => {
+          handleRuntimeError(error, instance, info);
+        };
         // 把 instance 挂到 host 上，以便 inject 能沿父链查找
         attachInstanceToHost(this, instance);
         if (__DEV__) connectDevtoolsComponent(instance);
 
         scope.run(() => {
           // 同步 attribute 到 prop
-          for (const [key, opt] of propEntries) {
-            const attrName = kebab(key);
+          for (const [attrName, { key, option }] of propsByAttribute) {
             if (this.hasAttribute(attrName)) {
               const raw = this.getAttribute(attrName);
               const state = this.__propStates.get(key);
-              state?.set(coerceAttr(raw, opt));
+              state?.set(coerceAttr(raw, option, attrName));
             }
           }
 
-          // 暴露 host property: this[propName]
-          // 注意：用户可能在 appendChild 前已经 host[prop] = X 写入值（pre-mount 写）。
-          // 此时已经存在 own property，直接 defineProperty 会触发 TypeError 或被跳过。
-          // 处理：先捕获 own value、删掉它，再 defineProperty，最后通过 setter 把值写回。
-          for (const [key] of propEntries) {
-            let preMountValue: unknown = undefined;
-            let hasPreMount = false;
-            if (Object.prototype.hasOwnProperty.call(this, key)) {
-              preMountValue = (this as unknown as Record<string, unknown>)[key];
-              hasPreMount = true;
-              delete (this as unknown as Record<string, unknown>)[key];
-            }
-            Object.defineProperty(this, key, {
-              get: () => {
-                const s = this.__propStates.get(key);
-                if (!s) return undefined;
-                if (isRef(s)) return (s as { peek: () => unknown }).peek();
-                return s;
-              },
-              set: (v: unknown) => {
-                // 如果传入的本身就是一个 State（例如父组件 useReactive / useRef 后直接绑定），
-                // 用引用替换：丢掉原 propState，改用传入的 State 作为新 propState。
-                // 这样后续父组件对原 State 的修改能直接反映到 props.X。
-                if (isState(v)) {
-                  this.__propStates.set(key, v as unknown as ReturnType<typeof useRef>);
-                  return;
-                }
-                const s = this.__propStates.get(key);
-                if (s && isRef(s)) (s as { set: (v: unknown) => unknown }).set(v);
-              },
-              enumerable: true,
-              configurable: true
-            });
-            // 把 pre-mount 写入的值通过 setter 走一遍，让 State 引用替换 / 普通值同步生效
-            if (hasPreMount) {
-              (this as unknown as Record<string, unknown>)[key] = preMountValue;
-            }
+          // Initial attributes are parsed first; host property writes made before connection then
+          // win consistently, including values assigned by React during its commit.
+          for (const [key, value] of this.__preMountPropValues) {
+            (this as unknown as Record<string, unknown>)[key] = value;
           }
+          this.__preMountPropValues.clear();
 
           // 构造 props（解包后的对象）
           const props = createPropsProxy(this.__propStates);
@@ -270,8 +354,14 @@ export const defineCustomElement = (
           }
 
           // 注入样式
-          if (this.__shadow && definition.styles && definition.styles.length > 0) {
+          if (
+            !this.__stylesInjected &&
+            this.__shadow &&
+            definition.styles &&
+            definition.styles.length > 0
+          ) {
             injectStyles(this.__shadow, definition.styles);
+            this.__stylesInjected = true;
           }
 
           // setup
@@ -298,6 +388,7 @@ export const defineCustomElement = (
               }
 
               const target: ShadowRoot | HTMLElement = this.__shadow ?? this;
+              let pendingRenderScope: ReturnType<typeof effectScope> | null = null;
 
               // pending 期：渲染 fallback（如果 render 函数传 ctx.state.$asyncPending）
               const pendingCtx: RenderContext = buildRenderCtx(
@@ -310,14 +401,19 @@ export const defineCustomElement = (
                 definition.components
               );
               if (definition.render) {
-                callHooks(instance.beforeMountHooks);
-                const node = definition.render(pendingCtx);
-                target.appendChild(node);
+                pendingRenderScope = effectScope();
+                pendingRenderScope.run(() => {
+                  const node = definition.render!(pendingCtx);
+                  this.__appendRenderedNode(target, node);
+                });
               }
 
               (setupReturned as Promise<Record<string, unknown> | void>).then(
                 (resolvedState) => {
-                  if (!this.isConnected) return;
+                  if (!this.isConnected || !this.__mounted || mountVersion !== this.__mountVersion)
+                    return;
+                  pendingRenderScope?.stop();
+                  pendingRenderScope = null;
                   asyncState.$asyncPending = false;
                   asyncState.$asyncResolved = true;
                   if (__DEV__) {
@@ -326,27 +422,49 @@ export const defineCustomElement = (
                       ...(resolvedState ?? {})
                     };
                   }
-                  this.__rerenderAsync(
-                    asyncState as unknown as Record<string, unknown>,
-                    props,
-                    ctx,
-                    resolvedState
-                  );
+                  scope.run(() => {
+                    const asyncPrev = setCurrentInstance(instance);
+                    try {
+                      callHooks(instance.beforeMountHooks, instance, "component beforeMount hook");
+                      this.__rerenderAsync(
+                        asyncState as unknown as Record<string, unknown>,
+                        props,
+                        ctx,
+                        resolvedState
+                      );
+                      this.__finishMount(instance);
+                    } catch (err) {
+                      clearTemplateRefs(instance);
+                      handleRuntimeError(err, instance, "component async render");
+                    } finally {
+                      setCurrentInstance(asyncPrev);
+                    }
+                  });
                 },
                 (err) => {
-                  if (!this.isConnected) {
-                    handleError(instance, err);
-                    return;
-                  }
+                  if (mountVersion !== this.__mountVersion) return;
+                  if (!this.isConnected || !this.__mounted) return;
+                  pendingRenderScope?.stop();
+                  pendingRenderScope = null;
                   asyncState.$asyncPending = false;
                   asyncState.$asyncError = err;
-                  this.__rerenderAsync(
-                    asyncState as unknown as Record<string, unknown>,
-                    props,
-                    ctx,
-                    undefined
-                  );
-                  handleError(instance, err);
+                  scope.run(() => {
+                    const asyncPrev = setCurrentInstance(instance);
+                    try {
+                      this.__rerenderAsync(
+                        asyncState as unknown as Record<string, unknown>,
+                        props,
+                        ctx,
+                        undefined
+                      );
+                    } catch (renderError) {
+                      clearTemplateRefs(instance);
+                      handleRuntimeError(renderError, instance, "component async error render");
+                    } finally {
+                      setCurrentInstance(asyncPrev);
+                    }
+                  });
+                  handleRuntimeError(err, instance, "component async setup");
                 }
               );
             } else {
@@ -363,58 +481,18 @@ export const defineCustomElement = (
                   definition.directives,
                   definition.components
                 );
-                callHooks(instance.beforeMountHooks);
+                callHooks(instance.beforeMountHooks, instance, "component beforeMount hook");
                 const rootNode = definition.render(renderCtx);
                 const target: ShadowRoot | HTMLElement = this.__shadow ?? this;
-                target.appendChild(rootNode);
+                this.__appendRenderedNode(target, rootNode);
               }
+              this.__finishMount(instance);
             }
           } catch (err) {
-            handleError(instance, err);
+            clearTemplateRefs(instance);
+            handleRuntimeError(err, instance, "component setup/render");
           } finally {
             setCurrentInstance(prev);
-          }
-
-          instance.isMounted = true;
-          callHooks(instance.mountedHooks);
-          if (__DEV__) {
-            const hostRef = new WeakRef(this);
-            const instanceRef = new WeakRef(instance);
-            const source = (
-              this.constructor as typeof HTMLElement & {
-                __elfSource?: {
-                  file: string;
-                  line: number;
-                  column: number;
-                  endLine?: number;
-                  endColumn?: number;
-                };
-              }
-            ).__elfSource;
-            emitDevtoolsRuntimeEvent({
-              type: "component:mount",
-              component: {
-                id: instance.devtools.id,
-                host: this,
-                appId: instance.devtools.appId,
-                parentId: instance.devtools.parentId,
-                parentHost: instance.devtools.parentHost?.deref() ?? null,
-                tag: definition.tag,
-                displayName: definition.tag,
-                shadowMode: definition.shadow === false ? "none" : (definition.shadow ?? "open"),
-                ...(source ? { source } : {}),
-                props: () => instanceRef.deref()?.devtools.props ?? {},
-                attrs: () =>
-                  Object.fromEntries(
-                    Array.from(hostRef.deref()?.attributes ?? [], (attribute) => [
-                      attribute.name,
-                      attribute.value
-                    ])
-                  ),
-                setup: () => instanceRef.deref()?.devtools.setup ?? {},
-                exposed: () => instanceRef.deref()?.devtools.exposed ?? {}
-              }
-            });
           }
         });
 
@@ -441,27 +519,112 @@ export const defineCustomElement = (
       queueMicrotask(() => {
         if (this.isConnected) return;
         // 处于 KeepAlive 缓存中：跳过卸载
-        if ((this as unknown as Record<symbol, unknown>)[ELF_KEEP_ALIVE_FLAG]) return;
-        if (this.__instance) {
-          callHooks(this.__instance.beforeUnmountHooks);
-          this.__instance.isUnmounted = true;
+        const keepAliveHost = this as unknown as Record<symbol, unknown>;
+        if (keepAliveHost[ELF_KEEP_ALIVE_FLAG]) {
+          keepAliveHost[ELF_KEEP_ALIVE_RELEASE] = () => this.__finalizeUnmount();
+          return;
         }
-        this.__scope?.stop();
-        if (this.__instance) callHooks(this.__instance.unmountedHooks);
-        if (__DEV__) {
-          emitDevtoolsRuntimeEvent({ type: "component:unmount", host: this });
-          if (this.__instance) disconnectDevtoolsComponent(this.__instance);
-        }
-        disposeHostAttrs(this);
-        this.__mounted = false;
-
-        // 重置 setup 状态
-        this.__setupDone = false;
-        this.__pendingChildren = [];
+        this.__finalizeUnmount();
       });
     }
 
+    private __finalizeUnmount(): void {
+      if (this.isConnected || !this.__mounted || !this.__instance) return;
+      (this as unknown as Record<symbol, unknown>)[ELF_KEEP_ALIVE_RELEASE] = undefined;
+      this.__mountVersion++;
+      callHooks(
+        this.__instance.beforeUnmountHooks,
+        this.__instance,
+        "component beforeUnmount hook"
+      );
+      this.__instance.isUnmounted = true;
+      this.__scope?.stop();
+      this.__scope = null;
+      clearTemplateRefs(this.__instance);
+      this.__clearRenderedNodes();
+      callHooks(this.__instance.unmountedHooks, this.__instance, "component unmounted hook");
+      if (__DEV__) {
+        emitDevtoolsRuntimeEvent({ type: "component:unmount", host: this });
+        disconnectDevtoolsComponent(this.__instance);
+      }
+      disposeHostAttrs(this);
+      this.__instance.parent = null;
+      detachInstanceFromHost(this, this.__instance);
+      this.__instance = null;
+      this.__mounted = false;
+
+      // 重置 setup 状态
+      this.__setupDone = false;
+      this.__pendingChildren = [];
+    }
+
     /** 异步 setup resolve/reject 后，重新渲染 shadow root */
+    private __appendRenderedNode(target: ShadowRoot | HTMLElement, node: Node): void {
+      const nodes =
+        node.nodeType === 11 /* DOCUMENT_FRAGMENT_NODE */ ? Array.from(node.childNodes) : [node];
+      target.appendChild(node);
+      this.__renderedNodes = nodes;
+    }
+
+    private __clearRenderedNodes(): void {
+      for (const node of this.__renderedNodes) {
+        node.parentNode?.removeChild(node);
+      }
+      this.__renderedNodes = [];
+    }
+
+    private __finishMount(instance: ComponentInstance): void {
+      if (
+        instance.isMounted ||
+        instance.isUnmounted ||
+        this.__instance !== instance ||
+        !this.isConnected
+      ) {
+        return;
+      }
+      instance.isMounted = true;
+      callHooks(instance.mountedHooks, instance, "component mounted hook");
+      if (__DEV__) {
+        const hostRef = new WeakRef(this);
+        const instanceRef = new WeakRef(instance);
+        const source = (
+          this.constructor as typeof HTMLElement & {
+            __elfSource?: {
+              file: string;
+              line: number;
+              column: number;
+              endLine?: number;
+              endColumn?: number;
+            };
+          }
+        ).__elfSource;
+        emitDevtoolsRuntimeEvent({
+          type: "component:mount",
+          component: {
+            id: instance.devtools.id,
+            host: this,
+            appId: instance.devtools.appId,
+            parentId: instance.devtools.parentId,
+            parentHost: instance.devtools.parentHost?.deref() ?? null,
+            tag: definition.tag,
+            displayName: definition.tag,
+            shadowMode: definition.shadow === false ? "none" : (definition.shadow ?? "open"),
+            ...(source ? { source } : {}),
+            props: () => instanceRef.deref()?.devtools.props ?? {},
+            attrs: () =>
+              Object.fromEntries(
+                Array.from(hostRef.deref()?.attributes ?? [], (attribute) => [
+                  attribute.name,
+                  attribute.value
+                ])
+              ),
+            setup: () => instanceRef.deref()?.devtools.setup ?? {},
+            exposed: () => instanceRef.deref()?.devtools.exposed ?? {}
+          }
+        });
+      }
+    }
+
     private __rerenderAsync(
       asyncState: Record<string, unknown>,
       props: Record<string, unknown>,
@@ -471,14 +634,7 @@ export const defineCustomElement = (
       if (!definition.render) return;
       const target: ShadowRoot | HTMLElement = this.__shadow ?? this;
 
-      // 清空 target 内已渲染节点（保留 <style> 注入节点 / adoptedStyleSheets 不变）
-      // adoptedStyleSheets 模式下，target.children 都是用户内容，可以直接 innerHTML = ""
-      // <style> fallback 模式下，需要保留 <style>
-      const children = Array.from(target.childNodes);
-      for (const node of children) {
-        if (node.nodeType === 1 && (node as Element).tagName === "STYLE") continue;
-        target.removeChild(node);
-      }
+      this.__clearRenderedNodes();
 
       const renderCtx: RenderContext = buildRenderCtx(
         this,
@@ -494,7 +650,7 @@ export const defineCustomElement = (
         __DEV__ && this.__instance
           ? withDevtoolsComponentContext(this.__instance.devtools.id, render)
           : render();
-      target.appendChild(rootNode);
+      this.__appendRenderedNode(target, rootNode);
     }
 
     public attributeChangedCallback(
@@ -502,19 +658,17 @@ export const defineCustomElement = (
       oldVal: string | null,
       newVal: string | null
     ): void {
-      const propKey = camel(name);
-      const opt = propEntries.find(([k]) => k === propKey)?.[1];
-      if (opt) {
-        const s = this.__propStates.get(propKey);
-        if (s) (s as { set: (v: unknown) => unknown }).set(coerceAttr(newVal, opt));
+      const prop = propsByAttribute.get(name);
+      if (prop) {
+        const state = this.__propStates.get(prop.key);
+        state?.set(coerceAttr(newVal, prop.option, name));
       }
       if (this.__instance) {
         for (const fn of this.__instance.attrChangedHooks) {
           try {
             fn(name, oldVal, newVal);
           } catch (err) {
-            if (__DEV__) console.error("[attributeChanged] hook error:", err);
-            else console.error(err);
+            handleRuntimeError(err, this.__instance, "component attributeChanged hook");
           }
         }
       }
@@ -523,7 +677,9 @@ export const defineCustomElement = (
 
   (ElfElement as unknown as { __elfDefinition: ComponentDefinition }).__elfDefinition = definition;
 
-  if (options.register !== false) {
+  // Missing customElements may be temporary while a polyfill is loading. Keep component module
+  // evaluation safe and let an explicit ensureCustomElement/createApp call report the boundary.
+  if (options.register !== false && typeof customElements !== "undefined") {
     ensureCustomElement(ElfElement as unknown as ElfElementConstructor);
   }
 
@@ -545,7 +701,24 @@ export const ensureCustomElement = (component: ResolvableComponent): string => {
   if (!tag) {
     return (component as unknown as { name?: string }).name ?? "";
   }
-  if (typeof customElements !== "undefined" && !customElements.get(tag)) {
+  if (typeof customElements === "undefined") {
+    throw new Error(
+      `[ELF_CUSTOM_ELEMENTS_UNAVAILABLE] Cannot register "${tag}" outside a browser Custom Elements environment. ElfUI package and component imports are SSR-safe, but DOM creation and registration are client-only.`
+    );
+  }
+  if ((component as unknown as { __elfSSRPlaceholder?: boolean }).__elfSSRPlaceholder) {
+    throw new Error(
+      `[ELF_SSR_PLACEHOLDER] Cannot register the server placeholder for "${tag}". Evaluate the component module in the client bundle after HTMLElement is available.`
+    );
+  }
+
+  const registered = customElements.get(tag);
+  if (registered && registered !== component) {
+    throw new Error(
+      `[ELF_CUSTOM_ELEMENT_CONFLICT] Cannot register "${tag}" because the tag already uses a different constructor. Give the component a unique tag/name prefix, or ensure only one component/runtime version owns that tag.`
+    );
+  }
+  if (!registered) {
     customElements.define(tag, component);
   }
   return tag;
@@ -574,256 +747,4 @@ export const registerComponents = (...inputs: ComponentRegistryInput[]): void =>
     }
     ensureCustomElement(input as ResolvableComponent);
   }
-};
-
-// ---------- helpers ----------
-
-const normalizeProps = (props: PropsOptions): Array<[string, PropOption<unknown>]> => {
-  const out: Array<[string, PropOption<unknown>]> = [];
-  for (const key of Object.keys(props)) {
-    const v = props[key];
-    if (typeof v === "function") {
-      out.push([key, { type: v as PropType<unknown> }]);
-    } else if (v) {
-      out.push([key, v]);
-    }
-  }
-  return out;
-};
-
-const resolveDefault = (opt: PropOption<unknown>): unknown => {
-  const d = opt.default;
-  if (typeof d === "function" && opt.type !== Function) {
-    return (d as () => unknown)();
-  }
-  return d;
-};
-
-const coerceAttr = (raw: string | null, opt: PropOption<unknown>): unknown => {
-  if (raw === null) return resolveDefault(opt);
-  const T = opt.type;
-  if (T === Boolean) {
-    return raw === "" || raw === "true" || raw === kebab(String(opt));
-  }
-  if (T === Number) {
-    return Number(raw);
-  }
-  if (T === Object || T === Array) {
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return raw;
-    }
-  }
-  return raw;
-};
-
-const createPropsProxy = (
-  states: Map<string, ReturnType<typeof useRef>>
-): Record<string, unknown> => {
-  return new Proxy(
-    {},
-    {
-      get(_t, key) {
-        if (typeof key === "symbol") return undefined;
-        const s = states.get(key);
-        if (!s) return undefined;
-        // Ref：取 .value（基本类型解包，对象返回内部 reactive 代理）
-        if (isRef(s)) {
-          return (s as { value: unknown }).value;
-        }
-        // 直接是 Reactive / 普通对象：原样返回
-        return s;
-      },
-      has(_t, key) {
-        return typeof key === "string" && states.has(key);
-      },
-      ownKeys() {
-        return Array.from(states.keys());
-      },
-      getOwnPropertyDescriptor(_t, key) {
-        if (typeof key === "string" && states.has(key)) {
-          return { enumerable: true, configurable: true };
-        }
-        return undefined;
-      }
-    }
-  );
-};
-
-const createEmit = (
-  host: HTMLElement,
-  options: EmitOptions | undefined
-): ((event: string, ...args: unknown[]) => void) => {
-  return (ev, ...args) => {
-    const detail = options?.rawDetail === false ? args : args.length <= 1 ? args[0] : args;
-    host.dispatchEvent(new CustomEvent(ev, { detail }));
-    if (__DEV__) {
-      emitDevtoolsRuntimeEvent({ type: "component:emit", host, event: ev, args });
-    }
-  };
-};
-
-const injectStyles = (shadow: ShadowRoot, styles: string[]): void => {
-  // 优先 adoptedStyleSheets（更高效，浏览器兼容性 Chrome 73+ / Firefox 101+ / Safari 16.4+）
-  if (
-    "adoptedStyleSheets" in shadow &&
-    typeof CSSStyleSheet !== "undefined" &&
-    "replaceSync" in CSSStyleSheet.prototype
-  ) {
-    const sheets = styles.map((css) => {
-      const sheet = new CSSStyleSheet();
-      sheet.replaceSync(css);
-      return sheet;
-    });
-    shadow.adoptedStyleSheets = [...shadow.adoptedStyleSheets, ...sheets];
-    return;
-  }
-  // fallback: <style>
-  for (const css of styles) {
-    const styleEl = document.createElement("style");
-    styleEl.textContent = css;
-    shadow.appendChild(styleEl);
-  }
-};
-
-/** 构造模板 / render 函数拿到的 ctx
- *
- *  state 字段是平铺的 Proxy：访问任何 key 时按以下顺序查找
- *    1. setupResult / props / asyncState（用户数据）
- *    2. `$emit` / `$host` / `$root` / `$attrs` / `$props` / `$slots`（系统字段）
- *
- *  这样模板里：
- *    {{ count }}             // 来自 setup return
- *    {{ size }}               // 来自 props
- *    @click="$emit('change')" // 系统字段
- *    {{ $host.tagName }}      // 系统字段
- */
-const handleError = (instance: ComponentInstance | null, err: unknown): void => {
-  if (instance) {
-    if (__DEV__) {
-      emitDevtoolsRuntimeEvent({ type: "component:error", host: instance.host, error: err });
-    }
-    for (const fn of instance.errorCapturedHooks) {
-      try {
-        const res = fn(err, instance);
-        if (res === false) return;
-      } catch (e) {
-        if (__DEV__) console.error("[errorCaptured] hook error:", e);
-        else console.error(e);
-      }
-    }
-    const config = resolveAppConfig(instance.host);
-    if (config.errorHandler) {
-      config.errorHandler(err, "component setup/render");
-      return;
-    }
-  }
-  console.error(err);
-};
-
-/** 构建模板 / 手写 render 函数使用的 RenderContext。
- *
- *  约定：模板里 `{{ x }}` 解析顺序：
- *  1. setupState（setup return 的字段）
- *  2. props（声明在 .props 的字段，自动 unwrap）
- *  3. `$emit` / `$host` / `$root` / `$attrs` / `$props` 等系统字段
- *
- *  我们直接把它们都拍平到 ctx.state（一个对象）让模板编译器透明使用。
- *  这样心智 = Vue 3 setup 模板。
- */
-const buildRenderCtx = (
-  host: HTMLElement,
-  shadow: ShadowRoot | null,
-  props: Record<string, unknown>,
-  setupState: Record<string, unknown>,
-  emit: (event: string, ...args: unknown[]) => void,
-  directives?: Record<string, unknown>,
-  components?: ComponentDefinition["components"]
-): RenderContext => {
-  // 平铺：setupState 优先（setup 返回值覆盖 props 同名键）
-  const flatState: Record<string, unknown> = {
-    ...props,
-    ...setupState,
-    // 系统字段（$ 前缀避免与用户字段冲突）
-    $emit: emit,
-    $host: host,
-    $root: shadow ?? host,
-    $props: props,
-    $attrs: getHostAttrs(host),
-    $app: resolveAppConfig(host).globalProperties
-  };
-  const renderCtx: RenderContext = {
-    state: flatState,
-    props,
-    emit,
-    host,
-    shadow
-  };
-  if (directives) renderCtx.directives = directives;
-  if (components) renderCtx.components = components;
-  return renderCtx;
-};
-
-const kebab = (s: string): string =>
-  s
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .replace(/[_\s]+/g, "-")
-    .toLowerCase();
-const camel = (s: string): string => s.replace(/-(\w)/g, (_, c: string) => c.toUpperCase());
-const pascal = (s: string): string => {
-  const value = camel(s);
-  return value ? value[0]!.toUpperCase() + value.slice(1) : value;
-};
-
-const resolveLocalComponent = (
-  tag: string,
-  components?: ComponentDefinition["components"]
-): string | CustomElementConstructor | undefined => {
-  if (!components) return undefined;
-  const direct =
-    components[tag] ?? components[kebab(tag)] ?? components[camel(tag)] ?? components[pascal(tag)];
-  if (direct) return direct;
-
-  for (const [name, component] of Object.entries(components)) {
-    const definition = (component as unknown as { __elfDefinition?: ComponentDefinition })
-      .__elfDefinition;
-    if (definition?.tag === tag) return component;
-
-    const normalizedName = kebab(name);
-    if (tag === name || tag === normalizedName || tag === camel(normalizedName)) {
-      return component;
-    }
-  }
-  return undefined;
-};
-
-const findUnsetupParent = (el: HTMLElement): any | null => {
-  let current: Node | null = el.parentNode;
-  if (!current && el.getRootNode) {
-    const root = el.getRootNode();
-    if (root instanceof ShadowRoot) {
-      current = root.host;
-    }
-  }
-  while (current) {
-    if (
-      current instanceof HTMLElement &&
-      current.constructor &&
-      "__elfDefinition" in current.constructor
-    ) {
-      const elfEl = current as any;
-      if (!elfEl.__setupDone) {
-        return elfEl;
-      }
-    }
-    let next: Node | null = current.parentNode;
-    if (!next && current instanceof ShadowRoot) {
-      next = current.host;
-    } else if (!next && current.nodeType === 11 && "host" in current) {
-      next = (current as any).host;
-    }
-    current = next;
-  }
-  return null;
 };

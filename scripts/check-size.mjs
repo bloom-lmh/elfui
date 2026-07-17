@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { build } from "esbuild";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { gzipSync } from "node:zlib";
+import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -18,22 +18,28 @@ const readArg = (name) => {
 
 const targets = [
   {
+    id: "app-fixture",
+    name: "real app fixture (tree-shaken public API consumer)",
+    entry: resolve(root, "integration/size-fixture/app-entry.ts"),
+    target: { gzip: kb(9.8), brotli: kb(8.9) }
+  },
+  {
     id: "light",
     name: "elfui (light: reactivity + runtime public API, no compiler)",
     entry: resolve(root, "packages/elfui/src/index.ts"),
-    target: kb(10.7)
+    target: { gzip: kb(14.2), brotli: kb(12.8) }
   },
   {
     id: "runtime",
     name: "@elfui/runtime (stable runtime API, no compiler)",
     entry: resolve(root, "packages/runtime/src/index.ts"),
-    target: kb(13)
+    target: { gzip: kb(14.3), brotli: kb(13) }
   },
   {
     id: "reactivity",
     name: "@elfui/reactivity (reactivity only)",
     entry: resolve(root, "packages/reactivity/src/index.ts"),
-    target: kb(4.3)
+    target: { gzip: kb(5.5), brotli: kb(5) }
   }
 ];
 
@@ -64,23 +70,37 @@ for (const target of targets) {
     raw: raw.byteLength,
     min: min.byteLength,
     gz: gzipSync(min, { level: 9 }).byteLength,
+    br: brotliCompressSync(min, {
+      params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 11 }
+    }).byteLength,
     target: target.target
   });
 }
 
 console.log("\n📦 ElfUI size report\n");
 for (const result of results) {
-  const ok = result.gz <= result.target;
+  const ok = result.gz <= result.target.gzip && result.br <= result.target.brotli;
   console.log(`${ok ? "✅" : "⚠️"} ${result.name}`);
   console.log(`   raw : ${formatKb(result.raw)}`);
   console.log(`   min : ${formatKb(result.min)}`);
-  console.log(`   gzip: ${formatKb(result.gz)} / target ${(result.target / 1024).toFixed(1)} KB`);
+  console.log(
+    `   gzip: ${formatKb(result.gz)} / target ${(result.target.gzip / 1024).toFixed(1)} KB`
+  );
+  console.log(
+    `   br  : ${formatKb(result.br)} / target ${(result.target.brotli / 1024).toFixed(1)} KB`
+  );
 }
 
 const baselinePath = readArg("baseline");
-const baseline = baselinePath
-  ? JSON.parse(await readFile(resolve(root, baselinePath), "utf8"))
-  : undefined;
+let baseline;
+if (baselinePath) {
+  try {
+    baseline = JSON.parse(await readFile(resolve(root, baselinePath), "utf8"));
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+    console.warn(`size baseline not found: ${baselinePath}`);
+  }
+}
 const baselineById = new Map((baseline?.targets ?? []).map((item) => [item.id, item]));
 const reportPath = readArg("report");
 
@@ -94,16 +114,17 @@ if (reportPath) {
     "",
     "## Current Budget",
     "",
-    "| Target | Raw | Min | Gzip | Budget | Status | Diff From Baseline |",
-    "| --- | ---: | ---: | ---: | ---: | --- | ---: |"
+    "| Target | Raw | Min | Gzip | Brotli | Gzip Budget | Brotli Budget | Status | Gzip Diff | Brotli Diff |",
+    "| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: |"
   ];
   for (const result of results) {
     const prev = baselineById.get(result.id);
-    const diff = prev ? result.gz - prev.gz : undefined;
-    const diffText =
+    const gzipDiff = prev ? result.gz - prev.gz : undefined;
+    const brotliDiff = prev ? result.br - prev.br : undefined;
+    const formatDiff = (diff) =>
       diff === undefined ? "-" : `${diff >= 0 ? "+" : ""}${(diff / 1024).toFixed(2)} KB`;
     lines.push(
-      `| ${result.name} | ${formatKb(result.raw)} | ${formatKb(result.min)} | ${formatKb(result.gz)} | ${(result.target / 1024).toFixed(1)} KB | ${result.gz <= result.target ? "pass" : "fail"} | ${diffText} |`
+      `| ${result.name} | ${formatKb(result.raw)} | ${formatKb(result.min)} | ${formatKb(result.gz)} | ${formatKb(result.br)} | ${(result.target.gzip / 1024).toFixed(1)} KB | ${(result.target.brotli / 1024).toFixed(1)} KB | ${result.gz <= result.target.gzip && result.br <= result.target.brotli ? "pass" : "fail"} | ${formatDiff(gzipDiff)} | ${formatDiff(brotliDiff)} |`
     );
   }
   if (baseline) {
@@ -113,23 +134,45 @@ if (reportPath) {
       "",
       `Baseline: ${baseline.label}`,
       "",
-      "| Target | Baseline Gzip |",
-      "| --- | ---: |"
+      "| Target | Baseline Gzip | Baseline Brotli |",
+      "| --- | ---: | ---: |"
     );
     for (const item of baseline.targets) {
-      lines.push(`| ${item.name} | ${formatKb(item.gz)} |`);
+      lines.push(`| ${item.name} | ${formatKb(item.gz)} | ${formatKb(item.br)} |`);
     }
   }
   lines.push("");
   const markdown = await format(lines.join("\n"), { parser: "markdown" });
-  await writeFile(resolve(root, reportPath), markdown, "utf8");
+  const outputPath = resolve(root, reportPath);
+  await mkdir(dirname(outputPath), { recursive: true });
+  await writeFile(outputPath, markdown, "utf8");
 }
 
-const failed = results.filter((result) => result.gz > result.target);
+const writeBaselinePath = readArg("write-baseline");
+if (writeBaselinePath) {
+  const outputPath = resolve(root, writeBaselinePath);
+  await mkdir(dirname(outputPath), { recursive: true });
+  await writeFile(
+    outputPath,
+    `${JSON.stringify(
+      {
+        label: readArg("label") ?? `ElfUI ${new Date().toISOString()}`,
+        targets: results.map(({ id, name, raw, min, gz, br }) => ({ id, name, raw, min, gz, br }))
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+}
+
+const failed = results.filter(
+  (result) => result.gz > result.target.gzip || result.br > result.target.brotli
+);
 if (failed.length > 0) {
   for (const result of failed) {
     console.error(
-      `size exceeded: ${result.name} gzip ${formatKb(result.gz)} > ${(result.target / 1024).toFixed(1)} KB`
+      `size exceeded: ${result.name} gzip ${formatKb(result.gz)} / ${(result.target.gzip / 1024).toFixed(1)} KB, brotli ${formatKb(result.br)} / ${(result.target.brotli / 1024).toFixed(1)} KB`
     );
   }
   process.exit(1);

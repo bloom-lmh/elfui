@@ -9,6 +9,8 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      CHROME_PATH: /usr/bin/google-chrome
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -20,3 +22,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
+      - name: Lightweight native Chromium integration
+        run: pnpm verify:browser-smoke
+      - name: Full Chromium integration matrix
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: pnpm verify:integrations:chromium

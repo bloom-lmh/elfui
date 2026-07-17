@@ -71,6 +71,36 @@ export const triggerMany = (target: object, keys: readonly unknown[]): void => {
   }
 };
 
+const isArrayIndexKey = (key: unknown): key is string => {
+  if (typeof key !== "string" || key === "") return false;
+  const index = Number(key);
+  return Number.isInteger(index) && index >= 0 && index < 4_294_967_295 && String(index) === key;
+};
+
+/**
+ * 数组 length 写入需要同时通知 length 以及被截断索引的依赖，并在同一轮内去重。
+ * 这里只遍历已经被追踪的 key，避免按稀疏数组的长度逐项扫描。
+ */
+export const triggerArrayLength = (target: unknown[], newLength: number): void => {
+  const depsMap = targetMap.get(target);
+
+  if (!depsMap) {
+    return;
+  }
+
+  const effects: Dep = new Set();
+  for (const [key, dep] of depsMap) {
+    if (key !== "length" && !(isArrayIndexKey(key) && Number(key) >= newLength)) continue;
+    for (const effect of dep) {
+      effects.add(effect);
+    }
+  }
+
+  if (effects.size > 0) {
+    triggerEffects(effects, { target, key: "length" });
+  }
+};
+
 /** 触发 target 下所有 key 的 effect（用于深度替换、Object.assign 等） */
 export const triggerAll = (target: object): void => {
   const depsMap = targetMap.get(target);

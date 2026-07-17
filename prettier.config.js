@@ -1,4 +1,5 @@
 export default {
+  plugins: ["prettier-plugin-svelte"],
   semi: true,
   singleQuote: false,
   trailingComma: "none",

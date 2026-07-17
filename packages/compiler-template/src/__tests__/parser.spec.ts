@@ -214,6 +214,44 @@ describe("插值", () => {
     const el = ast.children[0] as ElementNode;
     expect((el.children[0] as InterpolationNode).content).toBe("msg");
   });
+
+  it("不会把字符串和转义字符中的 }} 当作结束符", () => {
+    const ast = parse(String.raw`{{ "before \"}}\" after" + ' }} ' }}`);
+    expect((ast.children[0] as InterpolationNode).content).toBe(
+      String.raw`"before \"}}\" after" + ' }} '`
+    );
+  });
+
+  it("支持模板字符串及其嵌套表达式", () => {
+    const source =
+      "{{ `before }} ${items.map((item) => ({ value: `${item}}}` })).length} after` }}";
+    const ast = parse(source);
+    expect((ast.children[0] as InterpolationNode).content).toBe(
+      "`before }} ${items.map((item) => ({ value: `${item}}}` })).length} after`"
+    );
+  });
+
+  it("只在圆括号、方括号和花括号的顶层结束插值", () => {
+    const ast = parse('{{ ({ rows: [{ value: "}}" }] }).rows[0].value }}');
+    expect((ast.children[0] as InterpolationNode).content).toBe(
+      '({ rows: [{ value: "}}" }] }).rows[0].value'
+    );
+  });
+
+  it("忽略行注释和块注释中的 }}", () => {
+    const block = parse("{{ value /* }} */ + 1 }}");
+    const line = parse("{{ value // }}\n / 2 }}");
+
+    expect((block.children[0] as InterpolationNode).content).toBe("value /* }} */ + 1");
+    expect((line.children[0] as InterpolationNode).content).toBe("value // }}\n / 2");
+  });
+
+  it("区分正则字面量和除法中的斜杠", () => {
+    const ast = parse("{{ /}}/.test(value) ? total++ / count : /[}]{2}/.test(value) }}");
+    expect((ast.children[0] as InterpolationNode).content).toBe(
+      "/}}/.test(value) ? total++ / count : /[}]{2}/.test(value)"
+    );
+  });
 });
 
 describe("注释", () => {
@@ -259,6 +297,10 @@ describe("source location", () => {
 describe("错误恢复", () => {
   it("未结束插值", () => {
     expect(() => parse("{{ x")).toThrow(/Unterminated interpolation/);
+  });
+
+  it("字符串中的 }} 不能掩盖未结束插值", () => {
+    expect(() => parse('{{ "}}"')).toThrow(/Unterminated interpolation/);
   });
 
   it("未结束属性值", () => {

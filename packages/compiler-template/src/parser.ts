@@ -417,11 +417,214 @@ const parseText = (cursor: Cursor): TextNode => {
   };
 };
 
+const REGEX_PREFIX_KEYWORDS = new Set([
+  "await",
+  "case",
+  "delete",
+  "do",
+  "else",
+  "in",
+  "instanceof",
+  "new",
+  "of",
+  "return",
+  "throw",
+  "typeof",
+  "void",
+  "yield"
+]);
+
+const isIdentifierStart = (char: string | undefined): boolean =>
+  char !== undefined && /[A-Za-z_$]/.test(char);
+
+const isIdentifierPart = (char: string | undefined): boolean =>
+  char !== undefined && /[\w$]/.test(char);
+
+const skipQuotedString = (source: string, start: number, quote: "'" | '"'): number => {
+  let index = start + 1;
+  while (index < source.length) {
+    const char = source[index];
+    if (char === "\\") {
+      index += 2;
+      continue;
+    }
+    index++;
+    if (char === quote) return index;
+  }
+  return source.length;
+};
+
+const skipLineComment = (source: string, start: number): number => {
+  const newline = source.indexOf("\n", start + 2);
+  return newline < 0 ? source.length : newline + 1;
+};
+
+const skipBlockComment = (source: string, start: number): number => {
+  const close = source.indexOf("*/", start + 2);
+  return close < 0 ? source.length : close + 2;
+};
+
+const skipRegexLiteral = (source: string, start: number): number => {
+  let index = start + 1;
+  let inCharacterClass = false;
+  while (index < source.length) {
+    const char = source[index];
+    if (char === "\\") {
+      index += 2;
+      continue;
+    }
+    if (char === "[") {
+      inCharacterClass = true;
+      index++;
+      continue;
+    }
+    if (char === "]" && inCharacterClass) {
+      inCharacterClass = false;
+      index++;
+      continue;
+    }
+    if (char === "/" && !inCharacterClass) {
+      index++;
+      while (isIdentifierPart(source[index])) index++;
+      return index;
+    }
+    if (char === "\n" || char === "\r") return index;
+    index++;
+  }
+  return source.length;
+};
+
+/** 找到表达式顶层的 `}}`；字符串、模板、注释、正则和嵌套结构中的内容均跳过。 */
+const findInterpolationClose = (source: string): number => {
+  let index = 0;
+  let parenDepth = 0;
+  let bracketDepth = 0;
+  let braceDepth = 0;
+  let canStartRegex = true;
+  let inTemplateText = false;
+  const templateReturnModes: boolean[] = [];
+  const templateExpressionBases: number[] = [];
+
+  while (index < source.length) {
+    const char = source[index];
+    const next = source[index + 1];
+
+    if (inTemplateText) {
+      if (char === "\\") {
+        index += 2;
+        continue;
+      }
+      if (char === "`") {
+        inTemplateText = templateReturnModes.pop() ?? false;
+        index++;
+        canStartRegex = false;
+        continue;
+      }
+      if (char === "$" && next === "{") {
+        templateExpressionBases.push(braceDepth);
+        braceDepth++;
+        inTemplateText = false;
+        index += 2;
+        canStartRegex = true;
+        continue;
+      }
+      index++;
+      continue;
+    }
+
+    if (
+      char === "}" &&
+      next === "}" &&
+      parenDepth === 0 &&
+      bracketDepth === 0 &&
+      braceDepth === 0 &&
+      templateExpressionBases.length === 0
+    ) {
+      return index;
+    }
+
+    if (char === "'" || char === '"') {
+      index = skipQuotedString(source, index, char);
+      canStartRegex = false;
+      continue;
+    }
+
+    if (char === "`") {
+      templateReturnModes.push(false);
+      inTemplateText = true;
+      index++;
+      continue;
+    }
+
+    if (char === "/" && next === "/") {
+      index = skipLineComment(source, index);
+      continue;
+    }
+    if (char === "/" && next === "*") {
+      index = skipBlockComment(source, index);
+      continue;
+    }
+    if (char === "/" && canStartRegex) {
+      index = skipRegexLiteral(source, index);
+      canStartRegex = false;
+      continue;
+    }
+
+    if (isIdentifierStart(char)) {
+      const start = index++;
+      while (isIdentifierPart(source[index])) index++;
+      canStartRegex = REGEX_PREFIX_KEYWORDS.has(source.slice(start, index));
+      continue;
+    }
+
+    if (char !== undefined && /[0-9]/.test(char)) {
+      index++;
+      while (index < source.length && /[\w.]/.test(source[index] ?? "")) index++;
+      canStartRegex = false;
+      continue;
+    }
+
+    if (char === "(") {
+      parenDepth++;
+      canStartRegex = true;
+    } else if (char === ")") {
+      parenDepth = Math.max(0, parenDepth - 1);
+      canStartRegex = false;
+    } else if (char === "[") {
+      bracketDepth++;
+      canStartRegex = true;
+    } else if (char === "]") {
+      bracketDepth = Math.max(0, bracketDepth - 1);
+      canStartRegex = false;
+    } else if (char === "{") {
+      braceDepth++;
+      canStartRegex = true;
+    } else if (char === "}") {
+      if (braceDepth > 0) braceDepth--;
+      const templateBase = templateExpressionBases[templateExpressionBases.length - 1];
+      if (templateBase !== undefined && braceDepth === templateBase) {
+        templateExpressionBases.pop();
+        inTemplateText = true;
+      }
+      canStartRegex = false;
+    } else if ((char === "+" || char === "-") && next === char) {
+      // 后缀 ++/-- 后仍是一个完整操作数；前缀 ++/-- 后则仍需读取操作数。
+      index++;
+    } else if (!/\s/.test(char ?? "")) {
+      canStartRegex = char !== "." && !(char === "?" && next === ".");
+    }
+
+    index++;
+  }
+
+  return -1;
+};
+
 const parseInterpolation = (cursor: Cursor): InterpolationNode => {
   const start = pos(cursor);
   advance(cursor, 2); // 吃 {{
   const inner = pos(cursor);
-  const closeIdx = cursor.rest.indexOf("}}");
+  const closeIdx = findInterpolationClose(cursor.rest);
   let content: string;
   let innerEnd: SourcePos;
   if (closeIdx < 0) {

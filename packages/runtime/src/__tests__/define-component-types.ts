@@ -28,7 +28,8 @@ defineComponent<{ label: string }, { save: [id: number] }, { default: { id: numb
   emits: ["save"],
   setup(props, ctx) {
     props.label.toUpperCase();
-    ctx.emit("save", 1);
+    const dispatched: boolean = ctx.emit("save", 1);
+    void dispatched;
     // @ts-expect-error save expects a number id
     ctx.emit("save", "bad");
     return {};

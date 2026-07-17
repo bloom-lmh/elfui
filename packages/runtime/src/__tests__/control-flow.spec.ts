@@ -5,6 +5,8 @@ import { describe, expect, it, vi } from "vitest";
 import { useRef } from "@elfui/reactivity";
 
 import { branch, list, mark, show } from "../control-flow";
+import { text } from "../bindings";
+import { applyCustomDirective } from "../directive";
 
 const setupContainer = () => {
   const root = document.createElement("div");
@@ -102,6 +104,24 @@ describe("branch — v-if 等", () => {
     expect(root.textContent).toBe("B");
     cleanup();
   });
+
+  it("切换分支时释放分支内的指令", () => {
+    const { anchor, cleanup } = setupContainer();
+    const visible = useRef(true);
+    const unmounted = vi.fn();
+    branch(anchor, () => (visible.value ? 0 : -1), [
+      () => {
+        const el = document.createElement("div");
+        applyCustomDirective(el, { unmounted }, () => "value");
+        return el;
+      }
+    ]);
+
+    visible.value = false;
+
+    expect(unmounted).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
 });
 
 describe("list — v-for", () => {
@@ -114,7 +134,7 @@ describe("list — v-for", () => {
       (n) => n,
       (n) => {
         const li = document.createElement("li");
-        li.textContent = String(n);
+        li.textContent = String(n.value);
         return li;
       }
     );
@@ -134,7 +154,7 @@ describe("list — v-for", () => {
       (n) => n,
       (n) => {
         const li = document.createElement("li");
-        li.textContent = String(n);
+        li.textContent = String(n.value);
         return li;
       }
     );
@@ -154,7 +174,7 @@ describe("list — v-for", () => {
       (n) => n,
       (n) => {
         const li = document.createElement("li");
-        li.textContent = String(n);
+        li.textContent = String(n.value);
         return li;
       }
     );
@@ -181,7 +201,7 @@ describe("list — v-for", () => {
       (n) => n,
       (n) => {
         const li = document.createElement("li");
-        li.textContent = String(n);
+        li.textContent = String(n.value);
         return li;
       }
     );
@@ -205,7 +225,7 @@ describe("list — v-for", () => {
       (it) => it.id,
       (it) => {
         const li = document.createElement("li");
-        li.textContent = it.name;
+        li.textContent = it.value.name;
         return li;
       }
     );
@@ -235,7 +255,7 @@ describe("list — v-for", () => {
       (it) => it.id,
       (it) => {
         const li = document.createElement("li");
-        li.textContent = it.name;
+        li.textContent = it.value.name;
         return li;
       }
     );
@@ -273,7 +293,7 @@ describe("list — v-for", () => {
       (it) => it.id,
       (it) => {
         const li = document.createElement("li");
-        li.textContent = it.name;
+        li.textContent = it.value.name;
         return li;
       }
     );
@@ -292,13 +312,82 @@ describe("list — v-for", () => {
       (n) => n,
       (n) => {
         const li = document.createElement("li");
-        li.textContent = String(n);
+        li.textContent = String(n.value);
         return li;
       }
     );
     expect(root.querySelectorAll("li")).toHaveLength(0);
     items.value.push(1);
     expect(root.querySelectorAll("li")).toHaveLength(1);
+    cleanup();
+  });
+
+  it("删除列表项时释放该项内的指令", () => {
+    const { anchor, cleanup } = setupContainer();
+    const items = useRef([1]);
+    const unmounted = vi.fn();
+    list(
+      anchor,
+      () => items.value,
+      (item) => item,
+      () => {
+        const el = document.createElement("div");
+        applyCustomDirective(el, { unmounted }, () => "value");
+        return el;
+      }
+    );
+
+    items.value = [];
+
+    expect(unmounted).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
+
+  it("同 key 替换 item 时更新已有节点内容", () => {
+    const { root, anchor, cleanup } = setupContainer();
+    const items = useRef([{ id: "a", name: "A" }]);
+    list(
+      anchor,
+      () => items.value,
+      (item) => item.id,
+      (item) => {
+        const li = document.createElement("li");
+        text(li.appendChild(document.createTextNode("")), () => item.value.name);
+        return li;
+      }
+    );
+
+    const before = root.querySelector("li");
+    items.value = [{ id: "a", name: "B" }];
+
+    expect(root.querySelector("li")).toBe(before);
+    expect(root.textContent).toBe("B");
+    cleanup();
+  });
+
+  it("重排后更新 index 并保留节点身份", () => {
+    const { root, anchor, cleanup } = setupContainer();
+    const a = { id: "a" };
+    const b = { id: "b" };
+    const items = useRef([a, b]);
+    list(
+      anchor,
+      () => items.value,
+      (item) => item.id,
+      (item, index) => {
+        const li = document.createElement("li");
+        text(li.appendChild(document.createTextNode("")), () => `${index.value}:${item.value.id}`);
+        return li;
+      }
+    );
+
+    const before = Array.from(root.querySelectorAll("li"));
+    items.value = [b, a];
+    const after = Array.from(root.querySelectorAll("li"));
+
+    expect(after[0]).toBe(before[1]);
+    expect(after[1]).toBe(before[0]);
+    expect(root.textContent).toBe("0:b1:a");
     cleanup();
   });
 });

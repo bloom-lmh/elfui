@@ -28,7 +28,7 @@ const evalCode = (code: string, helpers: string[]): ((ctx: runtime.RenderContext
 const makeCtx = (state: Record<string, unknown>): runtime.RenderContext => ({
   state,
   props: {},
-  emit: () => {},
+  emit: () => true,
   host: document.body,
   shadow: null
 });
@@ -59,6 +59,15 @@ describe("B3.6 codegen", () => {
     expect(code).toMatch(/name: "v-for", source: \{ line: 4, column: \d+ \}/);
   });
 
+  it("列表局部作用域使用分层代理而不是复制父 state", () => {
+    const { code, helpers } = codegen(
+      '<ul><li v-for="(item, index) in items" :key="item.id">{{ index }}-{{ item.name }}</li></ul>'
+    );
+
+    expect(helpers).toContain("extendRenderState");
+    expect(code).not.toContain("...ctx.state");
+  });
+
   it("插值绑定可执行", async () => {
     const { code, helpers } = codegen(`<p>{{ msg }}</p>`);
     const render = evalCode(code, helpers);
@@ -70,6 +79,16 @@ describe("B3.6 codegen", () => {
     msg.set("world");
     await Promise.resolve();
     expect(document.body.querySelector("p")?.textContent).toBe("world");
+  });
+
+  it("离线生成代码保留插值内部的 }}", () => {
+    const { code, helpers } = codegen(
+      '<p>{{ "}}" }}|{{ `before }} ${name} after` }}|{{ ({ value: "ok" }).value }}</p>'
+    );
+    const render = evalCode(code, helpers);
+    document.body.appendChild(render(makeCtx({ name: "elfui" })));
+
+    expect(document.body.querySelector("p")?.textContent).toBe("}}|before }} elfui after|ok");
   });
 
   it("SVG 节点使用 SVG namespace 创建", () => {
@@ -92,6 +111,25 @@ describe("B3.6 codegen", () => {
     });
     document.body.appendChild(render(makeCtx({ item })));
     expect(document.body.querySelector("p")?.textContent).toBe("real-value");
+  });
+
+  it("用语义化 helper 区分字符串、普通对象字段和 Ref value", async () => {
+    const { code, helpers } = codegen(
+      `<div><p>{{ "foo.value" }}|{{ item.value }}|{{ count.value }}</p><button @click="count.value = count.value + 1, item.value = 'after'">update</button></div>`
+    );
+    const render = evalCode(code, helpers);
+    const item = useReactive({ value: "before" });
+    const count = useRef(1);
+    document.body.appendChild(render(makeCtx({ item, count })));
+
+    expect(document.body.querySelector("p")?.textContent).toBe("foo.value|before|1");
+    document.body.querySelector("button")?.dispatchEvent(new Event("click"));
+    await Promise.resolve();
+
+    expect(item.value).toBe("after");
+    expect(count.value).toBe(2);
+    expect(document.body.querySelector("p")?.textContent).toBe("foo.value|after|2");
+    expect(helpers).toEqual(expect.arrayContaining(["readTemplateValue", "writeTemplateValue"]));
   });
 
   it("v-if / v-else 链可执行", async () => {
@@ -276,6 +314,28 @@ describe("B3.6 codegen", () => {
     visible.set(false);
     await Promise.resolve();
     expect(el.open).toBe(false);
+  });
+
+  it("显式 value 的 v-model 会区分 Ref 与普通对象字段", () => {
+    const { code, helpers } = codegen(
+      '<div><input id="ref" v-model="text.value" /><input id="object" v-model="item.value" /></div>'
+    );
+    const render = evalCode(code, helpers);
+    const text = useRef("ref-before");
+    const item = useReactive({ value: "object-before" });
+    document.body.appendChild(render(makeCtx({ text, item })));
+    const refInput = document.body.querySelector("#ref") as HTMLInputElement;
+    const objectInput = document.body.querySelector("#object") as HTMLInputElement;
+
+    expect(refInput.value).toBe("ref-before");
+    expect(objectInput.value).toBe("object-before");
+    refInput.value = "ref-after";
+    objectInput.value = "object-after";
+    refInput.dispatchEvent(new Event("input"));
+    objectInput.dispatchEvent(new Event("input"));
+
+    expect(text.value).toBe("ref-after");
+    expect(item.value).toBe("object-after");
   });
 
   it("custom element v-model 保留数组 detail", () => {

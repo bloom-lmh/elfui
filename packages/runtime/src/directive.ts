@@ -12,7 +12,8 @@
 //
 // ElfUI 不实现 created / beforeMount / beforeUpdate（用 onMount + useEffect 完全等价）
 
-import { effectScope, useEffect } from "@elfui/reactivity";
+import { effectScope, onScopeDispose, useEffect } from "@elfui/reactivity";
+import { handleRuntimeError } from "./error";
 
 const APP_DIRECTIVES_KEY: unique symbol = Symbol.for("elfui.app.directives") as never;
 
@@ -49,6 +50,7 @@ export type DirectiveDefinition<V = unknown, El extends Element = Element> =
   | DirectiveFn<V, El>;
 
 export type DirectiveUnregister = () => void;
+export type DirectiveDisposer = () => void;
 
 const globalDirectives = new Map<string, DirectiveDefinition>();
 
@@ -112,15 +114,39 @@ export const applyCustomDirective = <V = unknown>(
   def: DirectiveDefinition<V>,
   getValue: () => V,
   arg?: string | undefined,
-  modifiers: Readonly<Record<string, boolean>> = {}
-): void => {
+  modifiers: Readonly<Record<string, boolean>> = {},
+  owner?: HTMLElement
+): DirectiveDisposer => {
   const hooks = normalizeDirective(def as DirectiveDefinition);
   let oldValue: V | undefined = undefined;
   let mounted = false;
-  // 用 effectScope 隔离指令内部的 effect，便于卸载时统一清理
-  const scope = effectScope(true);
+  let disposed = false;
+  // 子作用域会自动加入当前组件、branch 或 list item 的作用域。
+  // 返回的 disposer 仍允许调用方单独停止某一个指令。
+  const scope = effectScope();
 
   scope.run(() => {
+    onScopeDispose(() => {
+      if (disposed) return;
+      disposed = true;
+      const binding: DirectiveBinding<V> = {
+        value: oldValue as V,
+        oldValue,
+        arg,
+        modifiers
+      };
+      try {
+        hooks.beforeUnmount?.(el, binding);
+      } catch (err) {
+        handleRuntimeError(err, owner, "directive beforeUnmount");
+      }
+      try {
+        hooks.unmounted?.(el, binding);
+      } catch (err) {
+        handleRuntimeError(err, owner, "directive unmounted");
+      }
+    });
+
     useEffect(() => {
       const value = getValue();
       const binding: DirectiveBinding<V> = { value, oldValue, arg, modifiers };
@@ -128,13 +154,12 @@ export const applyCustomDirective = <V = unknown>(
         // 首次：mounted 钩子
         // 用 microtask 延迟，确保 el 已经在 DOM 中（lifecycle 与 DOM 一致）
         queueMicrotask(() => {
-          if (!mounted) {
+          if (!mounted && !disposed) {
             mounted = true;
             try {
               hooks.mounted?.(el, binding);
             } catch (err) {
-              if (__DEV__) console.error("[directive] mounted error:", err);
-              else console.error(err);
+              handleRuntimeError(err, owner, "directive mounted");
             }
           }
         });
@@ -143,45 +168,12 @@ export const applyCustomDirective = <V = unknown>(
         try {
           (hooks.updated as DirectiveHooks<V>["updated"])?.(el, binding);
         } catch (err) {
-          if (__DEV__) console.error("[directive] updated error:", err);
-          else console.error(err);
+          handleRuntimeError(err, owner, "directive updated");
         }
       }
       oldValue = value;
     });
   });
 
-  // 借助 MutationObserver 监听元素从 DOM 移除以触发 unmount hooks
-  // 注意：这里只是简化实现，生产中可能需要更稳健的策略
-  if (hooks.beforeUnmount || hooks.unmounted) {
-    const observer = new MutationObserver(() => {
-      if (!el.isConnected) {
-        observer.disconnect();
-        const binding: DirectiveBinding<V> = {
-          value: oldValue as V,
-          oldValue,
-          arg,
-          modifiers
-        };
-        try {
-          hooks.beforeUnmount?.(el, binding);
-        } catch (err) {
-          if (__DEV__) console.error("[directive] beforeUnmount error:", err);
-          else console.error(err);
-        }
-        scope.stop();
-        try {
-          hooks.unmounted?.(el, binding);
-        } catch (err) {
-          if (__DEV__) console.error("[directive] unmounted error:", err);
-          else console.error(err);
-        }
-      }
-    });
-    // 在 microtask 后才能保证 el 已挂到 DOM
-    queueMicrotask(() => {
-      const root = el.getRootNode();
-      observer.observe(root, { childList: true, subtree: true });
-    });
-  }
+  return () => scope.stop();
 };

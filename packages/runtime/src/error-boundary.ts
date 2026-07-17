@@ -21,6 +21,7 @@
 
 import { effectScope } from "@elfui/reactivity";
 
+import { DEV as __DEV__ } from "./dev";
 import { onErrorCaptured } from "./lifecycle";
 
 export interface ErrorBoundarySlots {

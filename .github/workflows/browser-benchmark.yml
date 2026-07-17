@@ -1,0 +1,42 @@
+name: Browser Benchmark
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 2 * * 2"
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: Chromium runtime benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CHROME_PATH: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm benchmark:browser
+      - name: Add report to job summary
+        if: always()
+        run: |
+          if [ -f output/BROWSER-BENCHMARK.md ]; then
+            cat output/BROWSER-BENCHMARK.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-benchmark-${{ github.run_id }}
+          path: output/BROWSER-BENCHMARK.md
+          if-no-files-found: warn
+          retention-days: 30

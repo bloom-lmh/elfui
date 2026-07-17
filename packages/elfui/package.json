@@ -1,6 +1,6 @@
 {
   "name": "@elfui/core",
-  "version": "0.1.0-beta.3",
+  "version": "0.1.0-beta.4",
   "description": "Core macro component entry for ElfUI.",
   "keywords": [
     "elfui",
@@ -43,6 +43,10 @@
     "dist/app.js.map",
     "dist/app.d.ts",
     "dist/app.d.ts.map",
+    "dist/dev.js",
+    "dist/dev.js.map",
+    "dist/dev.d.ts",
+    "dist/dev.d.ts.map",
     "dist/macro.js",
     "dist/macro.js.map",
     "dist/macro.d.ts",

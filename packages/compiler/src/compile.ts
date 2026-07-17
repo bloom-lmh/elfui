@@ -21,7 +21,6 @@ import {
   type InterpolationNode,
   type ParserOptions,
   type RootNode,
-  type SourceLoc,
   type TemplateChildNode,
   type TextNode
 } from "@elfui/compiler-template";
@@ -33,6 +32,7 @@ import {
   cls,
   dynamicComponent,
   ensureCustomElement,
+  extendRenderState,
   keepAlive,
   list,
   mark,
@@ -53,7 +53,20 @@ import {
   transitionGroup,
   type DirectiveDefinition
 } from "@elfui/runtime/internal";
-import { createElfDiagnostic, formatElfDiagnostic } from "./diagnostic";
+import { DEV as __DEV__ } from "./dev";
+import {
+  bindingDebug,
+  directiveMeta,
+  expressionMeta,
+  makeChildKeyGetter,
+  makeEventHandler,
+  makeGetter,
+  makeSetter,
+  reportRuntimeCompilerDiagnostic,
+  reportRuntimeExpressionError,
+  wrapCtx,
+  type RuntimeExpressionMeta
+} from "./runtime-expression";
 
 export interface RenderCtx {
   state: Record<string, unknown>;
@@ -72,11 +85,6 @@ export type RenderFunction = (ctx: RenderCtx) => Node;
 export interface CompileOptions extends ParserOptions {
   /** 模板根多个节点时是否包成 fragment（默认 true） */
   wrapFragment?: boolean;
-}
-
-interface RuntimeExpressionMeta {
-  kind: string;
-  loc?: SourceLoc | undefined;
 }
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -718,7 +726,7 @@ const createSuspense = (node: ElementNode, ctx: RenderCtx): Node => {
       slots.error = (err) =>
         renderFragment(errorChildren, {
           ...ctx,
-          state: { ...ctx.state, error: err }
+          state: extendRenderState(ctx.state, { error: err })
         });
     }
     suspense(anchor, getSource, slots);
@@ -739,37 +747,31 @@ const makeTransitionHook = (
         "done",
         `with(ctx.state){const __h=(${expr});if(typeof __h==="function"){return __h(el, done);}}`
       );
-      let warned = false;
+      let reported = false;
       return (ctx, el, done) => {
         try {
           return fn(ctx, el, done);
         } catch (error) {
-          if (__DEV__ && !warned) {
-            warned = true;
-            reportRuntimeExpressionError(ctx, expr, error, meta, "transition");
-          }
+          reportRuntimeExpressionError(ctx, expr, error, meta, "transition", !reported);
+          reported = true;
         }
       };
     }
     const fn = new Function("ctx", "$event", "done", `with(ctx.state){${expr};}`);
-    let warned = false;
+    let reported = false;
     return (ctx, el, done) => {
       try {
         return fn(wrapCtx(ctx), el, done);
       } catch (error) {
-        if (__DEV__ && !warned) {
-          warned = true;
-          reportRuntimeExpressionError(ctx, expr, error, meta, "transition");
-        }
+        reportRuntimeExpressionError(ctx, expr, error, meta, "transition", !reported);
+        reported = true;
       }
     };
   } catch (error) {
-    let warned = false;
+    let reported = false;
     return (ctx) => {
-      if (__DEV__ && !warned) {
-        warned = true;
-        reportRuntimeExpressionError(ctx, expr, error, meta, "compile");
-      }
+      reportRuntimeExpressionError(ctx, expr, error, meta, "compile", !reported);
+      reported = true;
     };
   }
 };
@@ -918,16 +920,13 @@ const createTransitionGroup = (node: ElementNode, ctx: RenderCtx): Node => {
         p.type === AttrTypes.DIRECTIVE && p.name === "bind" && p.arg === "key"
     );
     const keyGetter = keyDir
-      ? (item: unknown, index: number) =>
-          evalChild(
-            keyDir.exp,
-            ctx,
-            itemName,
-            item,
-            indexName,
-            index,
-            directiveMeta("TransitionGroup key", keyDir)
-          )
+      ? makeChildKeyGetter(
+          keyDir.exp,
+          ctx,
+          itemName,
+          indexName,
+          directiveMeta("TransitionGroup key", keyDir)
+        )
       : (_item: unknown, index: number) => index;
 
     const getItems = () => {
@@ -941,11 +940,10 @@ const createTransitionGroup = (node: ElementNode, ctx: RenderCtx): Node => {
     const renderItem = (item: any, index: number) => {
       const childCtx: RenderCtx = {
         ...ctx,
-        state: {
-          ...ctx.state,
+        state: extendRenderState(ctx.state, {
           [itemName]: item,
           ...(indexName ? { [indexName]: index } : {})
-        }
+        })
       };
       const cloned: ElementNode = {
         ...child,
@@ -1066,21 +1064,13 @@ const extractScopedSlot = (
     name,
     fn: (scope: unknown) => {
       const frag = document.createDocumentFragment();
+      const locals = scope && typeof scope === "object" ? (scope as Record<string, unknown>) : {};
       const childCtx: RenderCtx = {
         ...ctx,
-        state: {
-          ...ctx.state
-        }
+        state: extendRenderState(ctx.state, locals)
       };
       // 提供 createNodes 闭包，把 scope 注入到 ctx.state
       const createNodes = (): Node => {
-        // 把 scope 字段先合并到 ctx.state（通过浅拷贝）
-        // 注意：scope 可能是对象，需要解构后注入
-        if (scope && typeof scope === "object") {
-          for (const k of Object.keys(scope as Record<string, unknown>)) {
-            (childCtx.state as Record<string, unknown>)[k] = (scope as Record<string, unknown>)[k];
-          }
-        }
         const f = document.createDocumentFragment();
         for (const child of node.children) {
           f.appendChild(createNode(child, childCtx));
@@ -1216,17 +1206,17 @@ const applyDirective = (el: Element, d: DirectiveNode, ctx: RenderCtx): void => 
       if (dynArgGetter) {
         // 动态事件名：维护 lastEvent，名字变化时 remove + add
         let lastEvent: string | null = null;
+        let disposeListener: (() => void) | null = null;
         attr(
           el,
           "data-elf-dyn-on-marker",
           () => {
             const ev = dynArgGetter();
             if (lastEvent === ev) return null;
-            if (lastEvent) {
-              el.removeEventListener(lastEvent, wrapped, opts);
-            }
+            disposeListener?.();
+            disposeListener = null;
             if (ev) {
-              el.addEventListener(ev, wrapped, opts);
+              disposeListener = on(el, ev, wrapped, opts);
             }
             lastEvent = ev;
             return null;
@@ -1305,7 +1295,7 @@ const applyDirective = (el: Element, d: DirectiveNode, ctx: RenderCtx): void => 
         const valueGetter = makeGetter(d.exp, directiveMeta(`v-${d.name}`, d));
         const modMap: Record<string, boolean> = {};
         for (const m of d.modifiers) modMap[m] = true;
-        applyCustomDirective(el, def, () => valueGetter(ctx), d.arg, modMap);
+        applyCustomDirective(el, def, () => valueGetter(ctx), d.arg, modMap, ctx.host);
       } else if (d.exp) {
         // 编译期没有解析到指令；运行时也没注册，给一个轻量提示
         // 不抛错，避免初次渲染就崩溃
@@ -1407,16 +1397,7 @@ const createForBlock = (node: ElementNode, dir: DirectiveNode, ctx: RenderCtx): 
       p.type === AttrTypes.DIRECTIVE && p.name === "bind" && p.arg === "key"
   );
   const keyGetter = keyDir
-    ? (item: unknown, index: number) =>
-        evalChild(
-          keyDir.exp,
-          ctx,
-          itemName,
-          item,
-          indexName,
-          index,
-          directiveMeta("v-for key", keyDir)
-        )
+    ? makeChildKeyGetter(keyDir.exp, ctx, itemName, indexName, directiveMeta("v-for key", keyDir))
     : (_item: unknown, index: number) => index;
 
   const anchor = mark("v-for");
@@ -1437,11 +1418,10 @@ const createForBlock = (node: ElementNode, dir: DirectiveNode, ctx: RenderCtx): 
       // 创建一个克隆的 ctx，state 中加入 itemName / indexName
       const childCtx: RenderCtx = {
         ...ctx,
-        state: {
-          ...ctx.state,
+        state: extendRenderState(ctx.state, {
           [itemName]: item,
           ...(indexName ? { [indexName]: index } : {})
-        }
+        })
       };
       // 复制一份 node，去掉 v-for 指令避免无限递归
       const cloned: ElementNode = {
@@ -1493,7 +1473,7 @@ const applyVModel = (el: Element, d: DirectiveNode, ctx: RenderCtx): void => {
     const propName = d.arg ? templateAttrToProp(d.arg) : "modelValue";
     const eventName = `update:${propName}`;
     prop(el, propName, () => getter(ctx), debug);
-    el.addEventListener(eventName, (e) => {
+    on(el, eventName, (e) => {
       const ce = e as CustomEvent;
       let v: unknown = ce.detail;
       if (d.modifiers.includes("number")) v = Number(v);
@@ -1549,261 +1529,6 @@ const applyVModel = (el: Element, d: DirectiveNode, ctx: RenderCtx): void => {
 };
 
 // ---------- helpers ----------
-
-// State 自动解包：模板里 `name` 本质是 ctx.state.name，但 useRef / useModel
-// 返回的是 Ref-like 对象。共享自 @elfui/runtime/internal 的 unwrapStateAccess。
-import { isState } from "@elfui/reactivity";
-import { unwrapStateAccess } from "@elfui/runtime/internal";
-
-const wrapCtx = (ctx: RenderCtx): RenderCtx => ({
-  ...ctx,
-  state: unwrapStateAccess(ctx.state)
-});
-
-const stripStandaloneRefValue = (expr: string): string =>
-  expr.replace(/(?<!\.)\b([A-Za-z_$][\w$]*)\.value\b(?!\s*(?:[.[(]|\?\.))/g, "$1");
-
-const expressionMeta = (kind: string, loc: SourceLoc | undefined): RuntimeExpressionMeta => ({
-  kind,
-  ...(loc ? { loc } : {})
-});
-
-const bindingDebug = (
-  loc: SourceLoc | undefined,
-  name?: string
-): { name?: string; source: { line: number; column: number } } | undefined =>
-  loc
-    ? {
-        ...(name ? { name } : {}),
-        source: { line: loc.start.line, column: loc.start.column }
-      }
-    : undefined;
-
-const directiveMeta = (kind: string, directive: DirectiveNode): RuntimeExpressionMeta =>
-  expressionMeta(kind, directive.expLoc ?? directive.loc);
-
-const reportRuntimeCompilerDiagnostic = (
-  ctx: RenderCtx,
-  severity: "error" | "warning",
-  code: string,
-  message: string,
-  meta: RuntimeExpressionMeta,
-  hint?: string,
-  error?: unknown
-): void => {
-  if (!__DEV__) {
-    if (severity === "error") console.error(error ?? message);
-    return;
-  }
-  const tag = ctx.host?.localName || ctx.host?.tagName?.toLowerCase() || "anonymous";
-  const diagnostic = createElfDiagnostic({
-    code,
-    severity,
-    file: `<${tag}>`,
-    message,
-    ...(meta.loc
-      ? {
-          line: meta.loc.start.line,
-          column: meta.loc.start.column
-        }
-      : {}),
-    ...(hint ? { hint } : {})
-  });
-  const output = `[elfui:runtime-compiler]\n${formatElfDiagnostic(diagnostic)}`;
-  if (severity === "error") console.error(output, ...(error === undefined ? [] : [error]));
-  else console.warn(output);
-};
-
-const reportRuntimeExpressionError = (
-  ctx: RenderCtx,
-  expr: string,
-  error: unknown,
-  meta: RuntimeExpressionMeta,
-  phase: "compile" | "event" | "getter" | "key" | "setter" | "transition"
-): void => {
-  if (!__DEV__) return;
-  const tag = ctx.host?.localName || ctx.host?.tagName?.toLowerCase() || "anonymous";
-  const snippet = meta.loc?.source?.trim();
-  const locationText = meta.loc
-    ? ` at line ${meta.loc.start.line}, column ${meta.loc.start.column}`
-    : "";
-  const hint = `expression: ${expr}${snippet ? `; template: ${snippet}` : ""}`;
-  const diagnostic = createElfDiagnostic({
-    code: "ELF_RUNTIME_EXPRESSION",
-    severity: "error",
-    file: `<${tag}>`,
-    message: `${phase} ${meta.kind} expression failed in <${tag}>${locationText}`,
-    ...(meta.loc
-      ? {
-          line: meta.loc.start.line,
-          column: meta.loc.start.column
-        }
-      : {}),
-    hint
-  });
-
-  console.error(`[elfui:runtime-compiler]\n${formatElfDiagnostic(diagnostic)}`, error);
-};
-
-const makeGetter = (
-  expr: string,
-  meta: RuntimeExpressionMeta = expressionMeta("expression", undefined)
-): ((ctx: RenderCtx) => unknown) => {
-  if (!expr.trim()) return () => undefined;
-  const cleanedExpr = stripStandaloneRefValue(expr);
-  try {
-    const fn = new Function("ctx", "$event", `with(ctx.state){return (${cleanedExpr});}`);
-    let warned = false;
-    return (ctx: RenderCtx) => {
-      try {
-        return fn(wrapCtx(ctx), undefined);
-      } catch (error) {
-        if (__DEV__ && !warned) {
-          warned = true;
-          reportRuntimeExpressionError(ctx, cleanedExpr, error, meta, "getter");
-        }
-        return undefined;
-      }
-    };
-  } catch (error) {
-    let warned = false;
-    return (ctx) => {
-      if (__DEV__ && !warned) {
-        warned = true;
-        reportRuntimeExpressionError(ctx, cleanedExpr, error, meta, "compile");
-      }
-      return undefined;
-    };
-  }
-};
-
-const makeSetter = (
-  expr: string,
-  meta: RuntimeExpressionMeta = expressionMeta("assignment", undefined)
-): ((ctx: RenderCtx, value: unknown) => void) => {
-  // 简单赋值：foo / obj.bar
-  // 注意：这里不能 wrap state（写入需要触发原 state 的 setter）
-  // 我们直接对原 state 对象写：ctx.state.foo.value = v 或 ctx.state.foo = v
-  // 这里采用：从 state 中读出 BasicState 对象后调用 .set(v)
-  try {
-    // 简单标识符路径
-    const m = expr.match(/^\s*(\w+)(?:\.(\w+))?\s*$/);
-    if (m) {
-      const [, root, sub] = m;
-      return (ctx, v) => {
-        const target = (ctx.state as Record<string, unknown>)[root!];
-        if (target && isState(target)) {
-          if (sub) {
-            (target as unknown as Record<string, unknown>)[sub] = v;
-          } else {
-            // BasicState：调 .set
-            (target as { set?: (v: unknown) => unknown }).set?.(v);
-          }
-        } else if (target && typeof target === "object" && sub) {
-          (target as Record<string, unknown>)[sub] = v;
-        } else {
-          (ctx.state as Record<string, unknown>)[root!] = v;
-        }
-      };
-    }
-    // 复杂路径：fall back
-
-    const fn = new Function("ctx", "__v", `with(ctx.state){${expr} = __v}`);
-    let warned = false;
-    return (ctx, v) => {
-      try {
-        fn(ctx, v);
-      } catch (error) {
-        if (__DEV__ && !warned) {
-          warned = true;
-          reportRuntimeExpressionError(ctx, expr, error, meta, "setter");
-        }
-      }
-    };
-  } catch (error) {
-    let warned = false;
-    return (ctx) => {
-      if (__DEV__ && !warned) {
-        warned = true;
-        reportRuntimeExpressionError(ctx, expr, error, meta, "compile");
-      }
-    };
-  }
-};
-
-const makeEventHandler = (
-  expr: string,
-  meta: RuntimeExpressionMeta = expressionMeta("event", undefined)
-): ((ctx: RenderCtx, ev: Event) => void) => {
-  if (!expr.trim()) return () => undefined;
-  try {
-    // 单标识符（handler 名）：直接调；不要解包，handler 通常不是 state
-    if (/^[\w.$]+$/.test(expr.trim())) {
-      const fn = new Function(
-        "ctx",
-        "$event",
-        `with(ctx.state){const __h=(${expr});if(typeof __h==="function"){return __h($event);}}`
-      );
-      let warned = false;
-      return (ctx, ev) => {
-        try {
-          return fn(ctx, ev);
-        } catch (error) {
-          if (__DEV__ && !warned) {
-            warned = true;
-            reportRuntimeExpressionError(ctx, expr, error, meta, "event");
-          }
-        }
-      };
-    }
-    // 内联表达式
-
-    const fn = new Function("ctx", "$event", `with(ctx.state){${expr};}`);
-    let warned = false;
-    return (ctx, ev) => {
-      try {
-        return fn(wrapCtx(ctx), ev);
-      } catch (error) {
-        if (__DEV__ && !warned) {
-          warned = true;
-          reportRuntimeExpressionError(ctx, expr, error, meta, "event");
-        }
-      }
-    };
-  } catch (error) {
-    let warned = false;
-    return (ctx) => {
-      if (__DEV__ && !warned) {
-        warned = true;
-        reportRuntimeExpressionError(ctx, expr, error, meta, "compile");
-      }
-    };
-  }
-};
-
-const evalChild = (
-  expr: string,
-  ctx: RenderCtx,
-  itemName: string,
-  item: unknown,
-  indexName: string | undefined,
-  index: number,
-  meta: RuntimeExpressionMeta = expressionMeta("key", undefined)
-): string | number => {
-  try {
-    const fn = new Function(
-      "ctx",
-      itemName,
-      indexName ?? "_index",
-      `with(ctx.state){return (${expr});}`
-    );
-    const v = fn(ctx, item, index);
-    return typeof v === "string" || typeof v === "number" ? v : String(v);
-  } catch (error) {
-    if (__DEV__) reportRuntimeExpressionError(ctx, expr, error, meta, "key");
-    return index;
-  }
-};
 
 const wrapEventModifiers = (
   handler: (ctx: RenderCtx, ev: Event) => void,

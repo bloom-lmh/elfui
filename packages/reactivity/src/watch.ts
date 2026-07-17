@@ -16,6 +16,7 @@
 
 import { ReactiveEffect } from "./effect";
 import { isFunction, isObject } from "@elfui/shared";
+import { DEV as __DEV__ } from "./dev";
 import { isState, type Ref, type StateMethods } from "./state";
 import { queueJob, queuePostFlushJob, type SchedulerJob } from "./scheduler";
 

@@ -6,8 +6,9 @@
 // 这些 helper 都返回一个"占位 + 副作用"组合：返回一个 Comment 锚点节点，
 // 然后在 effect 内做实际工作。
 
-import { effectScope, useEffect } from "@elfui/reactivity";
+import { effectScope, getCurrentScope, onScopeDispose, useEffect } from "@elfui/reactivity";
 
+import { DEV as __DEV__ } from "./dev";
 import { ensureCustomElement } from "./element";
 import { attachDevtoolsLogicalParent } from "./devtools";
 import { getInstanceFromHost } from "./inject";
@@ -15,6 +16,8 @@ import { callHooks, getCurrentInstance } from "./lifecycle";
 
 /** KeepAlive 标记 host 不会被卸载（即使从 DOM 中移除） */
 export const ELF_KEEP_ALIVE_FLAG: unique symbol = Symbol("elfui.keep-alive");
+/** KeepAlive 缓存释放时，让已断开的 ElfUI host 完成延迟卸载。 */
+export const ELF_KEEP_ALIVE_RELEASE: unique symbol = Symbol("elfui.keep-alive-release");
 
 // ---------- Teleport ----------
 
@@ -230,8 +233,10 @@ export const dynamicComponent = (
 // ---------- KeepAlive ----------
 
 interface KeepAliveCacheEntry {
+  key: string;
   el: HTMLElement;
   scope: ReturnType<typeof effectScope>;
+  cached: boolean;
 }
 
 /**
@@ -252,11 +257,22 @@ export const keepAlive = (
   // LRU 顺序追踪
   const order: string[] = [];
   let active: KeepAliveCacheEntry | null = null;
+  let disposed = false;
 
   const shouldCache = (key: string): boolean => {
     if (options.exclude && matchPattern(key, options.exclude)) return false;
     if (options.include && !matchPattern(key, options.include)) return false;
     return true;
+  };
+
+  const releaseEntry = (entry: KeepAliveCacheEntry): void => {
+    entry.scope.stop();
+    const host = entry.el as unknown as Record<symbol, unknown>;
+    host[ELF_KEEP_ALIVE_FLAG] = false;
+    entry.el.remove();
+    const release = host[ELF_KEEP_ALIVE_RELEASE];
+    host[ELF_KEEP_ALIVE_RELEASE] = undefined;
+    if (typeof release === "function") release();
   };
 
   const evict = (): void => {
@@ -266,37 +282,43 @@ export const keepAlive = (
       if (!oldest) break;
       const entry = cache.get(oldest);
       if (entry && entry !== active) {
-        entry.scope.stop();
         cache.delete(oldest);
+        releaseEntry(entry);
       }
     }
   };
 
   const apply = (): void => {
+    if (disposed) return;
     const key = getKey();
-    if (!key) return;
 
     if (active) {
-      const idx = order.indexOf(getEntryKey(cache, active));
+      const previous = active;
+      active = null;
+      const idx = order.indexOf(previous.key);
       if (idx >= 0) {
         order.splice(idx, 1);
-        order.push(getEntryKey(cache, active));
+        order.push(previous.key);
       }
       // 触发 deactivated（缓存中保留，仅从 DOM 移除）
-      const oldInst = getInstanceFromHost(active.el);
-      if (oldInst) callHooks(oldInst.deactivatedHooks);
-      active.el.parentNode?.removeChild(active.el);
+      const oldInst = getInstanceFromHost(previous.el);
+      if (oldInst) callHooks(oldInst.deactivatedHooks, oldInst, "component deactivated hook");
+      previous.el.remove();
+      if (!previous.cached) releaseEntry(previous);
     }
+
+    if (!key) return;
 
     let entry = cache.get(key);
     if (!entry) {
       const scope = effectScope(true);
       const el = scope.run(() => factory(key)) as HTMLElement;
       if (__DEV__) attachDevtoolsLogicalParent(el, logicalOwner);
+      const cached = shouldCache(key);
       // 标记此 host 处于 KeepAlive 控制下：detach 时不要触发 unmount
       (el as unknown as Record<symbol, unknown>)[ELF_KEEP_ALIVE_FLAG] = true;
-      entry = { el, scope };
-      if (shouldCache(key)) {
+      entry = { key, el, scope, cached };
+      if (cached) {
         cache.set(key, entry);
         order.push(key);
         evict();
@@ -315,16 +337,35 @@ export const keepAlive = (
     anchor.parentNode?.insertBefore(entry.el, anchor);
     // 触发 activated（首次创建时也算 activated；onMount 会先于 activated 调用）
     queueMicrotask(() => {
+      if (disposed || active !== entry || !entry.el.isConnected) return;
       const inst = getInstanceFromHost(entry!.el);
       if (inst) {
         // 首次创建：等 mounted 完成（mounted 在 connectedCallback 内同步触发，
         // 但 attachInstanceToHost 也已经做完了，所以这里 inst 一定可用）
-        callHooks(inst.activatedHooks);
+        callHooks(inst.activatedHooks, inst, "component activated hook");
       }
     });
 
     active = entry;
   };
+
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      if (disposed) return;
+      disposed = true;
+
+      const entries = new Set(cache.values());
+      if (active) {
+        const inst = getInstanceFromHost(active.el);
+        if (inst) callHooks(inst.deactivatedHooks, inst, "component deactivated hook");
+        entries.add(active);
+      }
+      active = null;
+      cache.clear();
+      order.length = 0;
+      for (const entry of entries) releaseEntry(entry);
+    });
+  }
 
   let scheduled = false;
   useEffect(() => {
@@ -363,14 +404,4 @@ const matchPattern = (s: string, pattern: string | RegExp | (string | RegExp)[])
     }
   }
   return false;
-};
-
-const getEntryKey = (
-  cache: Map<string, KeepAliveCacheEntry>,
-  entry: KeepAliveCacheEntry
-): string => {
-  for (const [k, v] of cache) {
-    if (v === entry) return k;
-  }
-  return "";
 };

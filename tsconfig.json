@@ -1,5 +1,11 @@
 {
   "extends": "./tsconfig.base.json",
-  "include": ["globals.d.ts", "packages/**/*.ts", "scripts/**/*.mjs", "vitest.config.ts"],
+  "include": [
+    "globals.d.ts",
+    "packages/**/*.ts",
+    "integration/**/*.ts",
+    "scripts/**/*.mjs",
+    "vitest.config.ts"
+  ],
   "exclude": ["node_modules", "coverage", "packages/*/dist", "output"]
 }

@@ -1,0 +1,37 @@
+{
+  "label": "v0.1.0-beta.3-m6",
+  "targets": [
+    {
+      "id": "app-fixture",
+      "name": "real app fixture (tree-shaken public API consumer)",
+      "raw": 71928,
+      "min": 27766,
+      "gz": 9729,
+      "br": 8772
+    },
+    {
+      "id": "light",
+      "name": "elfui (light: reactivity + runtime public API, no compiler)",
+      "raw": 106249,
+      "min": 41696,
+      "gz": 14113,
+      "br": 12735
+    },
+    {
+      "id": "runtime",
+      "name": "@elfui/runtime (stable runtime API, no compiler)",
+      "raw": 101759,
+      "min": 41124,
+      "gz": 14199,
+      "br": 12873
+    },
+    {
+      "id": "reactivity",
+      "name": "@elfui/reactivity (reactivity only)",
+      "raw": 47681,
+      "min": 16692,
+      "gz": 5446,
+      "br": 4957
+    }
+  ]
+}

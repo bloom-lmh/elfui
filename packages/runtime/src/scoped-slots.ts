@@ -20,6 +20,7 @@
 //       const node = renderItem({ item, index });
 //     }
 
+import { DEV as __DEV__ } from "./dev";
 import { getCurrentInstance } from "./lifecycle";
 
 /** 作用域 slot 渲染函数 */

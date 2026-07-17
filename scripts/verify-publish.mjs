@@ -1,3 +1,5 @@
+// cspell:ignore onwarn
+
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -11,6 +13,11 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { nodeResolve } from "@rollup/plugin-node-resolve";
+import { build as esbuild } from "esbuild";
+import { rollup } from "rollup";
+import { build as viteBuild } from "vite";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
@@ -124,7 +131,7 @@ try {
     [
       'import { createApp } from "@elfui/core";',
       'import { useRef } from "@elfui/reactivity";',
-      'import { defineComponent } from "@elfui/runtime";',
+      'import { defineComponent, ensureCustomElement } from "@elfui/runtime";',
       'import { parse } from "@elfui/compiler-template";',
       'import { compileMacroComponent } from "@elfui/compiler";',
       'import { elfui as elfuiVite } from "@elfui/vite-plugin";',
@@ -134,12 +141,146 @@ try {
       "if (typeof defineComponent !== 'function' || typeof parse !== 'function') throw new Error('runtime/compiler parser smoke failed');",
       "if (typeof compileMacroComponent !== 'function') throw new Error('compiler smoke failed');",
       "if (typeof elfuiVite !== 'function') throw new Error('vite smoke failed');",
+      "if (Object.prototype.hasOwnProperty.call(globalThis, '__DEV__')) throw new Error('package import polluted globalThis.__DEV__');",
+      "const ServerComponent = defineComponent({ name: 'elf-publish-ssr-smoke', render: () => { throw new Error('SSR render executed'); } });",
+      "if (ServerComponent.__elfDefinition.tag !== 'elf-publish-ssr-smoke') throw new Error('SSR component declaration failed');",
+      "let ssrBoundary = false;",
+      "try { ensureCustomElement(ServerComponent); } catch (error) { ssrBoundary = String(error).includes('[ELF_CUSTOM_ELEMENTS_UNAVAILABLE]'); }",
+      "if (!ssrBoundary) throw new Error('SSR registration boundary failed');",
       ""
     ].join("\n")
   );
 
   run(process.execPath, [join(appDir, "index.mjs")], { cwd: appDir });
-  console.log(`publish dry-run passed for ${manifests.length} packages.`);
+
+  writeFileSync(
+    join(appDir, "tsconfig.json"),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          strict: true,
+          target: "ES2022",
+          module: "NodeNext",
+          moduleResolution: "NodeNext",
+          lib: ["ES2022", "DOM"],
+          skipLibCheck: false,
+          noEmit: true
+        },
+        include: ["types.ts"]
+      },
+      null,
+      2
+    )
+  );
+  writeFileSync(
+    join(appDir, "types.ts"),
+    [
+      'import { createApp, type ElfUIApp } from "@elfui/core";',
+      'import { useRef, type Ref } from "@elfui/reactivity";',
+      'import { defineComponent, type ElfElementConstructor } from "@elfui/runtime";',
+      'import { parse, type RootNode } from "@elfui/compiler-template";',
+      'import { compileMacroComponent } from "@elfui/compiler";',
+      'import { elfui } from "@elfui/vite-plugin";',
+      "",
+      "const count: Ref<number> = useRef(1);",
+      'const Component = defineComponent({ name: "elf-publish-types", register: false });',
+      "const typed: ElfElementConstructor = Component;",
+      'const ast: RootNode = parse("<button>ok</button>");',
+      "const app: ElfUIApp = createApp(Component);",
+      "const plugin = elfui();",
+      "void [count, typed, ast, app, plugin, compileMacroComponent];",
+      ""
+    ].join("\n")
+  );
+  const tscBin = join(repoRoot, "node_modules", "typescript", "bin", "tsc");
+  run(process.execPath, [tscBin, "-p", appDir], { cwd: appDir });
+
+  const consumerEntry = join(appDir, "consumer-entry.ts");
+  writeFileSync(
+    consumerEntry,
+    [
+      'import { useRef } from "@elfui/reactivity";',
+      "",
+      "export const elfuiConsumerValue = useRef(7).value;",
+      "if (elfuiConsumerValue !== 7) throw new Error('bundled consumer failed');",
+      ""
+    ].join("\n")
+  );
+
+  const esbuildOutput = join(appDir, "dist-esbuild", "consumer.mjs");
+  const rollupOutput = join(appDir, "dist-rollup", "consumer.mjs");
+  const viteOutput = join(appDir, "dist-vite", "consumer.mjs");
+  await esbuild({
+    entryPoints: [consumerEntry],
+    bundle: true,
+    format: "esm",
+    platform: "browser",
+    target: "es2022",
+    outfile: esbuildOutput,
+    treeShaking: true,
+    logLevel: "silent"
+  });
+  const rollupBundle = await rollup({
+    input: consumerEntry,
+    plugins: [nodeResolve({ browser: true, exportConditions: ["import", "default"] })],
+    treeshake: true,
+    onwarn(warning) {
+      throw new Error(`Rollup warning: ${warning.message}`);
+    }
+  });
+  try {
+    await rollupBundle.write({ file: rollupOutput, format: "es" });
+  } finally {
+    await rollupBundle.close();
+  }
+  await viteBuild({
+    root: appDir,
+    logLevel: "silent",
+    build: {
+      lib: {
+        entry: consumerEntry,
+        formats: ["es"],
+        fileName: () => "consumer.mjs"
+      },
+      outDir: "dist-vite",
+      emptyOutDir: true,
+      minify: false,
+      target: "es2022"
+    }
+  });
+
+  for (const output of [esbuildOutput, rollupOutput, viteOutput]) {
+    const bundled = readFileSync(output, "utf8");
+    if (!bundled.includes("elfuiConsumerValue")) {
+      throw new Error(`${output} did not preserve the consumer export.`);
+    }
+    for (const excluded of [
+      "compileMacroComponent",
+      "defineCustomElement",
+      "ELF_CUSTOM_ELEMENT_CONFLICT"
+    ]) {
+      if (bundled.includes(excluded)) {
+        throw new Error(`${output} retained unrelated ${excluded} code.`);
+      }
+    }
+    run(process.execPath, [output], { cwd: appDir });
+  }
+
+  writeFileSync(
+    join(appDir, "private-export.mjs"),
+    [
+      "let rejected = false;",
+      'try { await import("@elfui/runtime/dist/index.js"); }',
+      "catch (error) { rejected = error?.code === 'ERR_PACKAGE_PATH_NOT_EXPORTED'; }",
+      "if (!rejected) throw new Error('private package path was importable');",
+      ""
+    ].join("\n")
+  );
+  run(process.execPath, [join(appDir, "private-export.mjs")], { cwd: appDir });
+
+  console.log(
+    `publish dry-run passed for ${manifests.length} packages with ESM, types, exports, tree shaking, esbuild, Rollup and Vite consumers.`
+  );
 } finally {
   rmSync(tempRoot, { recursive: true, force: true });
 }

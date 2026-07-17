@@ -121,6 +121,7 @@ try {
       "const count = useRef(1);",
       "if (count.value !== 1) throw new Error('useRef smoke failed');",
       "if (typeof createApp !== 'function' || typeof defineComponent !== 'function') throw new Error('elfui API smoke failed');",
+      "if (Object.prototype.hasOwnProperty.call(globalThis, '__DEV__')) throw new Error('light import polluted globalThis.__DEV__');",
       ""
     ].join("\n")
   );

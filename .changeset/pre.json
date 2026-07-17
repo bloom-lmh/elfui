@@ -10,5 +10,19 @@
     "@elfui/shared": "0.1.0-beta.1",
     "@elfui/vite-plugin": "0.1.0-beta.1"
   },
-  "changesets": ["package-metadata"]
+  "changesets": [
+    "bright-props-inference",
+    "calm-array-effects",
+    "flexible-observer-targets",
+    "gentle-events-contract",
+    "kind-template-values",
+    "lean-expression-ir",
+    "package-metadata",
+    "quiet-dev-boundary",
+    "reliable-resource-teardown",
+    "robust-interpolation-parser",
+    "safe-ssr-registration",
+    "stable-host-properties",
+    "stable-mounted-lifecycle"
+  ]
 }

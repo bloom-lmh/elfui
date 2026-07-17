@@ -23,7 +23,8 @@ const emit = defineEmits<{
   click: [event: MouseEvent];
 }>();
 
-emit("click", new MouseEvent("click"));
+const dispatched: boolean = emit("click", new MouseEvent("click"));
+void dispatched;
 // @ts-expect-error click event requires a MouseEvent payload
 emit("click", "bad");
 

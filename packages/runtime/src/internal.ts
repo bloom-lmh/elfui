@@ -28,6 +28,8 @@ export {
 
 export { renderOnce } from "./memo";
 
+export { handleRuntimeError, type RuntimeErrorOwner } from "./error";
+
 export { applyCustomDirective, resolveDirective, type DirectiveDefinition } from "./directive";
 
 export {
@@ -53,7 +55,13 @@ export {
 
 export { setTemplateRef } from "./template-ref";
 
-export { unwrapStateAccess } from "./unwrap";
+export {
+  createRenderState,
+  extendRenderState,
+  readTemplateValue,
+  unwrapStateAccess,
+  writeTemplateValue
+} from "./unwrap";
 
 export {
   defineCustomElement,

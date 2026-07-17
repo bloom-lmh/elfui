@@ -179,6 +179,8 @@ export interface MacroExportedComponentMetadata {
   emitsType: string;
   slotsType: string;
   propNames: string[];
+  /** 编译器生成或保留的 runtime prop option 源码，供 language-tools/诊断展示。 */
+  runtimePropOptions: Record<string, string>;
   emitNames: string[];
 }
 
@@ -943,6 +945,177 @@ const collectDefineOptions = (call: ts.CallExpression, state: TransformState): v
   }
 };
 
+const collectTypeOnlyProps = (typeNode: ts.TypeNode, state: TransformState): void => {
+  const members = resolvePropsTypeMembers(typeNode, state, new Set());
+  if (!members) {
+    addDiagnostic(state, {
+      code: "ELF_MACRO_PROPS_RUNTIME_TYPE",
+      severity: "warning",
+      message: `无法从 ${textOf(typeNode, state)} 生成 runtime props。`,
+      node: typeNode,
+      hint: "请改用 defineProps<Props>({ key: String }) 显式声明 runtime converter；当前自动推断只解析同文件 type literal 或 interface。"
+    });
+    return;
+  }
+
+  for (const member of members) {
+    if (!ts.isPropertySignature(member)) {
+      addDiagnostic(state, {
+        code: "ELF_MACRO_PROP_RUNTIME_TYPE",
+        severity: "warning",
+        message: "type-only props 目前只支持具名属性签名。",
+        node: member,
+        hint: "请为该 prop 提供显式 runtime option。"
+      });
+      continue;
+    }
+    const key = propertyNameText(member.name);
+    if (!key || !member.type) {
+      addDiagnostic(state, {
+        code: "ELF_MACRO_PROP_RUNTIME_TYPE",
+        severity: "warning",
+        message: "无法推断未具名或缺少类型的 prop。",
+        node: member,
+        hint: "请为该 prop 提供显式 runtime option。"
+      });
+      continue;
+    }
+    const runtimeType = inferRuntimePropType(member.type, state, new Set());
+    if (!runtimeType) {
+      addDiagnostic(state, {
+        code: "ELF_MACRO_PROP_RUNTIME_TYPE",
+        severity: "warning",
+        message: `无法安全推断 prop ${key} 的 runtime converter：${textOf(member.type, state)}。`,
+        node: member.type,
+        hint: `请改用 defineProps<Props>({ ${key}: { type: ..., required: ${member.questionToken ? "false" : "true"} } })。`
+      });
+      state.props.set(key, member.questionToken ? "{}" : "{ required: true }");
+      continue;
+    }
+    state.props.set(
+      key,
+      `{ type: ${runtimeType}${member.questionToken ? "" : ", required: true"} }`
+    );
+  }
+};
+
+const resolvePropsTypeMembers = (
+  typeNode: ts.TypeNode,
+  state: TransformState,
+  seen: Set<string>
+): readonly ts.TypeElement[] | null => {
+  if (ts.isParenthesizedTypeNode(typeNode)) {
+    return resolvePropsTypeMembers(typeNode.type, state, seen);
+  }
+  if (ts.isTypeLiteralNode(typeNode)) return typeNode.members;
+  if (ts.isIntersectionTypeNode(typeNode)) {
+    const members: ts.TypeElement[] = [];
+    for (const part of typeNode.types) {
+      const resolved = resolvePropsTypeMembers(part, state, seen);
+      if (!resolved) return null;
+      members.push(...resolved);
+    }
+    return members;
+  }
+  if (!ts.isTypeReferenceNode(typeNode) || !ts.isIdentifier(typeNode.typeName)) return null;
+  if (typeNode.typeArguments?.length) return null;
+
+  const name = typeNode.typeName.text;
+  if (seen.has(name)) return null;
+  seen.add(name);
+  const declaration = state.sourceFile.statements.find(
+    (statement): statement is ts.InterfaceDeclaration | ts.TypeAliasDeclaration =>
+      (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)) &&
+      statement.name.text === name
+  );
+  if (!declaration || declaration.typeParameters?.length) return null;
+  if (ts.isTypeAliasDeclaration(declaration)) {
+    return resolvePropsTypeMembers(declaration.type, state, seen);
+  }
+
+  const members: ts.TypeElement[] = [];
+  for (const clause of declaration.heritageClauses ?? []) {
+    for (const inherited of clause.types) {
+      const inheritedType = ts.factory.createTypeReferenceNode(
+        inherited.expression.getText(state.sourceFile),
+        inherited.typeArguments
+      );
+      const inheritedMembers = resolvePropsTypeMembers(inheritedType, state, seen);
+      if (!inheritedMembers) return null;
+      members.push(...inheritedMembers);
+    }
+  }
+  members.push(...declaration.members);
+  return members;
+};
+
+const inferRuntimePropType = (
+  typeNode: ts.TypeNode,
+  state: TransformState,
+  seen: Set<string>
+): "String" | "Number" | "Boolean" | "Array" | "Object" | "Function" | null => {
+  if (ts.isParenthesizedTypeNode(typeNode)) {
+    return inferRuntimePropType(typeNode.type, state, seen);
+  }
+  if (ts.isTypeOperatorNode(typeNode)) {
+    return inferRuntimePropType(typeNode.type, state, seen);
+  }
+  if (ts.isArrayTypeNode(typeNode) || ts.isTupleTypeNode(typeNode)) return "Array";
+  if (ts.isTypeLiteralNode(typeNode)) return "Object";
+  if (ts.isFunctionTypeNode(typeNode)) return "Function";
+  if (ts.isLiteralTypeNode(typeNode)) {
+    if (ts.isStringLiteralLike(typeNode.literal)) return "String";
+    if (ts.isNumericLiteral(typeNode.literal) || isUnaryNumber(typeNode.literal)) return "Number";
+    if (
+      typeNode.literal.kind === ts.SyntaxKind.TrueKeyword ||
+      typeNode.literal.kind === ts.SyntaxKind.FalseKeyword
+    ) {
+      return "Boolean";
+    }
+    return null;
+  }
+  if (ts.isUnionTypeNode(typeNode)) {
+    const runtimeTypes = new Set<NonNullable<ReturnType<typeof inferRuntimePropType>>>();
+    for (const part of typeNode.types) {
+      if (part.kind === ts.SyntaxKind.UndefinedKeyword || part.kind === ts.SyntaxKind.NullKeyword) {
+        continue;
+      }
+      const runtimeType = inferRuntimePropType(part, state, new Set(seen));
+      if (!runtimeType) return null;
+      runtimeTypes.add(runtimeType);
+    }
+    return runtimeTypes.size === 1 ? ([...runtimeTypes][0] ?? null) : null;
+  }
+
+  switch (typeNode.kind) {
+    case ts.SyntaxKind.StringKeyword:
+      return "String";
+    case ts.SyntaxKind.NumberKeyword:
+      return "Number";
+    case ts.SyntaxKind.BooleanKeyword:
+      return "Boolean";
+    case ts.SyntaxKind.ObjectKeyword:
+      return "Object";
+    default:
+      break;
+  }
+
+  if (!ts.isTypeReferenceNode(typeNode) || !ts.isIdentifier(typeNode.typeName)) return null;
+  const name = typeNode.typeName.text;
+  if (name === "Array" || name === "ReadonlyArray") return "Array";
+  if (name === "Record") return "Object";
+  if (seen.has(name)) return null;
+  seen.add(name);
+  const declaration = state.sourceFile.statements.find(
+    (statement): statement is ts.InterfaceDeclaration | ts.TypeAliasDeclaration =>
+      (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)) &&
+      statement.name.text === name
+  );
+  if (!declaration || declaration.typeParameters?.length) return null;
+  if (ts.isInterfaceDeclaration(declaration)) return "Object";
+  return inferRuntimePropType(declaration.type, state, seen);
+};
+
 const collectUseProps = (
   call: ts.CallExpression,
   localName: string | null,
@@ -959,7 +1132,10 @@ const collectUseProps = (
   }
 
   const first = call.arguments[0];
-  if (!first) return;
+  if (!first) {
+    if (typeArg) collectTypeOnlyProps(typeArg, state);
+    return;
+  }
 
   if (ts.isArrayLiteralExpression(first)) {
     for (const item of first.elements) {
@@ -2128,7 +2304,7 @@ const renderPrecompiledTemplate = (
     runtimeImport: DEFAULT_RENDER_RUNTIME_IMPORT,
     expressionMode: "scope",
     scopeNames,
-    includePropsInScope: true
+    includePropsInScope: false
   });
   const code = generated.code
     .replace(/^import\s+\{[^}]*\}\s+from\s+["'][^"']+["'];?\s*/u, "")
@@ -2360,7 +2536,7 @@ const renderTypeAliases = (state: TransformState): string => {
   const setupContextType = `Omit<import(${JSON.stringify(
     state.runtimeImport
   )}).SetupContext, "emit"> & {
-  emit: <K extends keyof Emits & string>(event: K, ...args: Emits[K]) => void;
+  emit: <K extends keyof Emits & string>(event: K, ...args: Emits[K]) => boolean;
   readonly slots?: Slots;
 }`;
 
@@ -2506,6 +2682,7 @@ const buildMetadata = (
       emitsType: component.emitsType ?? fallbackEmitsType,
       slotsType: component.slotsType ?? fallbackSlotsType,
       propNames: Array.from(state.props.keys()),
+      runtimePropOptions: Object.fromEntries(state.props),
       emitNames: Array.from(state.emits)
     })),
     localComponents: Array.from(state.components, ([name, expression]) => {

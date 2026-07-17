@@ -64,7 +64,7 @@ export interface TypedSetupContext<
   Emits extends EmitMap = EmitMap,
   Slots extends SlotsMap = SlotsMap
 > extends Omit<SetupContext, "emit"> {
-  emit: <K extends keyof Emits & string>(event: K, ...args: Emits[K]) => void;
+  emit: <K extends keyof Emits & string>(event: K, ...args: Emits[K]) => boolean;
   readonly slots?: Slots;
 }
 
@@ -138,7 +138,7 @@ export function defineComponent(
   if (options.directives) definition.directives = { ...options.directives };
 
   const ctor = defineCustomElement(definition, { register: false });
-  if (options.register !== false) {
+  if (options.register !== false && typeof customElements !== "undefined") {
     ensureCustomElement(ctor);
   }
   return ctor;

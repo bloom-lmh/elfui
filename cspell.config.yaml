@@ -21,11 +21,13 @@ words:
   - keytar
   - microtask
   - onig
+  - oncontract
   - pnpm
   - readonly
   - reactivity
   - tsconfig
   - unref
+  - unitless
   - vite
   - VNode
   - effectScope

@@ -17,7 +17,7 @@ const setupCtx = (state: Record<string, unknown> = {}) => {
   return {
     state,
     props: {},
-    emit: () => {},
+    emit: () => true,
     host,
     shadow: null,
     cleanup: () => document.body.removeChild(host)

@@ -18,8 +18,10 @@
 
 import { isFunction, isObject } from "@elfui/shared";
 
-import { track, trigger, triggerAll, triggerMany } from "./dep";
+import { DEV as __DEV__ } from "./dev";
+import { triggerArrayLength, track, trigger, triggerAll, triggerMany } from "./dep";
 import { setReactivityDebugName } from "./devtools";
+import { batch } from "./effect";
 
 // ---------- 标识 ----------
 
@@ -123,6 +125,41 @@ const getCollectionKind = (value: unknown): CollectionKind | null => {
   if (value instanceof WeakMap) return "weakMap";
   if (value instanceof WeakSet) return "weakSet";
   return null;
+};
+
+const arrayMutationMethods = new Set([
+  "copyWithin",
+  "fill",
+  "pop",
+  "push",
+  "reverse",
+  "shift",
+  "sort",
+  "splice",
+  "unshift"
+]);
+
+const arrayMutationWrappers = new Map<string, (...args: unknown[]) => unknown>();
+
+const getArrayMutationWrapper = (method: string): ((...args: unknown[]) => unknown) => {
+  let wrapper = arrayMutationWrappers.get(method);
+  if (!wrapper) {
+    wrapper = function (this: unknown[], ...args: unknown[]): unknown {
+      const mutation = Array.prototype[method as keyof typeof Array.prototype] as unknown as (
+        this: unknown[],
+        ...args: unknown[]
+      ) => unknown;
+      return batch(() => mutation.apply(this, args));
+    };
+    arrayMutationWrappers.set(method, wrapper);
+  }
+  return wrapper;
+};
+
+const isArrayIndexKey = (key: PropertyKey): key is string => {
+  if (typeof key !== "string" || key === "") return false;
+  const index = Number(key);
+  return Number.isInteger(index) && index >= 0 && index < 4_294_967_295 && String(index) === key;
 };
 
 const isCollectionTarget = (value: unknown): value is CollectionTarget =>
@@ -291,8 +328,18 @@ const createReactive = <T extends object>(target: T): Reactive<T> => {
         return (next: T) => replaceReactive(target, next);
       }
 
-      track(t, key);
       const value = Reflect.get(t, key, receiver);
+
+      if (
+        Array.isArray(t) &&
+        typeof key === "string" &&
+        arrayMutationMethods.has(key) &&
+        value === Array.prototype[key as keyof typeof Array.prototype]
+      ) {
+        return getArrayMutationWrapper(key);
+      }
+
+      track(t, key);
 
       // 嵌套对象 lazy 代理；保留函数原样
       if (shouldProxyTarget(value)) {
@@ -303,18 +350,31 @@ const createReactive = <T extends object>(target: T): Reactive<T> => {
 
     set(t, key, value, receiver) {
       const incoming = unwrapValue(value);
-      const hadKey = Array.isArray(t)
-        ? typeof key !== "symbol" && Number(key) < (t as unknown[]).length
+      const isArray = Array.isArray(t);
+      const oldLength = isArray ? (t as unknown[]).length : 0;
+      const isArrayIndex = isArray && isArrayIndexKey(key);
+      const hadKey = isArrayIndex
+        ? Number(key) < oldLength
         : Object.prototype.hasOwnProperty.call(t, key);
       const old = (t as Record<PropertyKey, unknown>)[key as PropertyKey];
       const result = Reflect.set(t, key, incoming, receiver);
+
+      if (!result) return false;
+
+      if (isArray && key === "length") {
+        if (!Object.is(old, incoming)) {
+          triggerArrayLength(t as unknown[], Number(incoming));
+        }
+        return true;
+      }
+
       if (!hadKey) {
-        trigger(t, key);
-        if (Array.isArray(t)) trigger(t, "length");
+        if (isArrayIndex) triggerMany(t, [key, "length"]);
+        else trigger(t, key);
       } else if (!Object.is(old, incoming)) {
         trigger(t, key);
       }
-      return result;
+      return true;
     },
 
     deleteProperty(t, key) {

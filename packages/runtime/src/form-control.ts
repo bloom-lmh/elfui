@@ -12,8 +12,9 @@
 // - setValue(v)：通过 internals.setFormValue 同步到 form
 // - reset()：恢复默认值
 
-import { getCurrentInstance } from "./lifecycle";
 import { warn } from "./config";
+import { DEV as __DEV__ } from "./dev";
+import { getCurrentInstance } from "./lifecycle";
 
 export type FormControlValue = string | File | FormData | null;
 

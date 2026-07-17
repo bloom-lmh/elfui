@@ -9,6 +9,9 @@
 // - flushSync(fn) 在需要立即看到结果时绕过批量
 // - nextTick(fn?) 等本轮调度结束的 Promise
 
+import { DEV as __DEV__ } from "./dev";
+import { flushBatchedEffects } from "./effect";
+
 export type SchedulerJob = (() => void) & {
   /** 用于去重 / 排序的标识；当前未做排序，预留 */
   id?: number;
@@ -90,6 +93,7 @@ export const flushSync = <T>(fn: () => T): T => {
   isFlushingSync = true;
   try {
     const result = fn();
+    flushBatchedEffects();
     if (!isFlushing) {
       flushJobs();
     }

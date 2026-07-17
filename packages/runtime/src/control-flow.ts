@@ -13,9 +13,10 @@
 // - render(parent) / render(parentNode)：渲染函数返回 DocumentFragment 或 Node
 //   也可以接收 (anchor) 自行决定挂载位置
 
-import { effectScope, useEffect } from "@elfui/reactivity";
+import { effectScope, useEffect, useRef, type Ref } from "@elfui/reactivity";
 
 import type { BindingDebugInfo } from "./bindings";
+import { DEV as __DEV__ } from "./dev";
 
 const controlFlowEffect = (
   fn: () => void,
@@ -65,14 +66,14 @@ export const branch = (
   let currentScope: ReturnType<typeof effectScope> | null = null;
 
   const cleanup = (): void => {
-    for (const n of currentNodes) {
-      n.parentNode?.removeChild(n);
-    }
-    currentNodes = [];
     if (currentScope) {
       currentScope.stop();
       currentScope = null;
     }
+    for (const n of currentNodes) {
+      n.parentNode?.removeChild(n);
+    }
+    currentNodes = [];
   };
 
   const updateBranch = (): void => {
@@ -108,14 +109,15 @@ export const branch = (
 // ---------- list (v-for) ----------
 
 /** v-for 的 render 签名：(item, index) => Node */
-export type ListRender<T> = (item: T, index: number) => Node;
+export type ListRender<T> = (item: Ref<T>, index: Ref<number>) => Node;
 
 /** 主键提取器：拿到 item 的稳定 key */
 export type ListKeyGetter<T> = (item: T, index: number) => string | number;
 
 interface ListItem<T> {
   key: string | number;
-  item: T;
+  item: Ref<T>;
+  index: Ref<number>;
   /** 渲染产生的所有 DOM 节点（fragment 时多于一个） */
   nodes: Node[];
   scope: ReturnType<typeof effectScope>;
@@ -127,8 +129,10 @@ const createListItem = <T>(
   index: number,
   render: ListRender<T>
 ): ListItem<T> => {
+  const itemState = useRef(item);
+  const indexState = useRef(index);
   const scope = effectScope(true);
-  const rendered = scope.run(() => render(item, index)) as Node;
+  const rendered = scope.run(() => render(itemState, indexState)) as Node;
   // DocumentFragment 第一次 insert 后会变空，无法用作"持久节点引用"
   // 把它的子节点拍平成数组保存，以便后续重排 / 卸载时操作
   const nodes: Node[] =
@@ -136,7 +140,12 @@ const createListItem = <T>(
       ? Array.from(rendered.childNodes)
       : [rendered];
 
-  return { key, item, nodes, scope };
+  return { key, item: itemState, index: indexState, nodes, scope };
+};
+
+const updateListItem = <T>(entry: ListItem<T>, item: T, index: number): void => {
+  entry.item.set(item);
+  entry.index.set(index);
 };
 
 const removeListItem = <T>(item: ListItem<T>): void => {
@@ -245,7 +254,6 @@ export const list = <T>(
     while (oldStart <= oldEnd && newStart <= newEnd) {
       const oldItem = prev[oldStart] as ListItem<T>;
       if (oldItem.key !== (newKeys[newStart] as string | number)) break;
-      oldItem.item = newItems[newStart] as T;
       next[newStart] = oldItem;
       newIndexToOldIndex[newStart] = oldStart + 1;
       usedOldItems.add(oldItem);
@@ -256,7 +264,6 @@ export const list = <T>(
     while (oldStart <= oldEnd && newStart <= newEnd) {
       const oldItem = prev[oldEnd] as ListItem<T>;
       if (oldItem.key !== (newKeys[newEnd] as string | number)) break;
-      oldItem.item = newItems[newEnd] as T;
       next[newEnd] = oldItem;
       newIndexToOldIndex[newEnd] = oldEnd + 1;
       usedOldItems.add(oldItem);
@@ -281,7 +288,6 @@ export const list = <T>(
         const bucket = newIndexBuckets.get(oldItem.key);
         const newIndex = bucket?.shift();
         if (newIndex === undefined) continue;
-        oldItem.item = newItems[newIndex] as T;
         next[newIndex] = oldItem;
         newIndexToOldIndex[newIndex] = oldIndex + 1;
         usedOldItems.add(oldItem);
@@ -295,8 +301,12 @@ export const list = <T>(
     }
 
     for (let i = 0; i < newItems.length; i++) {
-      if (next[i]) continue;
-      next[i] = createListItem(newKeys[i] as string | number, newItems[i] as T, i, render);
+      const current = next[i];
+      if (current) {
+        updateListItem(current, newItems[i] as T, i);
+      } else {
+        next[i] = createListItem(newKeys[i] as string | number, newItems[i] as T, i, render);
+      }
     }
 
     // 注意：每次重新查询 parent，因为 anchor 可能在挂载到 host 前后变换 parent

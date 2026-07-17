@@ -1,4 +1,5 @@
 export {
+  batch,
   effect,
   isTracking,
   pauseTracking,
