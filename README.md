@@ -174,12 +174,6 @@ export const SaveField = defineHtml(html`
 `);
 ```
 
-When a Boolean prop is supplied as a Custom Element attribute, an absent attribute uses the default; an empty value, `"true"`, or the attribute's own name becomes `true`; `"false"` and other strings become `false`. For dynamic booleans, prefer property binding or remove the attribute when the value is `false`.
-
-Object, array, and function values passed as properties from native code or another framework retain their host-owned reference identity. Replacing the whole property remains reactive, but ElfUI does not convert the host-owned object or array into a new deep reactive Proxy.
-
-Basic Props declared in the same file only need one type declaration. `defineProps<Props>()` generates runtime converters for `string/number/boolean`, arrays, objects, functions, and same-kind literal unions, and uses `?` to infer optional properties. Continue to use `defineProps<Props>({ ... })` for defaults, imported or generic types, and mixed unions. Unsafe inference produces an `ELF_MACRO_PROPS_RUNTIME_TYPE` or `ELF_MACRO_PROP_RUNTIME_TYPE` warning instead of guessing.
-
 ## ⚡ Reactivity
 
 Use `useRef` for primitives or replaceable values, and `useReactive` for objects, arrays, and collections:
