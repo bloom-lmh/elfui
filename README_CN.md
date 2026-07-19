@@ -174,12 +174,6 @@ export const SaveField = defineHtml(html`
 `);
 ```
 
-Boolean prop 作为 Custom Element attribute 使用时：属性缺失取默认值；空值、`"true"` 或与属性同名的值为 `true`；`"false"` 和其他字符串为 `false`。动态布尔值优先使用 property 绑定，或在为 `false` 时移除 attribute。
-
-从原生页面或其他框架通过 property 传入 object、array 和 function 时，ElfUI 保留宿主值的引用身份；替换整个 property 会触发更新，但不会把宿主拥有的对象或数组转换为新的深层响应式 Proxy。
-
-同文件声明的基础 Props 可以只写一次类型：`defineProps<Props>()` 会为 `string/number/boolean`、数组、对象、函数和同类型字面量联合生成 runtime converter，并从 `?` 推断 optional。需要默认值、使用导入/泛型类型或混合联合类型时，继续使用 `defineProps<Props>({ ... })` 显式声明；编译器会通过 `ELF_MACRO_PROPS_RUNTIME_TYPE` / `ELF_MACRO_PROP_RUNTIME_TYPE` warning 提示无法安全推断的部分。
-
 ## ⚡ 响应式
 
 `useRef` 用于基本类型或需要整体替换的值，`useReactive` 用于对象、数组与集合：
@@ -234,16 +228,6 @@ onUnmounted(() => {
 | 属性变化 | `onAttributeChanged`             |
 | 缓存激活 | `onActivated`、`onDeactivated`   |
 | 错误捕获 | `onErrorCaptured`                |
-
-生命周期函数应在组件顶层同步调用。`onMounted` 触发时最终 DOM 与 template ref 已可用，适合初始化 Canvas、Observer 或其他接管 DOM 的外部工具；资源可通过 `onUnmounted` 清理。生命周期钩子可返回 Promise，框架不会阻塞挂载或卸载时序，但 Promise rejection 会进入 `onErrorCaptured` 和 App `errorHandler` 错误链。原有 `onMount`、`onUnmount` 保留为完全兼容的别名。
-
-### 外部工具与宿主框架
-
-ElfUI 不打包图表、编辑器、WebGL、弹层或宿主框架 adapter。集成统一依赖平台契约：在 `onMounted` 初始化接管 DOM 的工具，在 `onUnmounted` 销毁资源；需要跟踪尺寸或可见性时，可把动态 template ref 直接交给 `useResizeObserver` / `useIntersectionObserver`。
-
-发布门禁会运行真实 DOM 接管、Canvas 图表、SVG/WebGL、overlay/portal、原生 Observer/监听器、Worker/WASM、异步竞态和重复挂载清理场景；同时让 native、React、Vue、Svelte、Angular 执行同一组 Custom Element 契约。宿主拥有的 object/array/function property 保持引用身份，Custom Event、slot、Shadow DOM 样式、焦点、表单、keyed 复用和卸载遵循平台语义。
-
-完整做法和边界见官方文档的“集成”章节。上述外部工具与宿主框架只用于工作区集成测试，不会进入 ElfUI 发布包的依赖图。
 
 ## 🎨 样式
 
@@ -438,18 +422,6 @@ ElfUI 输出 ES2022 和标准 Custom Elements，需要浏览器支持：
 - ES Modules 与 ES2022
 
 建议使用当前仍受支持的 Chrome、Edge、Firefox 与 Safari。更旧的浏览器需要由应用构建工具降级语法并按需提供 Web Components polyfill。
-
-### SSR 与注册边界
-
-ElfUI 当前的支持等级如下：
-
-- **Node/SSR import：支持。** `@elfui/*` 包以及编译后的组件模块可以在没有 `window`、`document`、`HTMLElement` 和 `customElements` 的 Node 环境中加载。服务端得到的是只含组件元数据的占位构造器，客户端 bundle 会重新求值并创建真实 Custom Element。
-- **SSR markup：仅支持宿主输出 Custom Element 外壳。** 服务端可以输出 `<elf-user-card>...</elf-user-card>`，但 ElfUI 当前不负责把组件模板渲染成服务端 Shadow DOM。
-- **Hydration：暂不支持。** 客户端升级 Custom Element 后会按客户端组件逻辑渲染，不会复用或 hydration 服务端生成的组件内部 DOM；依赖 hydration 的页面应把 ElfUI 组件视为 client-only island。
-
-`defineCustomElement()` / `defineComponent()` 的模块级调用在 SSR 中可安全执行，但 `createApp().mount()`、DOM 创建和显式注册必须留在客户端。误在无 Custom Elements 环境中注册会得到 `ELF_CUSTOM_ELEMENTS_UNAVAILABLE`；尝试注册服务端占位构造器会得到 `ELF_SSR_PLACEHOLDER`。
-
-Custom Element registry 是页面级全局命名空间。同一个标签重复注册同一构造器是幂等的，同名标签对应不同构造器会抛出 `ELF_CUSTOM_ELEMENT_CONFLICT`，不会静默复用旧实现。应用和组件库应分配稳定且唯一的前缀；Macro 项目通过 `elfuiMacroPlugin({ tagPrefix: "acme" })` 配置，手写组件则直接使用带前缀的 `name` / `tag`。需要集中控制注册时，可设置 `register: false`，再由客户端入口调用 `registerComponents()`。
 
 ## 🌱 生态
 
