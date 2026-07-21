@@ -18,6 +18,7 @@
     "kind-template-values",
     "lean-expression-ir",
     "package-metadata",
+    "portable-template-refs",
     "quiet-dev-boundary",
     "reliable-resource-teardown",
     "robust-interpolation-parser",
