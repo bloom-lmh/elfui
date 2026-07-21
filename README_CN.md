@@ -56,7 +56,7 @@ pnpm create elfui@beta my-app --default --install
 
 | 路径                                                       | 说明                                                    |
 | ---------------------------------------------------------- | ------------------------------------------------------- |
-| [`packages/elfui`](packages/elfui)                         | 用户主入口（`@elfui/core`）                             |
+| [`packages/core`](packages/core)                           | 用户主入口（`@elfui/core`）                             |
 | [`packages/reactivity`](packages/reactivity)               | 细粒度响应式系统（`@elfui/reactivity`）                 |
 | [`packages/runtime`](packages/runtime)                     | 组件运行时与 Web Components helpers（`@elfui/runtime`） |
 | [`packages/compiler-template`](packages/compiler-template) | HTML 模板解析器（`@elfui/compiler-template`）           |

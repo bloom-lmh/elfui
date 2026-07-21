@@ -14,7 +14,7 @@ const aliases = {
   "@elfui/reactivity": resolve(root, "packages/reactivity/src/index.ts"),
   "@elfui/runtime": resolve(root, "packages/runtime/src/index.ts"),
   "@elfui/runtime/internal": resolve(root, "packages/runtime/src/internal.ts"),
-  "@elfui/core": resolve(root, "packages/elfui/src/index.ts")
+  "@elfui/core": resolve(root, "packages/core/src/index.ts")
 };
 
 const aliasPlugin = {

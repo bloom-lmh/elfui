@@ -56,7 +56,7 @@ This repository is a pnpm workspace with the following primary packages:
 
 | Path                                                       | Purpose                                                         |
 | ---------------------------------------------------------- | --------------------------------------------------------------- |
-| [`packages/elfui`](packages/elfui)                         | Public entry point (`@elfui/core`)                              |
+| [`packages/core`](packages/core)                           | Public entry point (`@elfui/core`)                              |
 | [`packages/reactivity`](packages/reactivity)               | Fine-grained reactivity (`@elfui/reactivity`)                   |
 | [`packages/runtime`](packages/runtime)                     | Component runtime and Web Components helpers (`@elfui/runtime`) |
 | [`packages/compiler-template`](packages/compiler-template) | HTML template parser (`@elfui/compiler-template`)               |

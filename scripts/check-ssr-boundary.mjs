@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createApp } from "../packages/elfui/dist/index.js";
+import { createApp } from "../packages/core/dist/index.js";
 import { defineComponent, ensureCustomElement } from "../packages/runtime/dist/index.js";
 
 assert.equal(typeof globalThis.HTMLElement, "undefined");

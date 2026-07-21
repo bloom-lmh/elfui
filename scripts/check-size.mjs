@@ -26,7 +26,7 @@ const targets = [
   {
     id: "light",
     name: "elfui (light: reactivity + runtime public API, no compiler)",
-    entry: resolve(root, "packages/elfui/src/index.ts"),
+    entry: resolve(root, "packages/core/src/index.ts"),
     target: { gzip: kb(14.2), brotli: kb(12.8) }
   },
   {

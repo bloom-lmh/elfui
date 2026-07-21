@@ -347,7 +347,7 @@ try {
 
 ### P2：失败的 `app.mount()` 会永久消耗 app 实例
 
-位置：`packages/elfui/src/app.ts`。
+位置：`packages/core/src/app.ts`。
 
 `mountCalled = true` 在 selector 解析和目标存在性检查之前设置。第一次因为 selector 无效或容器尚未出现而失败后，再次调用会得到 `ELF_APP_ALREADY_MOUNTED`。
 

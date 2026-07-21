@@ -14,7 +14,7 @@
     "url": "https://github.com/bloom-lmh/elfui/issues"
   },
   "scripts": {
-    "build": "tsc -b packages/shared packages/reactivity packages/runtime packages/compiler-template packages/compiler packages/elfui packages/vite-plugin && node scripts/fix-esm-extensions.mjs",
+    "build": "tsc -b packages/shared packages/reactivity packages/runtime packages/compiler-template packages/compiler packages/core packages/vite-plugin && node scripts/fix-esm-extensions.mjs",
     "clean": "rimraf --glob \"packages/*/dist\" \"packages/*/tsconfig.tsbuildinfo\" \"coverage\" \"output\"",
     "ci": "pnpm verify",
     "typecheck": "tsc -p tsconfig.json --noEmit",

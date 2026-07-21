@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 const fromRoot = (path: string): string => fileURLToPath(new URL(`../${path}`, import.meta.url));
 
 export const elfuiDevAliases = [
-  { find: "@elfui/core/internal", replacement: fromRoot("packages/elfui/src/internal.ts") },
+  { find: "@elfui/core/internal", replacement: fromRoot("packages/core/src/internal.ts") },
   { find: "@elfui/runtime/internal", replacement: fromRoot("packages/runtime/src/internal.ts") },
   { find: "@elfui/compiler/compile", replacement: fromRoot("packages/compiler/src/compile.ts") },
   {
@@ -20,5 +20,5 @@ export const elfuiDevAliases = [
   },
   { find: "@elfui/compiler", replacement: fromRoot("packages/compiler/src/index.ts") },
   { find: "@elfui/vite-plugin", replacement: fromRoot("packages/vite-plugin/src/index.ts") },
-  { find: "@elfui/core", replacement: fromRoot("packages/elfui/src/index.ts") }
+  { find: "@elfui/core", replacement: fromRoot("packages/core/src/index.ts") }
 ] as const;

@@ -38,7 +38,7 @@ jobs:
           REQUESTED_NPM_TAG: ${{ inputs.tag }}
         shell: bash
         run: |
-          version=$(node -p "require('./packages/elfui/package.json').version")
+          version=$(node -p "require('./packages/core/package.json').version")
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             test "$GITHUB_REF_NAME" = "v$version"
             if [[ "$version" == *-* ]]; then
@@ -60,7 +60,7 @@ jobs:
           pack_dir="$RUNNER_TEMP/elfui-packages"
           rm -rf "$pack_dir"
           mkdir -p "$pack_dir"
-          for pkg in shared reactivity runtime compiler-template compiler elfui vite-plugin; do
+          for pkg in shared reactivity runtime compiler-template compiler core vite-plugin; do
             package_dir="packages/$pkg"
             name=$(node -p "require('./$package_dir/package.json').name")
             version=$(node -p "require('./$package_dir/package.json').version")

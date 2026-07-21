@@ -156,7 +156,7 @@ importers:
         specifier: workspace:*
         version: link:../shared
 
-  packages/elfui:
+  packages/core:
     dependencies:
       '@elfui/reactivity':
         specifier: workspace:*

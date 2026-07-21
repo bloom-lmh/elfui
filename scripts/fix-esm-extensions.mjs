@@ -10,7 +10,7 @@ const defaultPackages = [
   "packages/runtime",
   "packages/compiler-template",
   "packages/compiler",
-  "packages/elfui",
+  "packages/core",
   "packages/vite-plugin"
 ];
 

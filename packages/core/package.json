@@ -13,9 +13,9 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bloom-lmh/elfui.git",
-    "directory": "packages/elfui"
+    "directory": "packages/core"
   },
-  "homepage": "https://github.com/bloom-lmh/elfui/tree/main/packages/elfui",
+  "homepage": "https://github.com/bloom-lmh/elfui/tree/main/packages/core",
   "bugs": {
     "url": "https://github.com/bloom-lmh/elfui/issues"
   },
@@ -61,7 +61,7 @@
     "dist/macro.d.ts.map"
   ],
   "scripts": {
-    "build": "tsc -b && node ../../scripts/fix-esm-extensions.mjs packages/elfui",
+    "build": "tsc -b && node ../../scripts/fix-esm-extensions.mjs packages/core",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

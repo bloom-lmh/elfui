@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { TextDecoder } from "node:util";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const packageDirs = ["reactivity", "runtime", "compiler", "elfui"];
+const packageDirs = ["reactivity", "runtime", "compiler", "core"];
 
 const collectJavaScript = async (directory, files = []) => {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -42,7 +42,7 @@ if (!hadGlobalDev && Object.prototype.hasOwnProperty.call(globalThis, "__DEV__")
 }
 
 const production = await build({
-  entryPoints: [resolve(root, "packages", "elfui", "dist", "index.js")],
+  entryPoints: [resolve(root, "packages", "core", "dist", "index.js")],
   bundle: true,
   format: "esm",
   platform: "browser",

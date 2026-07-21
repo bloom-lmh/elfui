@@ -10,7 +10,7 @@ const workspacePackages = [
   "packages/shared",
   "packages/reactivity",
   "packages/runtime",
-  "packages/elfui"
+  "packages/core"
 ];
 
 const run = (command, args, options = {}) => {

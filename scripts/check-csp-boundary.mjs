@@ -19,7 +19,7 @@ const sourceEntries = new Map(
     "@elfui/runtime/internal": "packages/runtime/src/internal.ts",
     "@elfui/compiler-template": "packages/compiler-template/src/index.ts",
     "@elfui/compiler": "packages/compiler/src/index.ts",
-    "@elfui/core": "packages/elfui/src/index.ts"
+    "@elfui/core": "packages/core/src/index.ts"
   }).map(([key, value]) => [key, resolve(root, value)])
 );
 
@@ -116,7 +116,7 @@ export const SafeButton = defineHtml(html\`
 const main = async () => {
   const light = await bundle({
     name: "elfui light",
-    entry: resolve(root, "packages/elfui/src/index.ts")
+    entry: resolve(root, "packages/core/src/index.ts")
   });
   const runtime = await bundle({
     name: "@elfui/runtime",
@@ -124,7 +124,7 @@ const main = async () => {
   });
   const macroApi = await bundle({
     name: "@elfui/core",
-    entry: resolve(root, "packages/elfui/src/index.ts")
+    entry: resolve(root, "packages/core/src/index.ts")
   });
 
   assertNoDynamicCode(light);
