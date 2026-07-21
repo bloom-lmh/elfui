@@ -32,12 +32,16 @@ export interface MacroComponentOptions {
 export type MacroEmitFnMap = Record<string, (...args: any[]) => void>;
 export type MacroEmitTupleMap = Record<string, readonly unknown[]>;
 export type MacroEmitMap = MacroEmitFnMap | MacroEmitTupleMap;
+export type MacroEmitValue = ((...args: any[]) => void) | readonly unknown[];
+export type MacroEmitShape<T extends object> = {
+  [K in keyof T]: T[K] extends MacroEmitValue ? T[K] : never;
+};
 export type MacroEmitArgs<T> = T extends (...args: infer Args) => unknown
   ? Args
   : T extends readonly unknown[]
     ? [...T]
     : never;
-export type MacroEmitTuples<T extends MacroEmitMap> = {
+export type MacroEmitTuples<T extends object> = {
   [K in keyof T & string]: MacroEmitArgs<T[K]>;
 };
 
@@ -59,40 +63,29 @@ type MacroPropConstructorValue<T> = T extends StringConstructor
 
 type MacroDefaultValue<T> = T extends (...args: unknown[]) => infer R ? R : T;
 
-type MacroPropValue<T> =
-  T extends PropOption<infer V>
-    ? unknown extends V
-      ? T extends { type: infer C }
-        ? [NonNullable<C>] extends [never]
-          ? T extends { default: infer D }
-            ? MacroDefaultValue<D>
-            : unknown
-          : MacroPropConstructorValue<NonNullable<C>>
-        : T extends { default: infer D }
-          ? MacroDefaultValue<D>
-          : unknown
-      : V
-    : T extends { type: infer C; default: infer D }
-      ? [NonNullable<C>] extends [never]
-        ? MacroDefaultValue<D>
-        : MacroPropConstructorValue<NonNullable<C>>
-      : T extends { type: infer C }
-        ? [NonNullable<C>] extends [never]
-          ? unknown
-          : MacroPropConstructorValue<NonNullable<C>>
-        : T extends { default: infer D }
-          ? MacroDefaultValue<D>
-          : T extends
-                | StringConstructor
-                | NumberConstructor
-                | BooleanConstructor
-                | ArrayConstructor
-                | ObjectConstructor
-                | FunctionConstructor
-            ? MacroPropConstructorValue<T>
-            : T extends PropType<infer V>
-              ? V
-              : MacroDefaultValue<T>;
+type MacroPropValue<T> = T extends { type: infer C; default: infer D }
+  ? [NonNullable<C>] extends [never]
+    ? MacroDefaultValue<D>
+    : MacroPropConstructorValue<NonNullable<C>>
+  : T extends { type: infer C }
+    ? [NonNullable<C>] extends [never]
+      ? unknown
+      : MacroPropConstructorValue<NonNullable<C>>
+    : T extends { default: infer D }
+      ? MacroDefaultValue<D>
+      : T extends
+            | StringConstructor
+            | NumberConstructor
+            | BooleanConstructor
+            | ArrayConstructor
+            | ObjectConstructor
+            | FunctionConstructor
+        ? MacroPropConstructorValue<T>
+        : T extends PropType<infer V>
+          ? V
+          : T extends PropOption<infer V>
+            ? V
+            : MacroDefaultValue<T>;
 
 export type MacroInferProps<T extends Record<string, unknown>> = Readonly<{
   [K in keyof T]: MacroPropValue<T[K]>;
@@ -106,7 +99,7 @@ export const css = (_strings: TemplateStringsArray, ..._values: unknown[]): stri
 
 export const defineHtml = <
   Props extends object = Record<string, unknown>,
-  Emits extends MacroEmitMap = Record<string, unknown[]>,
+  Emits extends MacroEmitShape<Emits> = Record<string, unknown[]>,
   Slots extends MacroSlotMap = MacroSlotMap
 >(
   _template: MacroHtmlTemplate
@@ -135,13 +128,12 @@ export function defineProps(
   return macroOnly("defineProps");
 }
 
+export function defineEmits<T extends MacroEmitShape<T>>(
+  _events?: readonly (keyof T & string)[]
+): <K extends keyof T & string>(event: K, ...args: MacroEmitArgs<T[K]>) => boolean;
 export function defineEmits<const T extends readonly string[]>(
   _events: T
 ): (event: T[number], ...args: unknown[]) => boolean;
-export function defineEmits<T extends MacroEmitMap>(): <K extends keyof T & string>(
-  event: K,
-  ...args: MacroEmitArgs<T[K]>
-) => boolean;
 export function defineEmits(
   _events?: readonly string[]
 ): (event: string, ...args: unknown[]) => boolean {

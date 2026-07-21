@@ -55,10 +55,14 @@ export type DirectiveDisposer = () => void;
 const globalDirectives = new Map<string, DirectiveDefinition>();
 
 /** 全局注册一个指令 */
-export const directive = (name: string, def: DirectiveDefinition): DirectiveUnregister => {
-  globalDirectives.set(name, def);
+export const directive = <V = unknown, El extends Element = Element>(
+  name: string,
+  def: DirectiveDefinition<V, El>
+): DirectiveUnregister => {
+  const stored = def as DirectiveDefinition;
+  globalDirectives.set(name, stored);
   return () => {
-    if (globalDirectives.get(name) === def) {
+    if (globalDirectives.get(name) === stored) {
       globalDirectives.delete(name);
     }
   };

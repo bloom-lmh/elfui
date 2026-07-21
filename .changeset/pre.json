@@ -24,6 +24,7 @@
     "robust-interpolation-parser",
     "safe-ssr-registration",
     "stable-host-properties",
-    "stable-mounted-lifecycle"
+    "stable-mounted-lifecycle",
+    "unified-core-types"
   ]
 }

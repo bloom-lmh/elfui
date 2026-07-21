@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 const fromRoot = (path: string): string => fileURLToPath(new URL(`../${path}`, import.meta.url));
 
 export const elfuiDevAliases = [
+  { find: "@elfui/core/internal", replacement: fromRoot("packages/elfui/src/internal.ts") },
   { find: "@elfui/runtime/internal", replacement: fromRoot("packages/runtime/src/internal.ts") },
   { find: "@elfui/compiler/compile", replacement: fromRoot("packages/compiler/src/compile.ts") },
   {

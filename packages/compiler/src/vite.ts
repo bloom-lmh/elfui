@@ -29,7 +29,6 @@ const macroImportNames = new Set([
   "useName",
   "useProps",
   "useEmit",
-  "useModel",
   "useStyle"
 ]);
 

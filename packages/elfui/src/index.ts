@@ -38,8 +38,10 @@ export {
   type MacroComponentOptions,
   type MacroEmitArgs,
   type MacroEmitMap,
+  type MacroEmitShape,
   type MacroEmitTupleMap,
   type MacroEmitTuples,
+  type MacroEmitValue,
   type MacroExtendableComponent,
   type MacroExtensionBuilder,
   type MacroHtmlTemplate,
@@ -62,7 +64,9 @@ export {
   effectScope,
   getCurrentScope,
   isProxy,
+  isReactive,
   isReadonly,
+  isRef,
   isState,
   markRaw,
   nextTick,
@@ -90,6 +94,9 @@ export {
   type EffectStopHandle,
   type ReadonlyComputed,
   type ReadonlyRef,
+  type Reactive,
+  type Ref,
+  type StateMethods,
   type UseEffectOptions,
   type WatchCallback,
   type WatchCleanup,
@@ -97,7 +104,9 @@ export {
   type WatchEffectFn,
   type WatchOptions,
   type WatchSource,
+  type WatchSourceOldValues,
   type WatchSourceValue,
+  type WatchSourceValues,
   type WatchStopHandle
 } from "@elfui/reactivity";
 
@@ -107,7 +116,7 @@ export { useComputed as computed } from "@elfui/reactivity";
 // 稳定 runtime 用户面 API
 //
 // 注：底层绑定原语（attr/prop/text/cls/sty/on/branch/list/show/mark）默认不导出，
-// 它们是编译产物使用的 internal API，编译器从 `@elfui/runtime/internal` 导入。
+// 它们是编译产物使用的 internal API，编译器从 `@elfui/core/internal` 导入。
 export {
   defineComponent,
   defineCustomElement,
@@ -147,7 +156,7 @@ export { theme as useTheme } from "@elfui/runtime";
 // 协作能力 + 常用 host / form helper
 //
 // 注：以下属于 internal / 编译产物使用的 API，主入口不再导出，
-// 编译产物从 `@elfui/runtime/internal` 导入：
+// 编译产物从 `@elfui/core/internal` 导入：
 // - applyCustomDirective / resolveDirective（编译产物）
 // - setScopedSlot / setScopedSlots / hasScopedSlot（编译产物）
 // - teleport / transition / transitionGroup / keepAlive / suspense / dynamicComponent（编译产物 helper）
@@ -155,16 +164,33 @@ export {
   // Light DOM 投射：ui-kit Dialog/Drawer 和宏组件迁移兼容主路径会用到。
   projectLightDom,
   // 自定义指令注册（用户层）
+  directive,
+  type DirectiveBinding,
+  type DirectiveDefinition,
+  type DirectiveFn,
+  type DirectiveHooks,
+  type DirectiveUnregister,
   // provide / inject
   provide,
   inject,
   hasInjectionContext,
   createInjectionKey,
+  // 应用配置与插件
+  configure,
+  getConfig,
+  usePlugin,
+  type ElfUIPlugin,
+  type ElfUIPluginContext,
+  type ElfUIPluginFn,
+  type ElfUIPluginObject,
   // 作用域 slot 消费（用户层）
   useScopedSlot,
   // 配置 / 插件
   // useTemplateRef — 模板引用
   useTemplateRef,
+  // 双向模型
+  useModel,
+  type UseModelOptions,
   // 全局 setup helpers
   defineExpose,
   useAppConfig,
@@ -195,6 +221,19 @@ export {
   // 错误边界
   captureError,
   errorBoundary,
+  // 内建渲染能力（用户层封装与高级组件可直接使用）
+  dynamicComponent,
+  keepAlive,
+  suspense,
+  teleport,
+  transition,
+  transitionGroup,
+  type KeepAliveOptions,
+  type SuspenseSlots,
+  type SuspenseStatus,
+  type TransitionHooks,
+  type TransitionOptions,
+  type TransitionGroupOptions,
   // 主题样式
   globalStyle,
   resetGlobalStyles,

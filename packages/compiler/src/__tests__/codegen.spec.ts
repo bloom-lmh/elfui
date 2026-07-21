@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 /** 用 new Function 把生成的源码当作 ESM module 执行：
- *  - 把 `import { ... } from "@elfui/runtime/internal"` 替换成从注入的 runtime 对象解构
+ *  - 把生成代码的 runtime import 替换成从注入的 runtime 对象解构
  *  - 把 `export default function render(ctx) { ... }` 改成 `return function render(ctx){...}`
  *  这样可以在测试里直接拿到 render 函数，无需配置真正的 ESM loader。
  */
@@ -36,7 +36,7 @@ const makeCtx = (state: Record<string, unknown>): runtime.RenderContext => ({
 describe("B3.6 codegen", () => {
   it("生成的源码包含 import 和 export default", () => {
     const { code, helpers } = codegen(`<div>{{ msg }}</div>`);
-    expect(code).toContain('from "@elfui/runtime/internal"');
+    expect(code).toContain('from "@elfui/core/internal"');
     expect(code).toContain("export default function render");
     expect(helpers).toContain("text");
   });

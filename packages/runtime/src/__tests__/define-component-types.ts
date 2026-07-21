@@ -1,6 +1,7 @@
 import { useComputed, useRef } from "@elfui/reactivity";
 
 import { defineComponent, type InferPropsOptions } from "../define-component";
+import { directive, type DirectiveBinding, type DirectiveDefinition } from "../directive";
 import type { PropOption, PropType } from "../element";
 import { useModel } from "../use-model";
 
@@ -79,8 +80,17 @@ const writableComputed = useComputed({
   get: () => 1,
   set: (_value: number) => undefined
 });
-writableComputed.set(2).set(3);
+writableComputed.set(2);
 
 const model = useModel<number>({ modelValue: 1 }, { emit: () => undefined });
-model.set(2).set(3);
+model.set(2);
 model.value.toFixed();
+
+type NumericDirective = DirectiveDefinition<number, HTMLElement>;
+const numericDirective: NumericDirective = (
+  element: HTMLElement,
+  binding: DirectiveBinding<number>
+) => {
+  element.dataset.value = binding.value.toFixed();
+};
+directive("numeric", numericDirective);

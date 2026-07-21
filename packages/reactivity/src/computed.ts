@@ -134,9 +134,8 @@ export function useComputed<T>(source: ComputedSource<T>): ReadonlyComputed<T> |
       return computeValue();
     },
 
-    set(next: T): Computed<T> {
+    set(next: T): void {
       this.value = next;
-      return computed as unknown as Computed<T>;
     },
 
     get dirty(): boolean {

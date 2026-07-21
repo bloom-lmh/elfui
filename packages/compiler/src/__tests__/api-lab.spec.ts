@@ -25,7 +25,8 @@ const typeCheckOptions: ts.CompilerOptions = {
     "@elfui/runtime/internal": ["./packages/runtime/src/internal.ts"],
     "@elfui/compiler-template": ["./packages/compiler-template/src/index.ts"],
     "@elfui/compiler": ["./packages/compiler/src/index.ts"],
-    "@elfui/core": ["./packages/elfui/src/index.ts"]
+    "@elfui/core": ["./packages/elfui/src/index.ts"],
+    "@elfui/core/internal": ["./packages/elfui/src/internal.ts"]
   }
 };
 
@@ -213,7 +214,14 @@ export const ApiLabField = defineHtml<ApiLabProps, ApiLabEmits, ApiLabSlots>(htm
       exportName: "ApiLabField",
       name: "elf-api-lab-field"
     });
+    expect(result.metadata.components[0]).toMatchObject({
+      exportName: "ApiLabField",
+      name: "elf-api-lab-field",
+      emitNames: ["select", "update:modelValue"]
+    });
     expect(result.code).toContain('formControl: { defaultValue: "" }');
+    expect(result.code).toContain('from "@elfui/core/internal"');
+    expect(result.code).not.toContain('from "@elfui/runtime');
     expect(result.code).toContain('const __elfDirectives = { "api-focus":');
     expect(result.code).toContain("onActivated(syncForm);");
     expect(result.code).toContain("useFormControlContext<string>();");

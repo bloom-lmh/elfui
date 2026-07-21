@@ -44,8 +44,6 @@ assertMissing(
     "ElementBuilder",
     "extend",
     "setTemplateCompiler",
-    "useModel",
-    "UseModelOptions",
     "variant"
   ],
   "主入口只能暴露宏组件、对象式和稳定用户 API；链式 builder / runtime compiler 留在 @elfui/chain。"
@@ -96,7 +94,27 @@ assertMissing(
     "text",
     "unwrapStateAccess"
   ],
-  "编译产物 helper 必须留在 @elfui/runtime/internal。"
+  "底层实现 helper 必须留在 @elfui/runtime/internal，并只经 @elfui/core/internal 转发给编译产物。"
+);
+
+assertMissing(
+  "@elfui/core",
+  [
+    "attr",
+    "branch",
+    "cls",
+    "list",
+    "mark",
+    "onObject",
+    "prop",
+    "resolveDirective",
+    "setTemplateRef",
+    "show",
+    "sty",
+    "text",
+    "unwrapStateAccess"
+  ],
+  "编译 helper 只能从 @elfui/core/internal 进入生成代码，不能泄漏到主入口。"
 );
 
 assertExact(

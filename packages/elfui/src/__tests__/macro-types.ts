@@ -1,4 +1,4 @@
-import { defineEmits, defineHtml, defineProps, html } from "../macro";
+import { defineEmits, defineExpose, defineHtml, defineProps, html } from "../macro";
 
 interface ButtonProps {
   disabled: boolean;
@@ -7,6 +7,11 @@ interface ButtonProps {
 
 interface ButtonSlots {
   default: () => unknown;
+}
+
+interface ButtonEmits {
+  click: [event: MouseEvent];
+  close: [];
 }
 
 const props = defineProps<ButtonProps>({
@@ -19,18 +24,28 @@ props.type.toUpperCase();
 // @ts-expect-error unknown prop should not be exposed by typed defineProps
 void props.missing;
 
-const emit = defineEmits<{
-  click: [event: MouseEvent];
-}>();
+const inferredProps = defineProps({
+  label: { type: String, default: "ready" },
+  count: { type: Number, default: 0 },
+  disabled: { type: Boolean, default: false }
+});
+const inferredLabel: string = inferredProps.label;
+const inferredCount: number = inferredProps.count;
+const inferredDisabled: boolean = inferredProps.disabled;
+void inferredLabel;
+void inferredCount;
+void inferredDisabled;
+
+const emit = defineEmits<ButtonEmits>(["click", "close"]);
 
 const dispatched: boolean = emit("click", new MouseEvent("click"));
 void dispatched;
 // @ts-expect-error click event requires a MouseEvent payload
 emit("click", "bad");
+// @ts-expect-error runtime event names must belong to the typed emit map
+defineEmits<ButtonEmits>(["missing"]);
 
-const _Button = defineHtml<ButtonProps, { click: [event: MouseEvent] }, ButtonSlots>(
-  html`<button></button>`
-);
+const _Button = defineHtml<ButtonProps, ButtonEmits, ButtonSlots>(html`<button></button>`);
 
 type ExportedButtonProps = NonNullable<(typeof _Button)["__elfProps"]>;
 type ExportedButtonEmits = NonNullable<(typeof _Button)["__elfEmits"]>;
@@ -50,3 +65,11 @@ const _badClickArgs: ExportedButtonEmits["click"] = ["bad"];
 
 const renderDefaultSlot: ExportedButtonSlots["default"] = () => undefined;
 renderDefaultSlot();
+
+interface ExposedButtonApi {
+  focus(): void;
+}
+
+defineExpose<ExposedButtonApi>({
+  focus: () => undefined
+});

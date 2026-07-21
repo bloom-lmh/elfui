@@ -1,6 +1,6 @@
 {
   "name": "@elfui/core",
-  "version": "0.1.0-beta.5",
+  "version": "0.1.0-beta.6",
   "description": "Core macro component entry for ElfUI.",
   "keywords": [
     "elfui",
@@ -30,6 +30,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./internal": {
+      "types": "./dist/internal.d.ts",
+      "import": "./dist/internal.js"
     }
   },
   "files": [
@@ -39,6 +43,10 @@
     "dist/index.js.map",
     "dist/index.d.ts",
     "dist/index.d.ts.map",
+    "dist/internal.js",
+    "dist/internal.js.map",
+    "dist/internal.d.ts",
+    "dist/internal.d.ts.map",
     "dist/app.js",
     "dist/app.js.map",
     "dist/app.d.ts",

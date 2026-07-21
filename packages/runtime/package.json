@@ -1,6 +1,6 @@
 {
   "name": "@elfui/runtime",
-  "version": "0.1.0-beta.5",
+  "version": "0.1.0-beta.6",
   "description": "Runtime APIs and Web Components helpers for ElfUI.",
   "keywords": [
     "elfui",

@@ -46,6 +46,8 @@ try {
   const tarballs = readdirSync(tarballDir)
     .filter((name) => name.endsWith(".tgz"))
     .map((name) => join(tarballDir, name));
+  const coreTarball = tarballs.find((name) => /elfui-core-.*\.tgz$/u.test(name));
+  if (!coreTarball) throw new Error("Missing packed @elfui/core tarball.");
 
   writeFileSync(
     join(appDir, "package.json"),
@@ -54,14 +56,20 @@ try {
         name: "elfui-light-install-smoke",
         version: "0.0.0",
         private: true,
-        type: "module"
+        type: "module",
+        dependencies: {
+          "@elfui/core": `file:${coreTarball}`
+        }
       },
       null,
       2
     )
   );
 
-  run("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", ...tarballs], {
+  // Install every local tarball without adding it to the application manifest. The
+  // manifest deliberately declares only @elfui/core; the other runtime packages
+  // must be reachable solely as its transitive dependencies.
+  run("npm", ["install", "--no-save", "--ignore-scripts", "--no-audit", "--no-fund", ...tarballs], {
     cwd: appDir
   });
 
@@ -93,7 +101,8 @@ try {
   writeFileSync(
     join(appDir, "index.ts"),
     [
-      'import { createApp, defineComponent, useRef, type ElfElementConstructor } from "@elfui/core";',
+      'import { createApp, defineComponent, directive, useModel, useRef, type ElfElementConstructor } from "@elfui/core";',
+      'import { text } from "@elfui/core/internal";',
       "",
       "const Counter = defineComponent<{ initial: number }, { change: [value: number] }>({",
       '  name: "x-light-counter",',
@@ -108,6 +117,9 @@ try {
       "});",
       "",
       "const typed: ElfElementConstructor = Counter;",
+      "void directive;",
+      "void useModel;",
+      "void text;",
       "export { Counter, typed, createApp };",
       ""
     ].join("\n")

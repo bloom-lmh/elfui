@@ -1,6 +1,8 @@
 # @elfui/core
 
-The main Macro component entry for ElfUI.
+The single application-facing runtime entry for ElfUI. It exposes the stable
+macro, reactivity, lifecycle, model, directive, plugin, and component APIs while
+keeping the compiler and optional router in separate packages.
 
 ```bash
 pnpm add @elfui/core
@@ -35,5 +37,9 @@ onUnmounted(() => {
 ```
 
 `onMount` and `onUnmount` remain compatible aliases. External tools are not bundled with `@elfui/core`.
+
+Application code should not need direct dependencies on `@elfui/runtime` or
+`@elfui/reactivity`. Compiler-generated render helpers resolve through
+`@elfui/core/internal`; that subpath is compiler-owned and is not an authoring API.
 
 See the [ElfUI documentation](https://github.com/bloom-lmh/elfui-docs) for setup, templates, reactivity, and component APIs.

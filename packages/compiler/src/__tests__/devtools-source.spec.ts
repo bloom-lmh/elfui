@@ -117,4 +117,14 @@ describe("macro component DevTools source metadata", () => {
     expect(result?.map?.sources).toEqual(["src/Card.elf.ts"]);
     expect(result?.code).toContain('"file":"src/Card.elf.ts"');
   });
+
+  it("does not classify the public runtime useModel hook as a macro-only import", () => {
+    const plugin = elfuiMacroPlugin();
+    const result = plugin.transform?.(
+      `import { useModel } from "@elfui/core";\nexport const bind = useModel;`,
+      "/workspace/src/form.ts"
+    );
+
+    expect(result).toBeNull();
+  });
 });

@@ -84,6 +84,10 @@ pnpm add @elfui/core@beta
 pnpm add -D @elfui/vite-plugin@beta
 ```
 
+`@elfui/core` is the single application-facing runtime dependency. Normal
+applications do not need to list `@elfui/runtime` or `@elfui/reactivity`
+directly; compiler-generated helpers stay behind `@elfui/core/internal`.
+
 ```ts
 // vite.config.ts
 import { defineConfig } from "vite";

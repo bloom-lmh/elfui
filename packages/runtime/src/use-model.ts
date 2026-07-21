@@ -77,10 +77,9 @@ export function useModel<T = unknown>(
       local.set(v);
       ctx.emit(eventName, v);
     },
-    set(v: T): ModelRef<T> {
+    set(v: T): void {
       local.set(v);
       ctx.emit(eventName, v);
-      return model;
     },
     peek(): T {
       return local.peek();

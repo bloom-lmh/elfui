@@ -25,6 +25,7 @@ const evalMacroModule = (code: string, dev: boolean | "absent" = true): Evaluate
   const module = { exports: {} as EvaluatedModule };
   const require = (id: string): unknown => {
     if (id === "@elfui/core") return elfuiRuntimeShim;
+    if (id === "@elfui/core/internal") return runtimeInternal;
     if (id === "@elfui/reactivity") return reactivity;
     if (id === "@elfui/runtime") return runtime;
     if (id === "@elfui/runtime/internal") return runtimeInternal;

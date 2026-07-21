@@ -16,15 +16,16 @@ export { formatElfDiagnostic, type ElfDiagnostic, type ElfDiagnosticSeverity } f
 
 const DEFAULT_RUNTIME_IMPORT = "@elfui/core";
 const DEFAULT_MACRO_IMPORT = "@elfui/core";
-const DEFAULT_RENDER_RUNTIME_IMPORT = "@elfui/runtime/internal";
-const DEFAULT_MODEL_RUNTIME_IMPORT = "@elfui/runtime";
+const DEFAULT_RENDER_RUNTIME_IMPORT = "@elfui/core/internal";
 const TEMPLATE_MACRO_STUB = `
 declare module "@elfui/core" {
   export type MacroHtmlTemplate = string & { readonly __elfHtmlTemplate?: true };
   export type MacroSlotMap = object;
   export type MacroEmitMap = Record<string, (...args: any[]) => void> | Record<string, readonly unknown[]>;
+  export type MacroEmitValue = ((...args: any[]) => void) | readonly unknown[];
+  export type MacroEmitShape<T extends object> = { [K in keyof T]: T[K] extends MacroEmitValue ? T[K] : never };
   export type MacroEmitArgs<T> = T extends (...args: infer Args) => unknown ? Args : T extends readonly unknown[] ? [...T] : never;
-  export type MacroEmitTuples<T extends MacroEmitMap> = { [K in keyof T & string]: MacroEmitArgs<T[K]> };
+  export type MacroEmitTuples<T extends object> = { [K in keyof T & string]: MacroEmitArgs<T[K]> };
   export interface ElfElementConstructor<Props extends object = Record<string, unknown>, Emits extends Record<string, unknown[]> = Record<string, unknown[]>, Slots extends object = object> extends CustomElementConstructor {
     readonly __elfProps?: Readonly<Props>;
     readonly __elfEmits?: Emits;
@@ -44,24 +45,30 @@ declare module "@elfui/core" {
               ? (...args: unknown[]) => unknown
               : unknown;
   type MacroDefaultValue<T> = T extends (...args: unknown[]) => infer R ? R : T;
-  type MacroPropValue<T> = T extends { type: infer C }
-    ? MacroPropConstructorValue<NonNullable<C>>
-    : T extends { default: infer D }
+  type MacroPropValue<T> = T extends { type: infer C; default: infer D }
+    ? [NonNullable<C>] extends [never]
       ? MacroDefaultValue<D>
-      : T extends StringConstructor | NumberConstructor | BooleanConstructor | ArrayConstructor | ObjectConstructor | FunctionConstructor
-        ? MacroPropConstructorValue<T>
-        : MacroDefaultValue<T>;
+      : MacroPropConstructorValue<NonNullable<C>>
+    : T extends { type: infer C }
+      ? [NonNullable<C>] extends [never]
+        ? unknown
+        : MacroPropConstructorValue<NonNullable<C>>
+      : T extends { default: infer D }
+        ? MacroDefaultValue<D>
+        : T extends StringConstructor | NumberConstructor | BooleanConstructor | ArrayConstructor | ObjectConstructor | FunctionConstructor
+          ? MacroPropConstructorValue<T>
+          : MacroDefaultValue<T>;
   export type MacroInferProps<T extends Record<string, unknown>> = Readonly<{ [K in keyof T]: MacroPropValue<T[K]> }>;
   export const html: any;
   export const css: any;
-  export function defineHtml<Props extends object = Record<string, unknown>, Emits extends MacroEmitMap = Record<string, unknown[]>, Slots extends object = object>(template: MacroHtmlTemplate): ElfElementConstructor<Props, MacroEmitTuples<Emits>, Slots>;
+  export function defineHtml<Props extends object = Record<string, unknown>, Emits extends MacroEmitShape<Emits> = Record<string, unknown[]>, Slots extends object = object>(template: MacroHtmlTemplate): ElfElementConstructor<Props, MacroEmitTuples<Emits>, Slots>;
   export const defineName: any;
   export const defineOptions: any;
   export function defineProps<const T extends Record<string, unknown>>(props: T): MacroInferProps<T>;
   export function defineProps<TProps extends object, const TOptions extends Record<string, unknown> = Record<string, unknown>>(props: TOptions): Readonly<TProps>;
   export function defineProps<TProps extends object>(): Readonly<TProps>;
   export function defineProps(props?: unknown): Record<string, unknown>;
-  export function defineEmits<T extends MacroEmitMap>(): any;
+  export function defineEmits<T extends MacroEmitShape<T>>(events?: readonly (keyof T & string)[]): any;
   export function defineEmits(events?: readonly string[]): any;
   export const defineModel: any;
   export const defineStyle: any;
@@ -122,7 +129,6 @@ const removedMacroAliasReplacements = new Map([
   ["useName", "defineName"],
   ["useProps", "defineProps"],
   ["useEmit", "defineEmits"],
-  ["useModel", "defineModel"],
   ["useStyle", "defineStyle"]
 ]);
 
@@ -1246,9 +1252,11 @@ const collectUseDirective = (call: ts.CallExpression, state: TransformState): vo
 
 const collectTypedEmitNames = (call: ts.CallExpression, state: TransformState): void => {
   const firstType = call.typeArguments?.[0];
-  if (!firstType || !ts.isTypeLiteralNode(firstType)) return;
+  if (!firstType) return;
+  const members = resolvePropsTypeMembers(firstType, state, new Set());
+  if (!members) return;
 
-  for (const member of firstType.members) {
+  for (const member of members) {
     if (!ts.isPropertySignature(member) && !ts.isMethodSignature(member)) continue;
     const name = propertyNameText(member.name);
     if (name) state.emits.add(name);
@@ -2292,6 +2300,9 @@ const splitAliases = (value: string): string[] => {
   return result;
 };
 
+const internalRuntimeImport = (runtimeImport: string): string =>
+  `${runtimeImport.replace(/\/$/u, "")}/internal`;
+
 const oneLineExpression = (expression: string): string => expression.trim().replace(/\s+/g, " ");
 
 const renderPrecompiledTemplate = (
@@ -2348,9 +2359,9 @@ const buildGeneratedModule = (
   return {
     runtimeImport: state.runtimeImport,
     runtimeImports,
-    renderRuntimeImport: DEFAULT_RENDER_RUNTIME_IMPORT,
+    renderRuntimeImport: internalRuntimeImport(state.runtimeImport),
     renderRuntimeImports,
-    modelRuntimeImport: DEFAULT_MODEL_RUNTIME_IMPORT,
+    modelRuntimeImport: state.runtimeImport,
     modelRuntimeImports,
     preservedImports: state.imports,
     topLevelStatements: state.topLevel,

@@ -53,7 +53,7 @@ export interface Ref<T> {
   /** 不触发追踪的读取 */
   peek(): T;
   /** 写入 */
-  set(value: T): Ref<T>;
+  set(value: T): void;
   /** 内部标识 */
   readonly [STATE_FLAG]: true;
   readonly [REF_FLAG]: true;
@@ -233,9 +233,8 @@ const createRef = <T>(initialValue: T, debugName?: string): Ref<T> => {
       return raw;
     },
 
-    set(next: T): Ref<T> {
+    set(next: T): void {
       this.value = next;
-      return ref;
     }
   };
 

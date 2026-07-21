@@ -9,7 +9,7 @@
 //
 //   import { branch, list, mark, on, attr, prop, cls, sty, text, show,
 //            teleport, dynamicComponent, applyCustomDirective, resolveDirective,
-//            setScopedSlot } from "@elfui/runtime/internal";
+//            setScopedSlot } from "@elfui/core/internal";
 //
 //   export default function render(ctx) {
 //     // ... 编译产物 ...
@@ -42,7 +42,7 @@ import {
 export interface CodegenOptions extends ParserOptions {
   /** 渲染函数名（默认 "render"） */
   functionName?: string;
-  /** 运行时 helper 包名（默认 "@elfui/runtime/internal"） */
+  /** 运行时 helper 包名（默认 "@elfui/core/internal"） */
   runtimeImport?: string;
   /**
    * 表达式包装模式。
@@ -363,7 +363,7 @@ export const codegen = (template: string, options: CodegenOptions = {}): Codegen
     ctxName: "ctx"
   };
   const fnName = options.functionName ?? "render";
-  const runtimeImport = options.runtimeImport ?? "@elfui/runtime/internal";
+  const runtimeImport = options.runtimeImport ?? "@elfui/core/internal";
 
   const childExpr = genChildren(ast.children, ctx);
 
