@@ -15,7 +15,7 @@ const elfuiRuntimeShim = {
   computed: reactivity.useComputed
 };
 
-const evalMacroModule = (code: string): EvaluatedModule => {
+const evalMacroModule = (code: string, dev: boolean | "absent" = true): EvaluatedModule => {
   const js = ts.transpileModule(code, {
     compilerOptions: {
       target: ts.ScriptTarget.ES2022,
@@ -30,8 +30,13 @@ const evalMacroModule = (code: string): EvaluatedModule => {
     if (id === "@elfui/runtime/internal") return runtimeInternal;
     throw new Error(`Unexpected module import in macro runtime test: ${id}`);
   };
-  const factory = new Function("require", "exports", "module", "__DEV__", js);
-  factory(require, module.exports, module, true);
+  if (dev === "absent") {
+    const factory = new Function("require", "exports", "module", js);
+    factory(require, module.exports, module);
+  } else {
+    const factory = new Function("require", "exports", "module", "__DEV__", js);
+    factory(require, module.exports, module, dev);
+  }
   return module.exports;
 };
 
@@ -53,9 +58,54 @@ afterEach(() => {
   runtime.resetDirectives();
   runtime.resetConfig();
   delete (globalThis as { __elfMacroRuntimeLog?: string[] }).__elfMacroRuntimeLog;
+  delete (globalThis as { __elfMacroTemplateRef?: Element | null }).__elfMacroTemplateRef;
 });
 
 describe("M9.7 macro runtime coverage", () => {
+  it("populates template refs before onMounted hooks run", () => {
+    const result = compileRuntimeMacro(
+      `
+import { defineHtml, html, onMounted, useTemplateRef } from "@elfui/core";
+const chart = useTemplateRef<HTMLDivElement>("chart");
+onMounted(() => {
+  (globalThis as { __elfMacroTemplateRef?: Element | null }).__elfMacroTemplateRef = chart.value;
+});
+export const MacroTemplateRefProbe = defineHtml(html\`<div ref="chart"></div>\`);
+      `,
+      { filename: "MacroTemplateRefProbe.ts", templateTypeCheck: false }
+    );
+    expectNoDiagnostics(result);
+
+    const exports = evalMacroModule(result.code);
+    const ctor = exports.MacroTemplateRefProbe as runtime.ElfElementConstructor;
+    const el = document.createElement(runtime.ensureCustomElement(ctor));
+    document.body.appendChild(el);
+
+    const chart = (el.shadowRoot ?? el).querySelector("div");
+    expect(chart).not.toBeNull();
+    expect((globalThis as { __elfMacroTemplateRef?: Element | null }).__elfMacroTemplateRef).toBe(
+      chart
+    );
+  });
+
+  it("runs generated components when the host bundler does not define __DEV__", () => {
+    const result = compileRuntimeMacro(
+      `
+import { defineHtml, html } from "@elfui/core";
+export const PortableDevProbe = defineHtml(html\`<p>portable</p>\`);
+      `,
+      { filename: "PortableDevProbe.ts", templateTypeCheck: false }
+    );
+    expectNoDiagnostics(result);
+
+    const exports = evalMacroModule(result.code, "absent");
+    const ctor = exports.PortableDevProbe as runtime.ElfElementConstructor & {
+      __elfSource?: { file: string };
+    };
+    expect(ctor).toBeTypeOf("function");
+    expect(ctor.__elfSource?.file).toBe("PortableDevProbe.ts");
+  });
+
   it("infers runtime converters from local type-only props", () => {
     const result = compileRuntimeMacro(
       `

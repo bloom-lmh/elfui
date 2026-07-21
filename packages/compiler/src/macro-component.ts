@@ -2642,7 +2642,7 @@ const renderComponent = (component: InternalCompiledComponent, state: TransformS
       endLine: end.line + 1,
       endColumn: end.character + 1
     });
-    return `if (__DEV__) Object.defineProperty(${reference}, "__elfSource", { value: ${source}, configurable: true });`;
+    return `if (typeof __DEV__ === "undefined" || __DEV__) Object.defineProperty(${reference}, "__elfSource", { value: ${source}, configurable: true });`;
   };
 
   if (component.exportName === "default") {

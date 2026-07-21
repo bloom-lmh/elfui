@@ -54,6 +54,7 @@ describe("macro component DevTools source metadata", () => {
     expect(result.code).toContain(
       'Object.defineProperty(Card, "__elfSource", { value: {"file":"C:/workspace/src/Card.elf.ts"'
     );
+    expect(result.code).toContain('if (typeof __DEV__ === "undefined" || __DEV__)');
     expect(result.code).toMatch(/"line":3,"column":\d+,"endLine":3,"endColumn":\d+/);
   });
 

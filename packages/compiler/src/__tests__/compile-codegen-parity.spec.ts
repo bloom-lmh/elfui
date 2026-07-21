@@ -129,29 +129,29 @@ describe("runtime compile / offline codegen parity", () => {
   it("保持 v-for 局部表达式的求值语义一致", async () => {
     const createFixture = () => {
       const items = useRef([
-        { id: 1, label: "A" },
-        { id: 2, label: "B" }
+        { id: 1, label: "A", value: 10 },
+        { id: 2, label: "B", value: 20 }
       ]);
       return { state: { items }, items };
     };
     const pair = mountBoth(
-      '<ul><li v-for="(item, index) in items" :data-id="item.id">{{ index }}:{{ item.label ?? "missing" }}</li></ul>',
+      '<ul><li v-for="(item, index) in items" :data-id="item.id">{{ index }}:{{ item.label ?? "missing" }}={{ item.value }}</li></ul>',
       createFixture
     );
 
     expectSameDom(pair.runtimeHost, pair.generatedHost);
-    expect(pair.runtimeHost.querySelector("ul")?.textContent).toBe("0:A1:B");
+    expect(pair.runtimeHost.querySelector("ul")?.textContent).toBe("0:A=101:B=20");
 
     for (const fixture of [pair.runtime, pair.generated]) {
       fixture.items.value = [
-        { id: 2, label: "B2" },
-        { id: 3, label: "C" }
+        { id: 2, label: "B2", value: 21 },
+        { id: 3, label: "C", value: 30 }
       ];
     }
     await Promise.resolve();
 
     expectSameDom(pair.runtimeHost, pair.generatedHost);
-    expect(pair.runtimeHost.querySelector("ul")?.textContent).toBe("0:B21:C");
+    expect(pair.runtimeHost.querySelector("ul")?.textContent).toBe("0:B2=211:C=30");
   });
 
   it("保持事件表达式的读取、赋值和批处理结果一致", async () => {

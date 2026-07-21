@@ -68,6 +68,14 @@ describe("B3.6 codegen", () => {
     expect(code).not.toContain("...ctx.state");
   });
 
+  it("静态 ref 生成 template ref 注册而不是普通 attribute", () => {
+    const { code, helpers } = codegen('<div ref="chart"></div>');
+
+    expect(helpers).toContain("setTemplateRef");
+    expect(code).toContain('setTemplateRef(ctx.host, "chart"');
+    expect(code).not.toContain('setAttribute("ref"');
+  });
+
   it("插值绑定可执行", async () => {
     const { code, helpers } = codegen(`<p>{{ msg }}</p>`);
     const render = evalCode(code, helpers);

@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { useRef } from "@elfui/reactivity";
 
-import { createRenderState, extendRenderState, unwrapStateAccess } from "../unwrap";
+import {
+  createRenderState,
+  extendRenderState,
+  readTemplateValue,
+  unwrapStateAccess,
+  writeTemplateValue
+} from "../unwrap";
 
 describe("render state facade", () => {
   it("实时读取 props 并保持 setup > props > system 优先级", () => {
@@ -42,5 +48,16 @@ describe("render state facade", () => {
     expect(child.label).toBe("local");
     expect(unwrapStateAccess(parent).label).toBe("parent");
     expect(unwrapStateAccess(parent).shared).toBe(2);
+  });
+  it("preserves value properties on auto-unwrapped template locals", () => {
+    const parent = createRenderState({}, { count: useRef(1) }, {});
+    const item = useRef({ value: "local-value" });
+    const child = extendRenderState(parent, { item });
+
+    expect(readTemplateValue(parent, "count", 1)).toBe(1);
+    expect(readTemplateValue(child, "item", item.value)).toBe("local-value");
+
+    writeTemplateValue(child, "item", item.value, "updated");
+    expect(item.value.value).toBe("updated");
   });
 });

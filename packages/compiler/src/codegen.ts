@@ -85,6 +85,7 @@ type Helper =
   | "resolveDirective"
   | "resolveComponentTag"
   | "setScopedSlot"
+  | "setTemplateRef"
   | "bindObject"
   | "onObject"
   | "unwrapStateAccess"
@@ -489,7 +490,7 @@ const genPlain = (node: ElementNode, ctx: CodegenContext): string => {
 
   for (const p of node.props) {
     if (p.type === AttrTypes.ATTRIBUTE) {
-      stmts.push(genAttribute(elVar, p));
+      stmts.push(genAttribute(elVar, p, ctx));
     } else {
       stmts.push(genDirective(elVar, p, ctx));
     }
@@ -524,7 +525,11 @@ const genTemplateFragment = (node: ElementNode, ctx: CodegenContext): string => 
   return `(() => { const __frag = document.createDocumentFragment(); const ${slotFn} = (${renderAnyParam(ctx, "__node")}) => { if (__node instanceof DocumentFragment) { for (const __child of Array.from(__node.childNodes)) ${slotFn}(__child); return; } if (__node instanceof Element) { __node.setAttribute("slot", ${slotLit}); __frag.appendChild(__node); return; } if (__node.nodeType === 3) { if (!__node.textContent || !__node.textContent.trim()) return; const __span = document.createElement("span"); __span.setAttribute("slot", ${slotLit}); __span.appendChild(__node); __frag.appendChild(__span); return; } __frag.appendChild(__node); }; ${parts}; return __frag; })()`;
 };
 
-const genAttribute = (elVar: string, p: AttributeNode): string => {
+const genAttribute = (elVar: string, p: AttributeNode, ctx: CodegenContext): string => {
+  if (p.name === "ref" && typeof p.value === "string") {
+    use(ctx, "setTemplateRef");
+    return `setTemplateRef(${currentCtx(ctx)}.host, ${escapeStr(p.value)}, ${elVar})`;
+  }
   if (p.value === true) return `${elVar}.setAttribute(${escapeStr(p.name)}, "")`;
   return `${elVar}.setAttribute(${escapeStr(p.name)}, ${escapeStr(p.value)})`;
 };
@@ -858,7 +863,7 @@ const genKeepAlive = (node: ElementNode, ctx: CodegenContext): string => {
   ];
   for (const p of child.props) {
     if (p.type === AttrTypes.ATTRIBUTE && p.name !== "is") {
-      childStmts.push(genAttribute(elVar, p));
+      childStmts.push(genAttribute(elVar, p, ctx));
     } else if (p.type === AttrTypes.DIRECTIVE && !(p.name === "bind" && p.arg === "is")) {
       childStmts.push(genDirective(elVar, p, ctx));
     }
@@ -1094,7 +1099,7 @@ const genTransitionGroup = (node: ElementNode, ctx: CodegenContext): string => {
         ["tag", "name", "move-class", "css"].includes(p.arg || ""));
     if (!isTransitionProp) {
       if (p.type === AttrTypes.ATTRIBUTE) {
-        stmts.push(genAttribute(elVar, p));
+        stmts.push(genAttribute(elVar, p, ctx));
       } else {
         stmts.push(genDirective(elVar, p, ctx));
       }

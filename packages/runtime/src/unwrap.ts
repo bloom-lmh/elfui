@@ -12,6 +12,10 @@
 import { isRef, isState } from "@elfui/reactivity";
 
 const cache: WeakMap<object, Record<string, unknown>> = new WeakMap();
+const extendedStateMetadata = new WeakMap<
+  object,
+  { parent: Record<string, unknown>; localKeys: ReadonlySet<PropertyKey> }
+>();
 
 const hasKey = (source: Record<string, unknown>, key: PropertyKey): boolean =>
   Reflect.has(source, key);
@@ -66,8 +70,8 @@ export const createRenderState = (
 export const extendRenderState = (
   parent: Record<string, unknown>,
   locals: Record<string, unknown>
-): Record<string, unknown> =>
-  new Proxy(
+): Record<string, unknown> => {
+  const state = new Proxy(
     {},
     {
       get(_target, key) {
@@ -98,6 +102,12 @@ export const extendRenderState = (
       }
     }
   );
+  extendedStateMetadata.set(state, {
+    parent,
+    localKeys: new Set(Reflect.ownKeys(locals))
+  });
+  return state;
+};
 
 /** 把一个 state 容器对象包成"自动解包"代理 */
 export const unwrapStateAccess = (raw: Record<string, unknown>): Record<string, unknown> => {
@@ -139,6 +149,26 @@ const resolveTemplateValueTarget = (
   fallback: unknown
 ): unknown => (Reflect.has(state, key) ? Reflect.get(state, key) : fallback);
 
+const isTemplateLocalKey = (state: Record<string, unknown>, key: PropertyKey): boolean => {
+  let current: Record<string, unknown> | undefined = state;
+  while (current) {
+    const metadata = extendedStateMetadata.get(current);
+    if (!metadata) return false;
+    if (metadata.localKeys.has(key)) return true;
+    current = metadata.parent;
+  }
+  return false;
+};
+
+const resolveTemplateValueAccessTarget = (
+  state: Record<string, unknown>,
+  key: string,
+  fallback: unknown
+): unknown => {
+  const target = resolveTemplateValueTarget(state, key, fallback);
+  return isTemplateLocalKey(state, key) && isRef(target) ? target.value : target;
+};
+
 /** 编译产物读取根标识符 `.value`：Ref 解包，普通对象保留真实 value 字段。 */
 export const readTemplateValue = (
   state: Record<string, unknown>,
@@ -146,7 +176,7 @@ export const readTemplateValue = (
   fallback: unknown,
   optional: boolean = false
 ): unknown => {
-  const target = resolveTemplateValueTarget(state, key, fallback);
+  const target = resolveTemplateValueAccessTarget(state, key, fallback);
   if (isRef(target)) return target.value;
   if (target === null || target === undefined) {
     if (optional) return undefined;
@@ -162,7 +192,7 @@ export const writeTemplateValue = (
   fallback: unknown,
   value: unknown
 ): unknown => {
-  const target = resolveTemplateValueTarget(state, key, fallback);
+  const target = resolveTemplateValueAccessTarget(state, key, fallback);
   if (isRef(target)) {
     target.value = value;
     return value;
