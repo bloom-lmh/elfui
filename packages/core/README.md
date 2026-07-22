@@ -10,11 +10,11 @@ pnpm add -D @elfui/vite-plugin
 ```
 
 ```ts
-import { defineHtml, html, useRef } from "@elfui/core";
+import { defineHtml, useRef } from "@elfui/core";
 
 const count = useRef(0);
 
-export const Counter = defineHtml(html`
+export const Counter = defineHtml(`
   <button @click=${() => count.set(count.peek() + 1)}>Count: ${count}</button>
 `);
 ```

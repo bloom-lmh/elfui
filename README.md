@@ -108,9 +108,9 @@ pnpm add @elfui/router@beta
 
 ```ts
 // Counter.ts
-import { css, defineHtml, defineStyle, html, useRef } from "@elfui/core";
+import { defineHtml, defineStyle, useRef } from "@elfui/core";
 
-defineStyle(css`
+defineStyle(`
   :host {
     display: inline-block;
   }
@@ -123,7 +123,7 @@ defineStyle(css`
 const count = useRef(0);
 const increment = (): void => count.set(count.peek() + 1);
 
-export default defineHtml(html` <button @click=${increment}>Clicked ${count} times</button> `);
+export default defineHtml(` <button @click=${increment}>Clicked ${count} times</button> `);
 ```
 
 Register and mount the root component with `createApp`. You do not need to place its Custom Element tag in `index.html` manually:
@@ -138,7 +138,7 @@ createApp(Counter).mount("#app");
 
 ## 🏗️ Component structure
 
-A Macro component combines ordinary top-level TypeScript with an exported `defineHtml(html\`...\`)` template:
+A Macro component combines ordinary top-level TypeScript with an exported `defineHtml(\`...\`)` template:
 
 | API               | Purpose                                                            |
 | ----------------- | ------------------------------------------------------------------ |
@@ -170,7 +170,7 @@ const value = defineModel<string>({ default: "" });
 defineSlots<{ default: () => unknown }>();
 defineOptions({ shadow: "open" });
 
-export const SaveField = defineHtml(html`
+export const SaveField = defineHtml(`
   <label>${props.label}</label>
   <input .value=${value} />
   <button @click=${() => emit("save", value.value)}>Save</button>
@@ -247,7 +247,7 @@ defineStyle(styles);
 Shadow DOM isolates component styles. Components can consume CSS custom properties and expose intentional external styling points through `part`:
 
 ```ts
-export const Button = defineHtml(html` <button part="control"><slot></slot></button> `);
+export const Button = defineHtml(` <button part="control"><slot></slot></button> `);
 ```
 
 ```css
@@ -267,7 +267,7 @@ elf-button::part(control) {
 ElfUI follows the standard Web Components slot model with default and named slots:
 
 ```ts
-export const Panel = defineHtml(html`
+export const Panel = defineHtml(`
   <header><slot name="title"></slot></header>
   <section><slot></slot></section>
 `);
@@ -299,7 +299,7 @@ const items = useReactive([
   { id: 2, name: "Web Components" }
 ]);
 
-export const FeatureList = defineHtml(html`
+export const FeatureList = defineHtml(`
   <button @click=${() => open.set(!open.peek())}>Toggle</button>
   <ul v-if=${open} :class=${{ active: open }}>
     <li v-for="item in items" :key="item.id">{{ item.name }}</li>
@@ -331,7 +331,7 @@ const submit = (event: SubmitEvent): void => {
   event.preventDefault();
 };
 
-export const Form = defineHtml(html`
+export const Form = defineHtml(`
   <form @submit=${submit}>
     <button type="submit">Submit</button>
   </form>
@@ -415,7 +415,7 @@ Recommended order:
 2. Declare the component contract with `defineProps`, `defineEmits`, and `defineModel`.
 3. Create reactive state, computed values, and event handlers.
 4. Register lifecycle hooks, host helpers, and local components.
-5. Export `defineHtml(html\`...\`)` last.
+5. Export `defineHtml(\`...\`)` last.
 
 ## 🌐 Browser support
 

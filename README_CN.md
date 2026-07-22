@@ -104,9 +104,9 @@ pnpm add @elfui/router@beta
 
 ```ts
 // Counter.ts
-import { css, defineHtml, defineStyle, html, useRef } from "@elfui/core";
+import { defineHtml, defineStyle, useRef } from "@elfui/core";
 
-defineStyle(css`
+defineStyle(`
   :host {
     display: inline-block;
   }
@@ -119,7 +119,7 @@ defineStyle(css`
 const count = useRef(0);
 const increment = (): void => count.set(count.peek() + 1);
 
-export default defineHtml(html` <button @click=${increment}>点击了 ${count} 次</button> `);
+export default defineHtml(` <button @click=${increment}>点击了 ${count} 次</button> `);
 ```
 
 使用 `createApp` 注册并挂载根组件，不需要在 `index.html` 手写自定义元素标签：
@@ -134,7 +134,7 @@ createApp(Counter).mount("#app");
 
 ## 🏗️ 组件结构
 
-一个 Macro 组件由普通 TypeScript 顶层逻辑和一个导出的 `defineHtml(html\`...\`)` 组成：
+一个 Macro 组件由普通 TypeScript 顶层逻辑和一个导出的 `defineHtml(\`...\`)` 组成：
 
 | API               | 用途                                |
 | ----------------- | ----------------------------------- |
@@ -166,7 +166,7 @@ const value = defineModel<string>({ default: "" });
 defineSlots<{ default: () => unknown }>();
 defineOptions({ shadow: "open" });
 
-export const SaveField = defineHtml(html`
+export const SaveField = defineHtml(`
   <label>${props.label}</label>
   <input .value=${value} />
   <button @click=${() => emit("save", value.value)}>保存</button>
@@ -243,7 +243,7 @@ defineStyle(styles);
 Shadow DOM 隔离组件内部样式。组件可以使用 CSS 自定义属性接收主题值，并通过 `part` 开放可控的外部样式入口：
 
 ```ts
-export const Button = defineHtml(html` <button part="control"><slot></slot></button> `);
+export const Button = defineHtml(` <button part="control"><slot></slot></button> `);
 ```
 
 ```css
@@ -263,7 +263,7 @@ elf-button::part(control) {
 ElfUI 基于标准 Web Components 插槽模型，支持默认插槽与具名插槽：
 
 ```ts
-export const Panel = defineHtml(html`
+export const Panel = defineHtml(`
   <header><slot name="title"></slot></header>
   <section><slot></slot></section>
 `);
@@ -295,7 +295,7 @@ const items = useReactive([
   { id: 2, name: "Web Components" }
 ]);
 
-export const FeatureList = defineHtml(html`
+export const FeatureList = defineHtml(`
   <button @click=${() => open.set(!open.peek())}>切换</button>
   <ul v-if=${open} :class=${{ active: open }}>
     <li v-for="item in items" :key="item.id">{{ item.name }}</li>
@@ -327,7 +327,7 @@ const submit = (event: SubmitEvent): void => {
   event.preventDefault();
 };
 
-export const Form = defineHtml(html`
+export const Form = defineHtml(`
   <form @submit=${submit}>
     <button type="submit">提交</button>
   </form>
@@ -411,7 +411,7 @@ Button/
 2. 使用 `defineProps`、`defineEmits`、`defineModel` 声明组件契约。
 3. 创建响应式状态、计算属性与事件函数。
 4. 注册生命周期、Host helpers 和局部组件。
-5. 最后导出 `defineHtml(html\`...\`)`。
+5. 最后导出 `defineHtml(\`...\`)`。
 
 ## 🌐 浏览器支持
 

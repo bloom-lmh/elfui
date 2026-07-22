@@ -63,6 +63,74 @@ afterEach(() => {
 });
 
 describe("M9.7 macro runtime coverage", () => {
+  it("compiles direct template literals without eager interpolation", () => {
+    const result = compileRuntimeMacro(
+      `
+import { defineHtml, useRef } from "@elfui/core";
+const count = useRef(0);
+const increment = (): void => count.set(count.peek() + 1);
+export const DirectTemplateProbe = defineHtml(\`
+  <button class="direct" @click=\${increment}>\${count}</button>
+\`);
+      `,
+      { filename: "DirectTemplateProbe.ts", templateTypeCheck: false }
+    );
+    expectNoDiagnostics(result);
+
+    const exports = evalMacroModule(result.code);
+    const ctor = exports.DirectTemplateProbe as runtime.ElfElementConstructor;
+    const el = document.createElement(runtime.ensureCustomElement(ctor));
+    document.body.appendChild(el);
+
+    const button = (el.shadowRoot ?? el).querySelector("button")!;
+    expect(button.textContent?.trim()).toBe("0");
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(button.textContent?.trim()).toBe("1");
+  });
+
+  it("combines imported-style expressions and direct style literals", () => {
+    const result = compileRuntimeMacro(
+      `
+import { defineHtml, defineStyle } from "@elfui/core";
+export const baseStyles = ":host { display: block; }";
+defineStyle(baseStyles, \`.direct { color: red; }\`);
+export const DirectStyleProbe = defineHtml(\`<p class="direct">styled</p>\`);
+      `,
+      { filename: "DirectStyleProbe.ts", templateTypeCheck: false }
+    );
+    expectNoDiagnostics(result);
+    expect(result.code).toContain("baseStyles");
+    expect(result.code).toContain(".direct { color: red; }");
+
+    const exports = evalMacroModule(result.code);
+    const ctor = exports.DirectStyleProbe as runtime.ElfElementConstructor;
+    const el = document.createElement(runtime.ensureCustomElement(ctor));
+    document.body.appendChild(el);
+
+    const styleText = [...(el.shadowRoot ?? el).querySelectorAll("style")]
+      .map((style) => style.textContent)
+      .join("\n");
+    expect(styleText).toContain(":host { display: block; }");
+    expect(styleText).toContain(".direct { color: red; }");
+  });
+
+  it("rejects runtime template variables without adding a runtime compiler", () => {
+    const result = compileRuntimeMacro(
+      `
+import { defineHtml } from "@elfui/core";
+const template: string = "<p>runtime</p>";
+export const RuntimeTemplateProbe = defineHtml(template);
+      `,
+      { filename: "RuntimeTemplateProbe.ts", templateTypeCheck: false }
+    );
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "ELF_MACRO_DEFINE_HTML_TEMPLATE", severity: "error" })
+      ])
+    );
+  });
+
   it("populates template refs before onMounted hooks run", () => {
     const result = compileRuntimeMacro(
       `

@@ -61,7 +61,7 @@ declare module "@elfui/core" {
   export type MacroInferProps<T extends Record<string, unknown>> = Readonly<{ [K in keyof T]: MacroPropValue<T[K]> }>;
   export const html: any;
   export const css: any;
-  export function defineHtml<Props extends object = Record<string, unknown>, Emits extends MacroEmitShape<Emits> = Record<string, unknown[]>, Slots extends object = object>(template: MacroHtmlTemplate): ElfElementConstructor<Props, MacroEmitTuples<Emits>, Slots>;
+  export function defineHtml<Props extends object = Record<string, unknown>, Emits extends MacroEmitShape<Emits> = Record<string, unknown[]>, Slots extends object = object>(template: MacroHtmlTemplate | string): ElfElementConstructor<Props, MacroEmitTuples<Emits>, Slots>;
   export const defineName: any;
   export const defineOptions: any;
   export function defineProps<const T extends Record<string, unknown>>(props: T): MacroInferProps<T>;
@@ -71,7 +71,7 @@ declare module "@elfui/core" {
   export function defineEmits<T extends MacroEmitShape<T>>(events?: readonly (keyof T & string)[]): any;
   export function defineEmits(events?: readonly string[]): any;
   export const defineModel: any;
-  export const defineStyle: any;
+  export function defineStyle(style: string, ...styles: string[]): void;
   export const defineDirective: any;
   export const defineSlots: any;
   export const useComponents: any;
@@ -661,7 +661,7 @@ const collectExportAssignment = (statement: ts.ExportAssignment, state: Transfor
     ts.isTaggedTemplateExpression(statement.expression) &&
     isMacroTag(statement.expression, "html")
   ) {
-    const template = compileHtmlTemplate(statement.expression, state);
+    const template = compileHtmlTemplate(statement.expression.template, state);
     addTemplateExport(
       {
         exportName: "default",
@@ -1374,17 +1374,14 @@ const getDefineHtmlTemplate = (
   if (!ts.isCallExpression(value) || callName(value) !== "defineHtml") return null;
   const first = value.arguments[0];
   const templateArg = first ? stripExpression(first) : null;
-  if (
-    templateArg &&
-    ts.isTaggedTemplateExpression(templateArg) &&
-    isMacroTag(templateArg, "html")
-  ) {
+  const template = templateArg ? getStaticHtmlTemplate(templateArg) : null;
+  if (template) {
     const propsType = value.typeArguments?.[0] ? textOf(value.typeArguments[0], state) : undefined;
     const emitsType = value.typeArguments?.[1]
       ? emitTuplesType(textOf(value.typeArguments[1], state))
       : undefined;
     const slotsType = value.typeArguments?.[2] ? textOf(value.typeArguments[2], state) : undefined;
-    const compiledTemplate = compileHtmlTemplate(templateArg, state);
+    const compiledTemplate = compileHtmlTemplate(template, state);
     return {
       template: compiledTemplate.template,
       sourceStart: compiledTemplate.sourceStart,
@@ -1396,18 +1393,28 @@ const getDefineHtmlTemplate = (
   }
   addDiagnostic(state, {
     code: "ELF_MACRO_DEFINE_HTML_TEMPLATE",
-    message: "defineHtml 需要接收 html`...` 模板。",
+    message: "defineHtml 需要接收内联模板字符串或 html`...` 模板。",
     node: value,
-    hint: "示例：const Button = defineHtml(html`<button></button>`);"
+    hint: "示例：const Button = defineHtml(`<button></button>`);"
   });
   return null;
 };
 
+const getStaticHtmlTemplate = (expression: ts.Expression): ts.TemplateLiteral | null => {
+  const value = stripExpression(expression);
+  if (ts.isNoSubstitutionTemplateLiteral(value) || ts.isTemplateExpression(value)) {
+    return value;
+  }
+  if (ts.isTaggedTemplateExpression(value) && isMacroTag(value, "html")) {
+    return value.template;
+  }
+  return null;
+};
+
 const compileHtmlTemplate = (
-  node: ts.TaggedTemplateExpression,
+  template: ts.TemplateLiteral,
   state: TransformState
 ): { template: string; sourceStart: number; sourceEnd: number } => {
-  const template = node.template;
   const sourceStart = template.getStart(state.sourceFile) + 1;
   const sourceEnd = template.getEnd() - 1;
   if (ts.isNoSubstitutionTemplateLiteral(template)) {

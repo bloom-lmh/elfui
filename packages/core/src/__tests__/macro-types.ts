@@ -1,4 +1,4 @@
-import { defineEmits, defineExpose, defineHtml, defineProps, html } from "../macro";
+import { defineEmits, defineExpose, defineHtml, defineProps, defineStyle, html } from "../macro";
 
 interface ButtonProps {
   disabled: boolean;
@@ -46,6 +46,10 @@ emit("click", "bad");
 defineEmits<ButtonEmits>(["missing"]);
 
 const _Button = defineHtml<ButtonProps, ButtonEmits, ButtonSlots>(html`<button></button>`);
+const _DirectButton = defineHtml<ButtonProps, ButtonEmits, ButtonSlots>(`<button></button>`);
+void _DirectButton;
+
+defineStyle(":host { display: block; }", ".button { cursor: pointer; }");
 
 type ExportedButtonProps = NonNullable<(typeof _Button)["__elfProps"]>;
 type ExportedButtonEmits = NonNullable<(typeof _Button)["__elfEmits"]>;

@@ -102,7 +102,7 @@ export const defineHtml = <
   Emits extends MacroEmitShape<Emits> = Record<string, unknown[]>,
   Slots extends MacroSlotMap = MacroSlotMap
 >(
-  _template: MacroHtmlTemplate
+  _template: MacroHtmlTemplate | string
 ): ElfElementConstructor<Props, MacroEmitTuples<Emits>, Slots> => macroOnly("defineHtml");
 
 export const defineName = (_name: string): void => {
@@ -152,7 +152,7 @@ export function defineModel(
   return macroOnly("defineModel");
 }
 
-export const defineStyle = (_style: string): void => {
+export const defineStyle = (_style: string, ..._styles: string[]): void => {
   macroOnly("defineStyle");
 };
 
