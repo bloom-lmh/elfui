@@ -26,6 +26,7 @@
     "safe-ssr-registration",
     "stable-host-properties",
     "stable-mounted-lifecycle",
+    "tidy-lifecycle-surface",
     "unified-core-types"
   ]
 }
