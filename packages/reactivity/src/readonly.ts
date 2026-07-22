@@ -46,7 +46,7 @@ type ReadonlyCollectionTarget =
 type ReadonlyCollectionKind = "map" | "set" | "weakMap" | "weakSet";
 
 /** 创建一个只读视图。
- *  - 读取依然 track（与 useState 一样，让 effect 订阅原对象的变化）
+ *  - 读取依然 track（与 useReactive 一样，让 effect 订阅原对象的变化）
  *  - 写入 / 删除时打 console.warn，不抛错
  *  - 嵌套对象 lazy 包装为 readonly */
 export function readonly<T extends object>(target: T): T {
@@ -432,7 +432,7 @@ export function useShallowReactive<T extends object>(target: T): T {
 
 import { REF_FLAG, type Ref } from "./state";
 
-/** 浅 Ref：与 useState 类似，但 .value 替换时不深度比较，写入对象内属性不触发 */
+/** 浅 Ref：只跟踪 .value 替换，写入对象内部属性不触发 */
 export function useShallowRef<T>(initial: T): Ref<T> {
   let raw = initial;
   const token: object = {};

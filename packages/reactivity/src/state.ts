@@ -7,9 +7,6 @@
 //   会触发响应式（与 Vue 3 ref 行为一致）。
 // - useReactive<T extends object>(initial) — 返回深度响应式代理对象。
 //   直接 obj.foo = 1 读写；obj 自身没有 .value/.set/.peek 名（释放给用户字段）。
-// - useState — 已废弃，作为 useRef + useReactive 的自动选择 fallback；
-//   会发警告（仅 DEV）。下一大版本删除。
-//
 // 与 Vue 3 的对应：
 // - useRef ↔ ref
 // - useReactive ↔ reactive

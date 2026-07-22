@@ -93,7 +93,7 @@ const loadMacroCompiler = async () => {
 };
 
 const macroSource = `
-import { defineEmits, defineHtml, defineProps, html, useRef } from "@elfui/core";
+import { defineEmits, defineHtml, defineProps, useRef } from "@elfui/core";
 
 const props = defineProps<{ disabled: boolean; label: string }>({
   disabled: { type: Boolean, default: false },
@@ -106,7 +106,7 @@ const press = (event: MouseEvent) => {
   emit("click", event);
 };
 
-export const SafeButton = defineHtml(html\`
+export const SafeButton = defineHtml(\`
   <button :disabled=\${props.disabled} @click=\${press}>
     \${props.label} \${count}
   </button>

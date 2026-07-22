@@ -13,6 +13,7 @@
   "changesets": [
     "bright-props-inference",
     "calm-array-effects",
+    "direct-macro-literals",
     "flexible-observer-targets",
     "gentle-events-contract",
     "kind-template-values",

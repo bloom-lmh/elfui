@@ -18,8 +18,8 @@
 // 等价 v-model:title。
 //
 // 设计要点：
-// 1. 返回一个 BasicState 风格对象（暴露 .value getter/setter、.set、.peek）
-//    与 useState 行为一致，模板里直接 {{ text }} 自动解包。
+// 1. 返回一个 Ref 风格对象（暴露 .value getter/setter、.set、.peek），
+//    模板里直接 {{ text }} 自动解包。
 // 2. .set / .value = 写入时：
 //    a) 立即更新本地内部 state（保证 effect/computed 立即看到新值）
 //    b) 通过 ctx.emit 发 "update:<name>"，父组件 v-model 接收后会回写 prop

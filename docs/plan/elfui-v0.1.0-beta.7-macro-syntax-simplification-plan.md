@@ -2,7 +2,7 @@
 
 ## 目标
 
-在不破坏现有宏组件的前提下，移除模板和行内样式声明中的重复包装：
+在 beta 阶段完成一次明确的破坏性收口，移除模板和行内样式声明中的重复包装与旧 tagged-template API：
 
 ```ts
 export default defineHtml(`
@@ -23,18 +23,18 @@ import themeStyles from "./theme.scss?inline";
 defineStyle(baseStyles, themeStyles);
 ```
 
-## 兼容边界
+## API 边界
 
-- 保留 `defineHtml(html\`...\`)`、`defineStyle(css\`...\`)`和`export default html\`...\``。
-- `defineHtml()` 只编译可静态分析的内联模板字面量或旧 `html` 标签模板；不引入运行时模板编译器。
+- 删除 `html`、`css` 的公开导出、源码实现、品牌类型和编译器兼容分支。
+- `defineHtml()` 只编译可静态分析的内联模板字面量；不引入运行时模板编译器。
 - `defineStyle()` 可接收内联模板字面量、字符串表达式和多个样式参数。
 - `${...}` 必须继续按模板表达式编译，不能退化为运行时字符串拼接。
-- npm 包名、组件构造器类型、Props/Emits/Slots 泛型顺序和生成代码协议保持不变。
+- npm 包名、组件构造器类型、Props/Emits/Slots 泛型顺序和生成代码协议保持不变；旧宏语法属于本次唯一破坏性 API 变化。
 
 ## 执行任务
 
 - [x] 扩展宏编译器与宏类型声明。
-- [x] 增加新旧语法、响应式插值、事件绑定、外部样式和非法动态模板测试。
+- [x] 增加直接语法、响应式插值、事件绑定、外部样式和非法动态模板测试。
 - [x] 更新 ElfUI Language Tools 的区域分析、语法高亮、补全与测试。
 - [x] 更新 create-elfui 模板和生成器快照。
 - [x] 更新框架 README、elfui-docs 核心指南、API 与变更日志。
@@ -42,14 +42,15 @@ defineStyle(baseStyles, themeStyles);
 
 ## 发布门槛
 
-- 新语法生成结果与旧语法等价。
-- 旧语法测试全部保持通过。
+- 所有官方 fixture、门禁和示例只使用直接语法。
+- 公开 API 快照确认 `html`、`css`、`MacroHtmlTemplate` 已删除。
 - 新语法内的 HTML/CSS 高亮、补全、诊断、格式化与源码位置可用。
 - 不增加运行时编译器，不改变运行时依赖，不造成可测量的核心产物体积增长。
 
 ## 验证记录（2026-07-22）
 
 - 框架 `verify:release` 通过：46 个测试文件、550 项测试，以及外部工具、宿主框架、多 Runtime 和发布产物消费矩阵。
+- beta.7 破坏性清理后再次通过完整门禁；公开 API 与真实 tarball 均不再包含 `html`、`css`、`MacroHtmlTemplate`。
 - ElfUI Language Tools：119 项测试、32 项语法高亮测试及生产构建通过。
 - create-elfui：58 项测试及生产构建通过。
 - elfui-docs：中英文站点生产构建通过。

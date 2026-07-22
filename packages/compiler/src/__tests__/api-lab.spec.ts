@@ -69,7 +69,6 @@ describe("M9.1 api-lab macro coverage", () => {
     const result = compileMacroComponent(
       `
 import {
-  css,
   createInjectionKey,
   defineDirective,
   defineEmits,
@@ -80,7 +79,6 @@ import {
   defineProps,
   defineSlots,
   defineStyle,
-  html,
   inject,
   nextTick,
   onActivated,
@@ -142,7 +140,7 @@ defineDirective("api-focus", {
     el.setAttribute("data-api-focus", "true");
   }
 });
-defineStyle(css\`
+defineStyle(\`
   :host { display: block; }
 \`);
 
@@ -195,7 +193,7 @@ defineExpose({
   root
 });
 
-export const ApiLabField = defineHtml<ApiLabProps, ApiLabEmits, ApiLabSlots>(html\`
+export const ApiLabField = defineHtml<ApiLabProps, ApiLabEmits, ApiLabSlots>(\`
   <section v-api-focus=\${model.value} :data-kind=\${frozen.kind}>
     <input ref="input" v-model=\${model} :disabled=\${props.disabled} />
     <button type="button" @click=\${activate}>\${props.label}: \${doubled}</button>
@@ -238,7 +236,6 @@ export const ApiLabField = defineHtml<ApiLabProps, ApiLabEmits, ApiLabSlots>(htm
 import {
   defineHtml,
   defineProps,
-  html,
   useComponents,
   useExtend,
   usePlugin,
@@ -281,7 +278,7 @@ const navigate = (): void => {
   disposeTheme();
 };
 
-export const ApiLabParent = defineHtml(html\`
+export const ApiLabParent = defineHtml(\`
   <main v-plugin-mark>
     <TypedChild label="Save" v-model=\${current} @select=\${onSelect}>
       <template #item="{ id }">{{ (id ?? "").toUpperCase() }}</template>

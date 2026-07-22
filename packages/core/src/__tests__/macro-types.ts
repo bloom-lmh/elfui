@@ -1,4 +1,4 @@
-import { defineEmits, defineExpose, defineHtml, defineProps, defineStyle, html } from "../macro";
+import { defineEmits, defineExpose, defineHtml, defineProps, defineStyle } from "../macro";
 
 interface ButtonProps {
   disabled: boolean;
@@ -45,9 +45,7 @@ emit("click", "bad");
 // @ts-expect-error runtime event names must belong to the typed emit map
 defineEmits<ButtonEmits>(["missing"]);
 
-const _Button = defineHtml<ButtonProps, ButtonEmits, ButtonSlots>(html`<button></button>`);
-const _DirectButton = defineHtml<ButtonProps, ButtonEmits, ButtonSlots>(`<button></button>`);
-void _DirectButton;
+const _Button = defineHtml<ButtonProps, ButtonEmits, ButtonSlots>(`<button></button>`);
 
 defineStyle(":host { display: block; }", ".button { cursor: pointer; }");
 

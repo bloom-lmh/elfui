@@ -38,11 +38,14 @@ const assertExact = (entry, expected, reason) => {
 assertMissing(
   "@elfui/core",
   [
+    "css",
     "compile",
     "CompileOptions",
     "createComponent",
     "ElementBuilder",
     "extend",
+    "html",
+    "MacroHtmlTemplate",
     "setTemplateCompiler",
     "variant"
   ],

@@ -134,12 +134,12 @@ export const RuntimeTemplateProbe = defineHtml(template);
   it("populates template refs before onMounted hooks run", () => {
     const result = compileRuntimeMacro(
       `
-import { defineHtml, html, onMounted, useTemplateRef } from "@elfui/core";
+import { defineHtml, onMounted, useTemplateRef } from "@elfui/core";
 const chart = useTemplateRef<HTMLDivElement>("chart");
 onMounted(() => {
   (globalThis as { __elfMacroTemplateRef?: Element | null }).__elfMacroTemplateRef = chart.value;
 });
-export const MacroTemplateRefProbe = defineHtml(html\`<div ref="chart"></div>\`);
+export const MacroTemplateRefProbe = defineHtml(\`<div ref="chart"></div>\`);
       `,
       { filename: "MacroTemplateRefProbe.ts", templateTypeCheck: false }
     );
@@ -160,8 +160,8 @@ export const MacroTemplateRefProbe = defineHtml(html\`<div ref="chart"></div>\`)
   it("runs generated components when the host bundler does not define __DEV__", () => {
     const result = compileRuntimeMacro(
       `
-import { defineHtml, html } from "@elfui/core";
-export const PortableDevProbe = defineHtml(html\`<p>portable</p>\`);
+import { defineHtml } from "@elfui/core";
+export const PortableDevProbe = defineHtml(\`<p>portable</p>\`);
       `,
       { filename: "PortableDevProbe.ts", templateTypeCheck: false }
     );
@@ -178,7 +178,7 @@ export const PortableDevProbe = defineHtml(html\`<p>portable</p>\`);
   it("infers runtime converters from local type-only props", () => {
     const result = compileRuntimeMacro(
       `
-import { defineHtml, defineProps, html } from "@elfui/core";
+import { defineHtml, defineProps } from "@elfui/core";
 
 interface BaseProps {
   label: string;
@@ -194,7 +194,7 @@ type Props = BaseProps & {
 
 const props = defineProps<Props>();
 
-export const TypeOnlyPropsProbe = defineHtml(html\`
+export const TypeOnlyPropsProbe = defineHtml(\`
   <p>\${props.label}|\${props.count}|\${props.active}|\${props.items[0]}|\${props.settings.dense}|\${props.mode}</p>
 \`);
       `,
@@ -234,10 +234,10 @@ export const TypeOnlyPropsProbe = defineHtml(html\`
   it("requires explicit runtime options for unsafe type-only props", () => {
     const mixed = compileRuntimeMacro(
       `
-import { defineHtml, defineProps, html } from "@elfui/core";
+import { defineHtml, defineProps } from "@elfui/core";
 interface Props { value: string | number }
 const props = defineProps<Props>();
-export const MixedProps = defineHtml(html\`<p>\${props.value}</p>\`);
+export const MixedProps = defineHtml(\`<p>\${props.value}</p>\`);
       `,
       { filename: "MixedProps.ts", templateTypeCheck: false }
     );
@@ -249,10 +249,10 @@ export const MixedProps = defineHtml(html\`<p>\${props.value}</p>\`);
 
     const imported = compileRuntimeMacro(
       `
-import { defineHtml, defineProps, html } from "@elfui/core";
+import { defineHtml, defineProps } from "@elfui/core";
 import type { ExternalProps } from "./external";
 const props = defineProps<ExternalProps>();
-export const ImportedProps = defineHtml(html\`<p>\${props.value}</p>\`);
+export const ImportedProps = defineHtml(\`<p>\${props.value}</p>\`);
       `,
       { filename: "ImportedProps.ts", templateTypeCheck: false }
     );
@@ -270,7 +270,6 @@ export const ImportedProps = defineHtml(html\`<p>\${props.value}</p>\`);
       `
 import {
   defineHtml,
-  html,
   onBeforeUpdate,
   onMount,
   onUnmount,
@@ -300,7 +299,7 @@ onBeforeUpdate(() => log.push("beforeUpdate"));
 onUpdated(() => log.push("updated"));
 onUnmount(() => log.push("unmount"));
 
-export const MacroLifecycleProbe = defineHtml(html\`
+export const MacroLifecycleProbe = defineHtml(\`
   <button v-macro-mark @click=\${inc}>\${count}</button>
 \`);
       `,
@@ -340,7 +339,7 @@ export const MacroLifecycleProbe = defineHtml(html\`
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const result = compileRuntimeMacro(
       `
-import { defineHtml, html, onErrorCaptured } from "@elfui/core";
+import { defineHtml, onErrorCaptured } from "@elfui/core";
 
 const log = (globalThis as { __elfMacroRuntimeLog: string[] }).__elfMacroRuntimeLog;
 const fail = (): string => {
@@ -354,7 +353,7 @@ onErrorCaptured((err) => {
 
 const broken = fail();
 
-export const MacroErrorProbe = defineHtml(html\`<p>\${broken}</p>\`);
+export const MacroErrorProbe = defineHtml(\`<p>\${broken}</p>\`);
       `,
       { filename: "MacroErrorProbe.ts" }
     );
@@ -373,7 +372,7 @@ export const MacroErrorProbe = defineHtml(html\`<p>\${broken}</p>\`);
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const result = compileRuntimeMacro(
       `
-import { defineHtml, html, usePlugin } from "@elfui/core";
+import { defineHtml, usePlugin } from "@elfui/core";
 
 const failGetter = (): string => {
   throw new Error("getter boom");
@@ -390,7 +389,7 @@ usePlugin((ctx) => {
   });
 });
 
-export const MacroBindingErrorProbe = defineHtml(html\`
+export const MacroBindingErrorProbe = defineHtml(\`
   <button v-explode @click=\${failEvent}>\${failGetter()}</button>
 \`);
       `,
@@ -429,7 +428,7 @@ export const MacroBindingErrorProbe = defineHtml(html\`
     (globalThis as { __elfMacroRuntimeLog?: string[] }).__elfMacroRuntimeLog = log;
     const result = compileRuntimeMacro(
       `
-import { defineHtml, html, useRef } from "@elfui/core";
+import { defineHtml, useRef } from "@elfui/core";
 
 const log = (globalThis as { __elfMacroRuntimeLog: string[] }).__elfMacroRuntimeLog;
 const count = useRef(0);
@@ -442,7 +441,7 @@ const label = (): number => {
   return count.value;
 };
 
-export const MacroBatchProbe = defineHtml(html\`<button @click=\${increment}>\${label()}</button>\`);
+export const MacroBatchProbe = defineHtml(\`<button @click=\${increment}>\${label()}</button>\`);
       `,
       { filename: "MacroBatchProbe.ts" }
     );

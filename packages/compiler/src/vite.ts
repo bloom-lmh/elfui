@@ -13,8 +13,6 @@ const elfFileRE = /\.elf\.tsx?(?:\?.*)?$/;
 const scriptFileRE = /\.[cm]?[jt]sx?(?:\?.*)?$/;
 const pragmaCommentRE = /^\/\/\/[ \t]*<!--[ \t]*@elf[ \t]+component[ \t]*-->[ \t]*$/;
 const macroImportNames = new Set([
-  "html",
-  "css",
   "defineHtml",
   "defineName",
   "defineOptions",
@@ -24,12 +22,7 @@ const macroImportNames = new Set([
   "defineStyle",
   "defineDirective",
   "defineSlots",
-  "useComponents",
-  // 已删除别名仍参与文件识别，确保 pragma `.ts` 能进入编译器并给出精准迁移诊断。
-  "useName",
-  "useProps",
-  "useEmit",
-  "useStyle"
+  "useComponents"
 ]);
 
 const defineHtmlImportName = "defineHtml";
@@ -141,8 +134,8 @@ export const elfuiMacroPlugin = (options: ElfUIMacroPluginOptions = {}): Minimal
                   : {}),
                 message: "Found ElfUI macro imports, but no exported defineHtml component.",
                 hint:
-                  "Export one with `export const X = defineHtml(html`...`)`, " +
-                  "`export default defineHtml(html`...`)`, `const X = defineHtml(...); export { X }`, " +
+                  "Export one with `export const X = defineHtml(`...`)`, " +
+                  "`export default defineHtml(`...`)`, `const X = defineHtml(...); export { X }`, " +
                   "or remove the macro imports."
               }),
               options
@@ -292,9 +285,7 @@ export const analyzeElfMacroUsage = (
       if (!macroImportNames.has(imported)) continue;
       hasMacroImport = true;
       firstMacroImportStart ??= specifier.getStart(sourceFile);
-      if (imported !== "html" && imported !== "css") {
-        hasMacroAuthoringImport = true;
-      }
+      hasMacroAuthoringImport = true;
       if (imported === defineHtmlImportName) {
         defineHtmlLocals.add(specifier.name.text);
       }

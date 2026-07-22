@@ -22,12 +22,12 @@ const [{ compileMacroComponent }, { createRenderState, extendRenderState, unwrap
   ]);
 
 const fixtureSource = (index) => `
-import { defineHtml, html, useRef } from "@elfui/core";
+import { defineHtml, useRef } from "@elfui/core";
 
 const count = useRef(${index});
 const increment = (): void => count.set(count.peek() + 1);
 
-export const GeneratedFixture${index} = defineHtml(html\`
+export const GeneratedFixture${index} = defineHtml(\`
   <article class="fixture">
     <h2>Fixture ${index}</h2>
     <button :aria-label=\${count} @click=\${increment}>\${count}</button>

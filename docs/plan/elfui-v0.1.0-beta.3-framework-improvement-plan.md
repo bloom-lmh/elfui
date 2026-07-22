@@ -496,6 +496,8 @@ Router plugin 通过 app provide 注入实例，composable 从当前组件 app c
 
 `defineHtml(html`...`)` 是否需要简化应通过用户测试决定。它虽然略显重复，但一个负责“组件定义”、一个负责“tagged template 边界”，语义仍然清楚，不建议在 beta 阶段仅为了少写几个字符引入第三种写法。
 
+> 2026-07-22 决策更新：真实应用验证确认直接模板字面量足以保留静态分析与类型能力。项目仍处于 beta 阶段，因此 beta.7 改为只保留 `defineHtml(\`...\`)`、`defineStyle(\`...\`)`，并删除 `html`、`css` 旧入口及编译器兼容分支。此处保留原审计结论作为决策历史。
+
 ### P1：减少 props 类型与 runtime option 重复
 
 常见组件同时维护 TypeScript Props 类型和 runtime converter/default，容易产生不一致。编译器已经拥有 TypeScript AST，可以逐步支持：

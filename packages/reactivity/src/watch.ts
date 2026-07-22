@@ -12,7 +12,7 @@
 //
 // 与 Vue watch 差异：
 // - State 自动解包：模板里直接读 .value；getter 形式与 Vue 一致
-// - 不强制 .value，可直接传 useState 返回值
+// - Ref 可直接作为 source 传入，不需要再包一层 getter
 
 import { ReactiveEffect } from "./effect";
 import { isFunction, isObject } from "@elfui/shared";
@@ -94,7 +94,7 @@ export const onWatcherCleanup = (cleanup: WatchCleanup): void => {
  * 监听一个数据源，状态变化时触发回调。
  *
  * @example
- *   const count = useState(0);
+ *   const count = useRef(0);
  *   const stop = watch(count, (v, ov) => console.log(v, ov));
  *   count.value = 1; // -> 1, 0
  *   stop();

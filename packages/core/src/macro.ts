@@ -12,8 +12,6 @@ import {
   type ComponentSlotMap
 } from "@elfui/runtime";
 
-export type MacroHtmlTemplate = string & { readonly __elfHtmlTemplate?: true };
-
 export interface MacroModelOptions<T = unknown> {
   default?: T | (() => T);
   required?: boolean;
@@ -91,18 +89,12 @@ export type MacroInferProps<T extends Record<string, unknown>> = Readonly<{
   [K in keyof T]: MacroPropValue<T[K]>;
 }>;
 
-export const html = (_strings: TemplateStringsArray, ..._values: unknown[]): MacroHtmlTemplate =>
-  macroOnly("html");
-
-export const css = (_strings: TemplateStringsArray, ..._values: unknown[]): string =>
-  macroOnly("css");
-
 export const defineHtml = <
   Props extends object = Record<string, unknown>,
   Emits extends MacroEmitShape<Emits> = Record<string, unknown[]>,
   Slots extends MacroSlotMap = MacroSlotMap
 >(
-  _template: MacroHtmlTemplate | string
+  _template: string
 ): ElfElementConstructor<Props, MacroEmitTuples<Emits>, Slots> => macroOnly("defineHtml");
 
 export const defineName = (_name: string): void => {

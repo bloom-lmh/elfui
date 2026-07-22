@@ -1,7 +1,7 @@
 ﻿// effect 系统 — 提供细粒度 effect 注册、依赖追踪、调度
 //
 // 设计目标：
-// - 与 ElfUI 的 useState/useEffect/useComputed/watch 共享同一套 active effect 栈
+// - 与 ElfUI 的 useRef/useReactive/useEffect/useComputed/watch 共享同一套 active effect 栈
 // - 比 Vue 3 的 effect 更轻：暂不引入 EffectScope dirty 链等优化
 // - 支持嵌套 effect、scheduler、stop、cleanup callback
 // - 自动加入当前 effectScope（A5）

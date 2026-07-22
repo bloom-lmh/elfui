@@ -155,8 +155,7 @@ import {
   defineModel,
   defineOptions,
   defineProps,
-  defineSlots,
-  html
+  defineSlots
 } from "@elfui/core";
 
 const props = defineProps<{ label: string }>();
@@ -229,16 +228,44 @@ onUnmounted(() => {
 | 缓存激活 | `onActivated`、`onDeactivated`   |
 | 错误捕获 | `onErrorCaptured`                |
 
+## 🔌 外部工具集成
+
+接管 DOM 的工具应在 template ref 就绪后初始化，Observer 直接监听 ref，并在卸载时释放。ECharts 这里只是集成示例，不会打包进 ElfUI：
+
+```ts
+import { defineHtml, onMounted, onUnmounted, useResizeObserver, useTemplateRef } from "@elfui/core";
+import * as echarts from "echarts";
+
+const chartRoot = useTemplateRef<HTMLDivElement>("chart");
+let chart: echarts.ECharts | undefined;
+
+onMounted(() => {
+  chart = echarts.init(chartRoot.value!);
+  chart.setOption({ series: [{ type: "bar", data: [3, 7, 5] }] });
+});
+
+useResizeObserver(chartRoot, () => chart?.resize());
+
+onUnmounted(() => {
+  chart?.dispose();
+  chart = undefined;
+});
+
+export const ChartPanel = defineHtml(`<div ref="chart" style="height: 240px"></div>`);
+```
+
 ## 🎨 样式
 
-可以直接使用 `css` 模板，也可以像脚手架生成的项目一样导入独立样式文件：
+可以直接传入模板字符串，也可以像脚手架生成的项目一样组合导入的独立样式字符串：
 
 ```ts
 import { defineStyle } from "@elfui/core";
 import styles from "./Button.scss?inline";
 
-defineStyle(styles);
+defineStyle(`:host { display: block; }`, styles);
 ```
+
+beta.7 已删除 `html`、`css` tagged-template helper。内联模板字符串应直接传给 `defineHtml()` 和 `defineStyle()`。
 
 Shadow DOM 隔离组件内部样式。组件可以使用 CSS 自定义属性接收主题值，并通过 `part` 开放可控的外部样式入口：
 

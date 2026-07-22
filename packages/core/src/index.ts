@@ -1,12 +1,12 @@
 // @elfui/core — ElfUI 主入口（用户使用入口）
 //
 // 这个包做三件事：
-// 1. 直接承载宏组件 API：defineHtml / defineProps / defineEmits / defineModel / html
+// 1. 直接承载宏组件 API：defineHtml / defineProps / defineEmits / defineModel
 // 2. 聚合常用 reactivity / runtime 用户面 API
 // 3. 不注入 runtime compiler；链式 `.template()` 请使用 @elfui/chain
 //
 // 用户用法：
-//   import { defineHtml, html, useRef, onMount } from "@elfui/core";
+//   import { defineHtml, useRef, onMounted } from "@elfui/core";
 
 export {
   createApp,
@@ -21,7 +21,6 @@ export {
 } from "./app";
 
 export {
-  css,
   defineDirective,
   defineEmits,
   defineHtml,
@@ -31,7 +30,6 @@ export {
   defineProps,
   defineSlots,
   defineStyle,
-  html,
   useComponents,
   useExtend,
   useVariant,
@@ -44,7 +42,6 @@ export {
   type MacroEmitValue,
   type MacroExtendableComponent,
   type MacroExtensionBuilder,
-  type MacroHtmlTemplate,
   type MacroInferProps,
   type MacroModelOptions,
   type MacroSlotMap,
@@ -56,8 +53,7 @@ export {
 //
 // 注：底层 effect 原语（effect / stop / isTracking）和调度 API（queueJob / flushSync /
 // queuePostFlushJob）属于内部能力，主入口不暴露；高级用户可从 `@elfui/reactivity` 直接 import。
-// shallowState 与 useShallowReactive 完全等价，只保留后者。
-// useState / useShallowState 已从 beta public API 移除；请迁移到 useRef / useReactive。
+// 响应式状态统一使用 useRef / useReactive 及其 shallow 版本。
 export {
   batch,
   useComputed,

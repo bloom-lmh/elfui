@@ -63,7 +63,7 @@ interface ComputedImpl<T> extends Ref<T> {
  * 创建一个派生 state。
  *
  * @example
- *   const count = useState(0);
+ *   const count = useRef(0);
  *   const doubled = useComputed(() => count.value * 2);
  *   doubled.value; // 0
  *   count.value = 5;

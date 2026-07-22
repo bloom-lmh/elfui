@@ -46,7 +46,7 @@ const originalPositionFor = (
 describe("macro component DevTools source metadata", () => {
   it("attaches normalized template source bounds to generated constructors", () => {
     const result = compileMacroComponent(
-      `import { defineHtml, html } from "@elfui/core";\n\nexport const Card = defineHtml(html\`<article>{{ title }}</article>\`);`,
+      `import { defineHtml } from "@elfui/core";\n\nexport const Card = defineHtml(\`<article>{{ title }}</article>\`);`,
       { filename: "C:\\workspace\\src\\Card.elf.ts", templateTypeCheck: false }
     );
 
@@ -60,7 +60,7 @@ describe("macro component DevTools source metadata", () => {
 
   it("uses a stable sourceId in component metadata and precise source maps", () => {
     const result = compileMacroComponent(
-      `import { defineHtml, html } from "@elfui/core";\n\nexport const Card = defineHtml(html\`<article>{{ title }}</article>\`);`,
+      `import { defineHtml } from "@elfui/core";\n\nexport const Card = defineHtml(\`<article>{{ title }}</article>\`);`,
       {
         filename: "C:\\workspace\\src\\Card.elf.ts?direct",
         sourceId: "src/Card.elf.ts",
@@ -110,7 +110,7 @@ describe("macro component DevTools source metadata", () => {
     const plugin = elfuiMacroPlugin();
     plugin.configResolved?.({ root: "C:\\workspace" });
     const result = plugin.transform?.(
-      `import { defineHtml, html } from "@elfui/core";\nexport const Card = defineHtml(html\`<p>card</p>\`);`,
+      `import { defineHtml } from "@elfui/core";\nexport const Card = defineHtml(\`<p>card</p>\`);`,
       "C:\\workspace\\src\\Card.elf.ts?direct"
     );
 

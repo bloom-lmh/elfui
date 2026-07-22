@@ -19,7 +19,6 @@ const DEFAULT_MACRO_IMPORT = "@elfui/core";
 const DEFAULT_RENDER_RUNTIME_IMPORT = "@elfui/core/internal";
 const TEMPLATE_MACRO_STUB = `
 declare module "@elfui/core" {
-  export type MacroHtmlTemplate = string & { readonly __elfHtmlTemplate?: true };
   export type MacroSlotMap = object;
   export type MacroEmitMap = Record<string, (...args: any[]) => void> | Record<string, readonly unknown[]>;
   export type MacroEmitValue = ((...args: any[]) => void) | readonly unknown[];
@@ -59,9 +58,7 @@ declare module "@elfui/core" {
           ? MacroPropConstructorValue<T>
           : MacroDefaultValue<T>;
   export type MacroInferProps<T extends Record<string, unknown>> = Readonly<{ [K in keyof T]: MacroPropValue<T[K]> }>;
-  export const html: any;
-  export const css: any;
-  export function defineHtml<Props extends object = Record<string, unknown>, Emits extends MacroEmitShape<Emits> = Record<string, unknown[]>, Slots extends object = object>(template: MacroHtmlTemplate | string): ElfElementConstructor<Props, MacroEmitTuples<Emits>, Slots>;
+  export function defineHtml<Props extends object = Record<string, unknown>, Emits extends MacroEmitShape<Emits> = Record<string, unknown[]>, Slots extends object = object>(template: string): ElfElementConstructor<Props, MacroEmitTuples<Emits>, Slots>;
   export const defineName: any;
   export const defineOptions: any;
   export function defineProps<const T extends Record<string, unknown>>(props: T): MacroInferProps<T>;
@@ -111,8 +108,6 @@ declare module "@elfui/core" {
 `;
 
 const macroNames = new Set([
-  "html",
-  "css",
   "defineHtml",
   "defineName",
   "defineOptions",
@@ -123,13 +118,6 @@ const macroNames = new Set([
   "defineDirective",
   "defineSlots",
   "useComponents"
-]);
-
-const removedMacroAliasReplacements = new Map([
-  ["useName", "defineName"],
-  ["useProps", "defineProps"],
-  ["useEmit", "defineEmits"],
-  ["useStyle", "defineStyle"]
 ]);
 
 const moduleSideEffectCalls = new Set(["globalStyle", "theme", "usePlugin", "useTheme"]);
@@ -425,8 +413,8 @@ export const compileMacroComponent = (
     addDiagnostic(state, {
       code: "ELF_MACRO_NO_TEMPLATE",
       message:
-        "未找到组件模板；请使用 export const X = defineHtml(html`...`) 或 const X = defineHtml(html`...`); export { X }。",
-      hint: "宏组件文件需要导出一个 html 模板或 defineHtml(...) 组件构造器。"
+        "未找到组件模板；请使用 export const X = defineHtml(`...`) 或 const X = defineHtml(`...`); export { X }。",
+      hint: "宏组件文件需要导出一个 defineHtml(...) 组件构造器。"
     });
   }
 
@@ -548,16 +536,6 @@ const collectImport = (statement: ts.ImportDeclaration, state: TransformState): 
 
   for (const specifier of named.elements) {
     const imported = (specifier.propertyName ?? specifier.name).text;
-    const replacement = removedMacroAliasReplacements.get(imported);
-    if (replacement) {
-      addDiagnostic(state, {
-        code: "ELF_MACRO_REMOVED_ALIAS",
-        message: `${imported} 已从 beta 宏 API 删除；请改用 ${replacement}。`,
-        node: specifier,
-        hint: `把 import 中的 ${imported} 改为 ${replacement}，并同步替换调用点。`
-      });
-      continue;
-    }
     if (!macroNames.has(imported)) {
       state.macroRuntimeImports.push(specifier.getText(state.sourceFile));
     }
@@ -657,24 +635,6 @@ const collectExportAssignment = (statement: ts.ExportAssignment, state: Transfor
     }
   }
 
-  if (
-    ts.isTaggedTemplateExpression(statement.expression) &&
-    isMacroTag(statement.expression, "html")
-  ) {
-    const template = compileHtmlTemplate(statement.expression.template, state);
-    addTemplateExport(
-      {
-        exportName: "default",
-        template: template.template,
-        sourceStart: template.sourceStart,
-        sourceEnd: template.sourceEnd,
-        lazyRegister: false,
-        exportMode: "default"
-      },
-      state
-    );
-    return;
-  }
   state.topLevel.push(textOf(statement, state));
 };
 
@@ -686,22 +646,6 @@ const collectVariableStatement = (statement: ts.VariableStatement, state: Transf
   for (const declaration of statement.declarationList.declarations) {
     const initializer = declaration.initializer;
     const localName = identifierText(declaration.name);
-
-    if (
-      exported &&
-      localName &&
-      initializer &&
-      ts.isTaggedTemplateExpression(initializer) &&
-      isMacroTag(initializer, "html")
-    ) {
-      addDiagnostic(state, {
-        code: "ELF_MACRO_DIRECT_HTML_EXPORT",
-        message: "命名模板导出请使用 defineHtml(html`...`)；不要直接 export const X = html`...`。",
-        node: declaration,
-        hint: "示例：export const Button = defineHtml(html`<button></button>`);"
-      });
-      continue;
-    }
 
     const initializerValue = initializer ? stripExpression(initializer) : undefined;
     const defineHtmlTemplate = initializerValue
@@ -786,7 +730,7 @@ const collectMacroCall = (
       addDiagnostic(state, {
         code: "ELF_MACRO_DEFINE_HTML_USAGE",
         message:
-          "defineHtml 需要赋值给本地变量或直接导出，例如 const Button = defineHtml(html`...`); export { Button }。",
+          "defineHtml 需要赋值给本地变量或直接导出，例如 const Button = defineHtml(`...`); export { Button }。",
         node: call
       });
       return true;
@@ -1393,7 +1337,7 @@ const getDefineHtmlTemplate = (
   }
   addDiagnostic(state, {
     code: "ELF_MACRO_DEFINE_HTML_TEMPLATE",
-    message: "defineHtml 需要接收内联模板字符串或 html`...` 模板。",
+    message: "defineHtml 需要接收内联模板字符串。",
     node: value,
     hint: "示例：const Button = defineHtml(`<button></button>`);"
   });
@@ -1404,9 +1348,6 @@ const getStaticHtmlTemplate = (expression: ts.Expression): ts.TemplateLiteral | 
   const value = stripExpression(expression);
   if (ts.isNoSubstitutionTemplateLiteral(value) || ts.isTemplateExpression(value)) {
     return value;
-  }
-  if (ts.isTaggedTemplateExpression(value) && isMacroTag(value, "html")) {
-    return value.template;
   }
   return null;
 };
@@ -1508,9 +1449,6 @@ const styleExpressionToCode = (expression: ts.Expression, state: TransformState)
   const value = stripExpression(expression);
   if (ts.isStringLiteralLike(value)) {
     return JSON.stringify(value.text);
-  }
-  if (ts.isTaggedTemplateExpression(value) && isMacroTag(value, "css")) {
-    return value.template.getText(state.sourceFile);
   }
   return textOf(value, state);
 };
@@ -2794,10 +2732,6 @@ const stripExpression = (expression: ts.Expression): ts.Expression => {
     current = current.expression;
   }
   return current;
-};
-
-const isMacroTag = (node: ts.TaggedTemplateExpression, name: string): boolean => {
-  return ts.isIdentifier(node.tag) && node.tag.text === name;
 };
 
 const callName = (call: ts.CallExpression): string | null => {
