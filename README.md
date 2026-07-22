@@ -475,10 +475,12 @@ Macro + Vite is the recommended path. Chain is an independent extension for runt
 ```bash
 pnpm install
 pnpm verify
+pnpm size
+pnpm verify:release
 pnpm verify:publish
 ```
 
-`pnpm verify` runs boundary checks, formatting, linting, type checking, builds, unit tests, and template type checks. `pnpm verify:publish` creates a temporary consumer from the actual npm tarballs and verifies ESM, SSR imports, types, exports, tree shaking, and esbuild, Rollup, and Vite builds.
+`pnpm verify` runs boundary checks, formatting, linting, type checking, builds, unit tests, and template type checks. `pnpm size` enforces both a strict tree-shaken application budget and aggregate package budgets; `pnpm size:detail` attributes the complete Core facade by API and workspace package. `pnpm verify:release` additionally runs size, relative Chromium performance, external-tool, host-framework, multi-runtime, and publish-artifact gates. `pnpm verify:publish` creates a temporary consumer from the actual npm tarballs and verifies ESM, SSR imports, types, exports, tree shaking, and esbuild, Rollup, and Vite builds.
 
 ## 🤝 Contributing
 

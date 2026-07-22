@@ -41,4 +41,23 @@ describe("sty — :style 数组形态", () => {
     fz.value = 18;
     expect(el.getAttribute("style")).toContain("font-size: 18px");
   });
+
+  it("重复混合更新时正确复用声明缓冲区", () => {
+    const value = useRef<Array<string | Record<string, string | number>>>([
+      "color: red; margin: 4px",
+      { padding: 2 }
+    ]);
+    const el = document.createElement("div");
+    sty(el, () => value.value);
+
+    value.value = ["color: blue", { padding: 8 }];
+    expect(el.style.color).toBe("blue");
+    expect(el.style.margin).toBe("");
+    expect(el.style.padding).toBe("8px");
+
+    value.value = ["margin: 6px", { color: "green" }];
+    expect(el.style.color).toBe("green");
+    expect(el.style.margin).toBe("6px");
+    expect(el.style.padding).toBe("");
+  });
 });

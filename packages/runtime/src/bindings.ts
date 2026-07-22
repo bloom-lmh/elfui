@@ -240,8 +240,10 @@ const stylePropertyValue = (key: string, value: string | number): StyleDeclarati
   };
 };
 
-const readStyleDeclaration = (style: CSSStyleDeclaration): Map<string, StyleDeclarationValue> => {
-  const declarations = new Map<string, StyleDeclarationValue>();
+const readStyleDeclaration = (
+  style: CSSStyleDeclaration,
+  declarations = new Map<string, StyleDeclarationValue>()
+): Map<string, StyleDeclarationValue> => {
   for (let i = 0; i < style.length; i++) {
     const key = style.item(i);
     declarations.set(key, {
@@ -255,11 +257,11 @@ const readStyleDeclaration = (style: CSSStyleDeclaration): Map<string, StyleDecl
 const normalizeStyle = (
   value: StyleValue,
   declarations: Map<string, StyleDeclarationValue>,
-  parse: (cssText: string) => Map<string, StyleDeclarationValue>
+  parse: (cssText: string, target: Map<string, StyleDeclarationValue>) => void
 ): void => {
   if (value == null) return;
   if (typeof value === "string") {
-    for (const [key, declaration] of parse(value)) declarations.set(key, declaration);
+    parse(value, declarations);
     return;
   }
   if (Array.isArray(value)) {
@@ -278,9 +280,9 @@ const serializeStyle = (el: Element, value: StyleValue): string => {
   if (typeof value === "string") return value;
   const parser = el.ownerDocument.createElement("div").style;
   const declarations = new Map<string, StyleDeclarationValue>();
-  normalizeStyle(value, declarations, (cssText) => {
+  normalizeStyle(value, declarations, (cssText, target) => {
     parser.cssText = cssText;
-    return readStyleDeclaration(parser);
+    readStyleDeclaration(parser, target);
   });
   return [...declarations]
     .map(
@@ -308,14 +310,15 @@ export const sty = (el: Element, getter: () => StyleValue, debug?: BindingDebugI
 
   const staticDeclarations = readStyleDeclaration(style);
   const parser = el.ownerDocument.createElement("div").style;
-  const parse = (cssText: string): Map<string, StyleDeclarationValue> => {
+  const parse = (cssText: string, target: Map<string, StyleDeclarationValue>): void => {
     parser.cssText = cssText;
-    return readStyleDeclaration(parser);
+    readStyleDeclaration(parser, target);
   };
   let previous = new Map<string, StyleDeclarationValue>();
+  let next = new Map<string, StyleDeclarationValue>();
   bindEffect(
     () => {
-      const next = new Map<string, StyleDeclarationValue>();
+      next.clear();
       normalizeStyle(getter(), next, parse);
 
       for (const key of previous.keys()) {
@@ -338,7 +341,9 @@ export const sty = (el: Element, getter: () => StyleValue, debug?: BindingDebugI
         style.setProperty(key, declaration.value, declaration.priority);
       }
 
+      const recyclable = previous;
       previous = next;
+      next = recyclable;
       if (style.length === 0) el.removeAttribute("style");
     },
     "style",

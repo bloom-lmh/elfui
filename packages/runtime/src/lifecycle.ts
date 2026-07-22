@@ -56,6 +56,19 @@ export interface ComponentInstance {
 
 let currentInstance: ComponentInstance | null = null;
 const pendingUpdatedInstances = new WeakSet<ComponentInstance>();
+const EMPTY_HOOKS = Object.freeze([]) as readonly never[];
+
+const emptyHooks = <T>(): T[] => EMPTY_HOOKS as unknown as T[];
+
+const appendHook = <T>(hooks: T[], hook: T): T[] => {
+  if (hooks === (EMPTY_HOOKS as unknown as T[])) return [hook];
+  hooks.push(hook);
+  return hooks;
+};
+
+const appendMountedCleanup = (instance: ComponentInstance, cleanup: LifecycleCleanup): void => {
+  instance.mountedCleanupHooks = appendHook(instance.mountedCleanupHooks, cleanup);
+};
 
 export const setCurrentInstance = (i: ComponentInstance | null): ComponentInstance | null => {
   const prev = currentInstance;
@@ -75,7 +88,8 @@ const inject =
       if (__DEV__) console.warn(`[lifecycle] 钩子必须在 setup 同步执行期间调用。`);
       return;
     }
-    (currentInstance[key] as unknown as Array<unknown>).push(fn);
+    const hooks = currentInstance[key] as unknown as Array<unknown>;
+    currentInstance[key] = appendHook(hooks, fn) as ComponentInstance[K];
   };
 
 const injectMounted = inject("mountedHooks");
@@ -108,17 +122,17 @@ export const createInstance = (
   form: undefined,
   isMounted: false,
   isUnmounted: false,
-  beforeMountHooks: [],
-  mountedHooks: [],
-  mountedCleanupHooks: [],
-  beforeUnmountHooks: [],
-  unmountedHooks: [],
-  beforeUpdateHooks: [],
-  updatedHooks: [],
-  attrChangedHooks: [],
-  errorCapturedHooks: [],
-  activatedHooks: [],
-  deactivatedHooks: [],
+  beforeMountHooks: emptyHooks(),
+  mountedHooks: emptyHooks(),
+  mountedCleanupHooks: emptyHooks(),
+  beforeUnmountHooks: emptyHooks(),
+  unmountedHooks: emptyHooks(),
+  beforeUpdateHooks: emptyHooks(),
+  updatedHooks: emptyHooks(),
+  attrChangedHooks: emptyHooks(),
+  errorCapturedHooks: emptyHooks(),
+  activatedHooks: emptyHooks(),
+  deactivatedHooks: emptyHooks(),
   devtools: {
     id: createDevtoolsComponentId(),
     appId: null,
@@ -148,7 +162,7 @@ export const callHooks = (
     try {
       const result = fn() as unknown;
       if (captureMountedCleanup && typeof result === "function") {
-        instance?.mountedCleanupHooks.push(result as LifecycleCleanup);
+        if (instance) appendMountedCleanup(instance, result as LifecycleCleanup);
         continue;
       }
       if (
@@ -172,7 +186,7 @@ export const callHooks = (
               reportError(error);
             }
           } else {
-            instance.mountedCleanupHooks.push(cleanup);
+            appendMountedCleanup(instance, cleanup);
           }
         }, reportError);
       }
@@ -184,14 +198,17 @@ export const callHooks = (
 
 /** 按后注册先清理执行 mounted 返回的资源清理函数。 */
 export const callMountedCleanups = (instance: ComponentInstance): void => {
-  const cleanups = instance.mountedCleanupHooks.splice(0).reverse();
+  const cleanups = instance.mountedCleanupHooks;
+  if (cleanups.length === 0) return;
+  instance.mountedCleanupHooks = emptyHooks();
   const reportError = (error: unknown): void => {
     if (instance.handleError) instance.handleError(error, "component mounted cleanup");
     else if (__DEV__) console.error("[lifecycle] mounted cleanup error:", error);
     else console.error(error);
   };
 
-  for (const cleanup of cleanups) {
+  for (let index = cleanups.length - 1; index >= 0; index--) {
+    const cleanup = cleanups[index]!;
     try {
       void Promise.resolve(cleanup()).catch(reportError);
     } catch (error) {

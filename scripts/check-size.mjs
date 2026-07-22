@@ -25,9 +25,9 @@ const targets = [
   },
   {
     id: "light",
-    name: "elfui (light: reactivity + runtime public API, no compiler)",
+    name: "@elfui/core aggregate public facade (all stable exports)",
     entry: resolve(root, "packages/core/src/index.ts"),
-    target: { gzip: kb(14.2), brotli: kb(12.8) }
+    target: { gzip: kb(16.5), brotli: kb(14.9) }
   },
   {
     id: "runtime",

@@ -532,3 +532,36 @@ if (hasArg("json")) {
   }
   console.log(`memory retained: ${((memory.retained ?? 0) / 1024).toFixed(2)} KB`);
 }
+
+if (hasArg("check")) {
+  const byLabel = new Map(results.map((result) => [result.label, result]));
+  const staticDirect = byLabel.get("static shadow direct 1k")?.median;
+  const staticHoisted = byLabel.get("static shadow hoisted 1k")?.median;
+  const listCreate = byLabel.get("list create 1k")?.median;
+  const listSameKey = byLabel.get("list same-key 1k")?.median;
+  const failures = [];
+
+  if (
+    staticDirect === undefined ||
+    staticHoisted === undefined ||
+    staticHoisted > staticDirect * 1.05
+  ) {
+    failures.push(
+      `static subtree regression: hoisted ${formatMs(staticHoisted ?? 0)} / direct ${formatMs(staticDirect ?? 0)}`
+    );
+  }
+  if (listCreate === undefined || listSameKey === undefined || listSameKey > listCreate * 3) {
+    failures.push(
+      `same-key list regression: update ${formatMs(listSameKey ?? 0)} / create ${formatMs(listCreate ?? 0)}`
+    );
+  }
+  if ((memory.retained ?? 0) > 1024 * 1024) {
+    failures.push(`memory smoke regression: ${(memory.retained / 1024).toFixed(2)} KB retained`);
+  }
+
+  if (failures.length > 0) {
+    for (const failure of failures) console.error(failure);
+    process.exit(1);
+  }
+  console.log("performance regression checks passed");
+}
