@@ -691,7 +691,7 @@ const genDirective = (elVar: string, d: DirectiveNode, ctx: CodegenContext): str
       use(ctx, "applyCustomDirective");
       use(ctx, "resolveDirective");
       const modMap = `{ ${d.modifiers.map((m) => `${escapeStr(m)}: true`).join(", ")} }`;
-      return `(() => { const __def = resolveDirective(${escapeStr(d.name)}, undefined, ${currentCtx(ctx)}.host); if (__def) { applyCustomDirective(${elVar}, __def, () => (${wrapGetter(d.exp, ctx)})(${currentCtx(ctx)}), ${d.arg ? escapeStr(d.arg) : "undefined"}, ${modMap}, ${currentCtx(ctx)}.host); } })()`;
+      return `(() => { const __def = resolveDirective(${escapeStr(d.name)}, ${currentCtx(ctx)}.directives, ${currentCtx(ctx)}.host); if (__def) { applyCustomDirective(${elVar}, __def, () => (${wrapGetter(d.exp, ctx)})(${currentCtx(ctx)}), ${d.arg ? escapeStr(d.arg) : "undefined"}, ${modMap}, ${currentCtx(ctx)}.host); } })()`;
     }
   }
 };

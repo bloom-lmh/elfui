@@ -149,10 +149,9 @@ export const defineStyle = (_style: string, ..._styles: string[]): void => {
 };
 
 export function defineDirective<V = unknown, El extends Element = Element>(
-  _name: string,
   _definition: DirectiveDefinition<V, El>
-): void {
-  macroOnly("defineDirective");
+): DirectiveDefinition<V, El> {
+  return macroOnly("defineDirective");
 }
 
 export type MacroSlotMap = object;

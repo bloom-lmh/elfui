@@ -332,6 +332,93 @@ export const MacroLifecycleProbe = defineHtml(\`
     expect(log).toEqual(["mount", "beforeUpdate", "updated", "unmount"]);
   });
 
+  it("runs inferred local directives inside v-for and cleans them up on unmount", async () => {
+    const log: string[] = [];
+    (globalThis as { __elfMacroRuntimeLog?: string[] }).__elfMacroRuntimeLog = log;
+    const result = compileRuntimeMacro(
+      `
+import { defineDirective, defineHtml } from "@elfui/core";
+
+const dual = defineDirective<string, HTMLLIElement>({
+  mounted(_element, binding) {
+    (globalThis as { __elfMacroRuntimeLog: string[] }).__elfMacroRuntimeLog.push("local:" + binding.value);
+  },
+  beforeUnmount(_element, binding) {
+    (globalThis as { __elfMacroRuntimeLog: string[] }).__elfMacroRuntimeLog.push("before:" + binding.value);
+  },
+  unmounted(_element, binding) {
+    (globalThis as { __elfMacroRuntimeLog: string[] }).__elfMacroRuntimeLog.push("unmounted:" + binding.value);
+  }
+});
+
+const items = ["a", "b"];
+
+export const LocalDirectiveProbe = defineHtml(\`
+  <ul><li v-for="item in items" :key="item" v-dual=\${item}>\${item}</li></ul>
+\`);
+      `,
+      { filename: "LocalDirectiveProbe.ts", templateTypeCheck: false }
+    );
+    expectNoDiagnostics(result);
+    expect(result.code).toContain("const __elfDirectives = { dual:");
+    expect(result.code).toMatch(/resolveDirective\("dual", _ctx\d+\.directives, _ctx\d+\.host\)/);
+
+    const exports = evalMacroModule(result.code);
+    const ctor = exports.LocalDirectiveProbe as runtime.ElfElementConstructor;
+    const el = document.createElement(runtime.ensureCustomElement(ctor));
+    const appDirective = {
+      mounted: () => log.push("app")
+    };
+    (el as unknown as Record<symbol, Map<string, unknown>>)[Symbol.for("elfui.app.directives")] =
+      new Map([["dual", appDirective]]);
+    document.body.appendChild(el);
+    await nextMicrotask();
+
+    expect(log).toEqual(["local:a", "local:b"]);
+    expect((el.shadowRoot ?? el).querySelectorAll("li")).toHaveLength(2);
+
+    el.remove();
+    await nextMicrotask();
+    await nextMicrotask();
+    expect(log).toEqual(
+      expect.arrayContaining([
+        "local:a",
+        "local:b",
+        "before:a",
+        "before:b",
+        "unmounted:a",
+        "unmounted:b"
+      ])
+    );
+    expect(log).not.toContain("app");
+  });
+
+  it("rejects legacy or unassigned defineDirective macro calls", () => {
+    const legacy = compileRuntimeMacro(
+      `
+import { defineDirective, defineHtml } from "@elfui/core";
+defineDirective("legacy", { mounted() {} });
+export const LegacyDirectiveProbe = defineHtml(\`<p v-legacy>legacy</p>\`);
+      `,
+      { filename: "LegacyDirectiveProbe.ts", templateTypeCheck: false }
+    );
+    const unassigned = compileRuntimeMacro(
+      `
+import { defineDirective, defineHtml } from "@elfui/core";
+defineDirective({ mounted() {} });
+export const UnassignedDirectiveProbe = defineHtml(\`<p>unassigned</p>\`);
+      `,
+      { filename: "UnassignedDirectiveProbe.ts", templateTypeCheck: false }
+    );
+
+    expect(legacy.diagnostics).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: "ELF_MACRO_DEFINE_DIRECTIVE" })])
+    );
+    expect(unassigned.diagnostics).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: "ELF_MACRO_DEFINE_DIRECTIVE" })])
+    );
+  });
+
   it("runs onErrorCaptured for macro render errors", () => {
     const log: string[] = [];
     (globalThis as { __elfMacroRuntimeLog?: string[] }).__elfMacroRuntimeLog = log;

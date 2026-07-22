@@ -346,7 +346,19 @@ export const FeatureList = defineHtml(`
 | `v-once`                        | Render a region once                       |
 | `v-memo`                        | Cache a template region by dependencies    |
 
-Use `defineDirective()` for component-local custom directives and `app.directive()` for application-wide directives.
+Use an assigned `defineDirective()` call for component-local custom directives. The variable name becomes the template name in kebab-case:
+
+```ts
+const autoFocus = defineDirective<unknown, HTMLInputElement>({
+  mounted(element) {
+    element.focus();
+  }
+});
+
+export const SearchField = defineHtml(`<input v-auto-focus />`);
+```
+
+Use `app.directive()` for application-wide directives. A component-local definition wins when both scopes register the same name.
 
 The beta.8 API surface keeps `onMounted`, `onUnmounted`, `useComputed`, `useEffect`, `watch`, `theme`, `defineDirective`, and `app.directive`. The former `onMount`, `onUnmount`, `computed`, `watchEffect`, `watchPostEffect`, `watchSyncEffect`, `useTheme`, and process-wide `directive()` exports have been removed.
 

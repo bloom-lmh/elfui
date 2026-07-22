@@ -537,6 +537,17 @@ describe("createApp", () => {
     expect(resolveDirective("mark", undefined, secondRoot)).toBe(second);
   });
 
+  it("prefers a component-local directive over an app directive with the same name", () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    const Root = defineTestElement("directive-priority");
+    const appDirective = { mounted: vi.fn() };
+    const localDirective = { mounted: vi.fn() };
+    const root = createApp(Root).directive("dual", appDirective).mount("#app");
+
+    expect(resolveDirective("dual", { dual: localDirective }, root)).toBe(localDirective);
+    expect(resolveDirective("dual", undefined, root)).toBe(appDirective);
+  });
+
   it("keeps config, provides, directives and plugin installation isolated across apps", () => {
     document.body.innerHTML = '<div id="a"></div><div id="b"></div>';
     const key = Symbol("shared-app-key");

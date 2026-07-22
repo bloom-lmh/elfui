@@ -1306,7 +1306,7 @@ const applyDirective = (el: Element, d: DirectiveNode, ctx: RenderCtx): void => 
             "ELF_RUNTIME_UNKNOWN_DIRECTIVE",
             `未知指令 v-${d.name}；请通过 defineDirective() 或 app.directive() 注册。`,
             directiveMeta(`v-${d.name}`, d),
-            `如果这是自定义指令，请先通过 defineDirective("${d.name}", ...) 或 app.directive("${d.name}", ...) 注册。`
+            `如果这是局部指令，请使用 const localDirective = defineDirective(...)；应用级指令使用 app.directive("${d.name}", ...)。`
           );
         }
       }

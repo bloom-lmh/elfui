@@ -102,6 +102,29 @@ describe("B3.6 codegen", () => {
     expect(code).toContain("source: { line: 3, column: 16 }");
   });
 
+  it("根节点和 v-for 子上下文都会传递局部指令表", async () => {
+    const { code, helpers } = codegen(
+      `<ul><li v-for="item in items" :key="item" v-dual="item">{{ item }}</li></ul>`
+    );
+    const render = evalCode(code, helpers);
+    const mounted: string[] = [];
+    const ctx: runtime.RenderContext = {
+      ...makeCtx({ items: ["a", "b"] }),
+      directives: {
+        dual: {
+          mounted(_element: Element, binding: runtime.DirectiveBinding<string>) {
+            mounted.push(String(binding.value));
+          }
+        }
+      }
+    };
+
+    expect(code).toMatch(/resolveDirective\("dual", _ctx\d+\.directives, _ctx\d+\.host\)/);
+    document.body.appendChild(render(ctx));
+    await Promise.resolve();
+    expect(mounted).toEqual(["a", "b"]);
+  });
+
   it("为 v-model 与控制流生成具名 binding 元数据", () => {
     const { code } = codegen(
       `<input v-model="value" />\n<p v-show="visible">x</p>\n<div v-if="visible">y</div>\n<li v-for="item in items">{{ item }}</li>`

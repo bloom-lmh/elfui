@@ -13,7 +13,14 @@
 // - render(parent) / render(parentNode)：渲染函数返回 DocumentFragment 或 Node
 //   也可以接收 (anchor) 自行决定挂载位置
 
-import { effectScope, useEffect, useRef, type Ref } from "@elfui/reactivity";
+import {
+  effectScope,
+  getCurrentScope,
+  onScopeDispose,
+  useEffect,
+  useRef,
+  type Ref
+} from "@elfui/reactivity";
 
 import type { BindingDebugInfo } from "./bindings";
 import { DEV as __DEV__ } from "./dev";
@@ -75,6 +82,7 @@ export const branch = (
     }
     currentNodes = [];
   };
+  if (getCurrentScope()) onScopeDispose(cleanup);
 
   const updateBranch = (): void => {
     const key = keyGetter();
@@ -221,6 +229,12 @@ export const list = <T>(
   debug?: BindingDebugInfo
 ): void => {
   let prev: ListItem<T>[] = [];
+
+  const cleanup = (): void => {
+    for (const item of prev) removeListItem(item);
+    prev = [];
+  };
+  if (getCurrentScope()) onScopeDispose(cleanup);
 
   const updateList = (): void => {
     const raw = itemsGetter();

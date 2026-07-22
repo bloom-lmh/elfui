@@ -752,7 +752,7 @@ const collectMacroCall = (
       collectUseStyle(call, state);
       return true;
     case "defineDirective":
-      collectUseDirective(call, state);
+      collectUseDirective(call, localName, state);
       return true;
     case "defineSlots":
       collectDefineSlots(call, state);
@@ -1175,22 +1175,42 @@ const collectUseStyle = (call: ts.CallExpression, state: TransformState): void =
   }
 };
 
-const collectUseDirective = (call: ts.CallExpression, state: TransformState): void => {
-  const first = call.arguments[0];
-  const second = call.arguments[1];
-  if (!first || !second || !ts.isStringLiteralLike(stripExpression(first))) {
+const collectUseDirective = (
+  call: ts.CallExpression,
+  localName: string | null,
+  state: TransformState
+): void => {
+  const definition = call.arguments[0];
+  if (!localName) {
     addDiagnostic(state, {
       code: "ELF_MACRO_DEFINE_DIRECTIVE",
-      message: 'defineDirective 目前支持 defineDirective("name", definition)。',
+      message: "defineDirective 必须赋值给本地变量，变量名会作为模板指令名。",
+      node: call,
+      hint: "例如：const loading = defineDirective(definition)。"
+    });
+    return;
+  }
+  if (!definition || call.arguments.length !== 1) {
+    addDiagnostic(state, {
+      code: "ELF_MACRO_DEFINE_DIRECTIVE",
+      message: "defineDirective 只接受一个指令定义参数。",
+      node: call,
+      hint: `例如：const ${localName} = defineDirective(definition)。`
+    });
+    return;
+  }
+
+  const name = kebab(localName).replace(/^-+/, "");
+  if (!name) {
+    addDiagnostic(state, {
+      code: "ELF_MACRO_DEFINE_DIRECTIVE",
+      message: "defineDirective 无法从变量名推导模板指令名。",
       node: call
     });
     return;
   }
 
-  state.directives.set(
-    (stripExpression(first) as ts.StringLiteralLike).text,
-    textOf(second, state)
-  );
+  state.directives.set(name, textOf(definition, state));
 };
 
 const collectTypedEmitNames = (call: ts.CallExpression, state: TransformState): void => {

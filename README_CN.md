@@ -342,7 +342,19 @@ export const FeatureList = defineHtml(`
 | `v-once`                        | 只渲染一次             |
 | `v-memo`                        | 按依赖缓存模板区域     |
 
-局部自定义指令使用 `defineDirective()`，应用级指令使用 `app.directive()` 注册。
+组件局部指令必须把 `defineDirective()` 赋值给变量；变量名会转换为 kebab-case 模板名：
+
+```ts
+const autoFocus = defineDirective<unknown, HTMLInputElement>({
+  mounted(element) {
+    element.focus();
+  }
+});
+
+export const SearchField = defineHtml(`<input v-auto-focus />`);
+```
+
+应用级指令使用 `app.directive()` 注册。同名时组件局部指令优先。
 
 beta.8 的公开 API 统一保留 `onMounted`、`onUnmounted`、`useComputed`、`useEffect`、`watch`、`theme`、`defineDirective` 和 `app.directive`；旧的 `onMount`、`onUnmount`、`computed`、`watchEffect`、`watchPostEffect`、`watchSyncEffect`、`useTheme` 与进程级 `directive()` 导出已删除。
 

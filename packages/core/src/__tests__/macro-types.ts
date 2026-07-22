@@ -1,4 +1,13 @@
-import { defineEmits, defineExpose, defineHtml, defineProps, defineStyle } from "../macro";
+import type { DirectiveDefinition } from "@elfui/runtime";
+
+import {
+  defineDirective,
+  defineEmits,
+  defineExpose,
+  defineHtml,
+  defineProps,
+  defineStyle
+} from "../macro";
 
 interface ButtonProps {
   disabled: boolean;
@@ -48,6 +57,16 @@ defineEmits<ButtonEmits>(["missing"]);
 const _Button = defineHtml<ButtonProps, ButtonEmits, ButtonSlots>(`<button></button>`);
 
 defineStyle(":host { display: block; }", ".button { cursor: pointer; }");
+
+const focus = defineDirective<string, HTMLButtonElement>({
+  mounted(element, binding) {
+    element.dataset.value = binding.value;
+  }
+});
+const typedDirective: DirectiveDefinition<string, HTMLButtonElement> = focus;
+void typedDirective;
+// @ts-expect-error legacy name + definition signature was removed
+defineDirective("focus", { mounted() {} });
 
 type ExportedButtonProps = NonNullable<(typeof _Button)["__elfProps"]>;
 type ExportedButtonEmits = NonNullable<(typeof _Button)["__elfEmits"]>;

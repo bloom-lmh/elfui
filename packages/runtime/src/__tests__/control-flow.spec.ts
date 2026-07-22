@@ -2,7 +2,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { useRef } from "@elfui/reactivity";
+import { effectScope, useRef } from "@elfui/reactivity";
 
 import { branch, list, mark, show } from "../control-flow";
 import { text } from "../bindings";
@@ -118,6 +118,26 @@ describe("branch — v-if 等", () => {
     ]);
 
     visible.value = false;
+
+    expect(unmounted).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
+
+  it("所有者作用域停止时释放当前分支指令", () => {
+    const { anchor, cleanup } = setupContainer();
+    const unmounted = vi.fn();
+    const owner = effectScope();
+    owner.run(() => {
+      branch(anchor, () => 0, [
+        () => {
+          const el = document.createElement("div");
+          applyCustomDirective(el, { unmounted }, () => "value");
+          return el;
+        }
+      ]);
+    });
+
+    owner.stop();
 
     expect(unmounted).toHaveBeenCalledTimes(1);
     cleanup();
@@ -340,6 +360,29 @@ describe("list — v-for", () => {
     items.value = [];
 
     expect(unmounted).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
+
+  it("所有者作用域停止时释放全部列表项指令", () => {
+    const { anchor, cleanup } = setupContainer();
+    const unmounted = vi.fn();
+    const owner = effectScope();
+    owner.run(() => {
+      list(
+        anchor,
+        () => [1, 2],
+        (item) => item,
+        () => {
+          const el = document.createElement("div");
+          applyCustomDirective(el, { unmounted }, () => "value");
+          return el;
+        }
+      );
+    });
+
+    owner.stop();
+
+    expect(unmounted).toHaveBeenCalledTimes(2);
     cleanup();
   });
 

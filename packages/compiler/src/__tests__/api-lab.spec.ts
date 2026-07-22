@@ -134,7 +134,7 @@ const props = defineProps<ApiLabProps>({
 const emit = defineEmits<ApiLabEmits>();
 const model = defineModel<string>({ default: "" });
 defineSlots<ApiLabSlots>();
-defineDirective("api-focus", {
+const apiFocus = defineDirective({
   mounted(el: HTMLElement) {
     el.setAttribute("data-api-focus", "true");
   }
