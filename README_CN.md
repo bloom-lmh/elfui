@@ -196,14 +196,14 @@ batch(() => {
 
 `batch()` 会把同步写入延迟并去重到最外层 batch 结束；编译生成的模板事件会自动建立同样的批处理边界。
 
-| API                         | 用途                                          |
-| --------------------------- | --------------------------------------------- |
-| `useRef()`                  | 创建带 `.value`、`.set()` 与 `.peek()` 的 Ref |
-| `useReactive()`             | 创建深度响应式对象、数组、Map 或 Set          |
-| `useComputed()`             | 创建惰性派生状态                              |
-| `useEffect()`               | 自动收集依赖并执行副作用与清理函数            |
-| `watch()` / `watchEffect()` | 精确监听或自动监听响应式依赖                  |
-| `batch()`                   | 把多次同步写入合并为一次 effect 通知          |
+| API             | 用途                                          |
+| --------------- | --------------------------------------------- |
+| `useRef()`      | 创建带 `.value`、`.set()` 与 `.peek()` 的 Ref |
+| `useReactive()` | 创建深度响应式对象、数组、Map 或 Set          |
+| `useComputed()` | 创建惰性派生状态                              |
+| `useEffect()`   | 自动收集依赖并执行副作用与清理函数            |
+| `watch()`       | 精确监听数据源并取得新旧值                    |
+| `batch()`       | 把多次同步写入合并为一次 effect 通知          |
 
 ## 🔄 组件生命周期
 
@@ -233,7 +233,7 @@ onUnmounted(() => {
 接管 DOM 的工具应在 template ref 就绪后初始化，Observer 直接监听 ref，并在卸载时释放。ECharts 这里只是集成示例，不会打包进 ElfUI：
 
 ```ts
-import { defineHtml, onMounted, onUnmounted, useResizeObserver, useTemplateRef } from "@elfui/core";
+import { defineHtml, onMounted, useResizeObserver, useTemplateRef } from "@elfui/core";
 import * as echarts from "echarts";
 
 const chartRoot = useTemplateRef<HTMLDivElement>("chart");
@@ -242,14 +242,13 @@ let chart: echarts.ECharts | undefined;
 onMounted(() => {
   chart = echarts.init(chartRoot.value!);
   chart.setOption({ series: [{ type: "bar", data: [3, 7, 5] }] });
+  return () => {
+    chart?.dispose();
+    chart = undefined;
+  };
 });
 
 useResizeObserver(chartRoot, () => chart?.resize());
-
-onUnmounted(() => {
-  chart?.dispose();
-  chart = undefined;
-});
 
 export const ChartPanel = defineHtml(`<div ref="chart" style="height: 240px"></div>`);
 ```
@@ -344,6 +343,8 @@ export const FeatureList = defineHtml(`
 | `v-memo`                        | 按依赖缓存模板区域     |
 
 局部自定义指令使用 `defineDirective()`，应用级指令使用 `app.directive()` 注册。
+
+beta.8 的公开 API 统一保留 `onMounted`、`onUnmounted`、`useComputed`、`useEffect`、`watch`、`theme`、`defineDirective` 和 `app.directive`；旧的 `onMount`、`onUnmount`、`computed`、`watchEffect`、`watchPostEffect`、`watchSyncEffect`、`useTheme` 与进程级 `directive()` 导出已删除。
 
 ## 🔔 事件
 

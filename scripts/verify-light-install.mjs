@@ -101,7 +101,7 @@ try {
   writeFileSync(
     join(appDir, "index.ts"),
     [
-      'import { createApp, defineComponent, directive, useModel, useRef, type ElfElementConstructor } from "@elfui/core";',
+      'import { createApp, defineComponent, useModel, useRef, type ElfElementConstructor } from "@elfui/core";',
       'import { text } from "@elfui/core/internal";',
       "",
       "const Counter = defineComponent<{ initial: number }, { change: [value: number] }>({",
@@ -117,7 +117,6 @@ try {
       "});",
       "",
       "const typed: ElfElementConstructor = Counter;",
-      "void directive;",
       "void useModel;",
       "void text;",
       "export { Counter, typed, createApp };",

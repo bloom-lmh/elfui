@@ -55,10 +55,10 @@ const apis = [
     "createFormControlContext",
     `import { createFormControlContext } from "@elfui/runtime"; export { createFormControlContext };`
   ],
-  // directive
+  // directive internals used by app.directive() and compiled templates
   [
-    "directive",
-    `import { directive } from "@elfui/runtime"; import { applyCustomDirective, resolveDirective } from "@elfui/runtime/internal"; export { directive, applyCustomDirective, resolveDirective };`
+    "directive internals",
+    `import { registerGlobalDirective, applyCustomDirective, resolveDirective } from "@elfui/runtime/internal"; export { registerGlobalDirective, applyCustomDirective, resolveDirective };`
   ],
   // unwrap helper（被 compiler 调用）
   [

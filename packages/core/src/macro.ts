@@ -292,16 +292,12 @@ export {
   toValue,
   unref,
   useComputed,
-  useComputed as computed,
   useEffect,
   useReactive,
   useRef,
   useShallowReactive,
   useShallowRef,
-  watch,
-  watchEffect,
-  watchPostEffect,
-  watchSyncEffect
+  watch
 } from "@elfui/reactivity";
 
 export {
@@ -315,8 +311,8 @@ export {
   onBeforeUpdate,
   onDeactivated,
   onErrorCaptured,
-  onMount,
-  onUnmount,
+  onMounted,
+  onUnmounted,
   onUpdated,
   provide,
   globalStyle,

@@ -87,8 +87,8 @@ import {
   onBeforeUpdate,
   onDeactivated,
   onErrorCaptured,
-  onMount,
-  onUnmount,
+  onMounted,
+  onUnmounted,
   onUpdated,
   provide,
   readonly,
@@ -101,8 +101,7 @@ import {
   useRenderRoot,
   useScopedSlot,
   useTemplateRef,
-  watch,
-  watchEffect
+  watch
 } from "@elfui/core";
 
 type ApiLabProps = {
@@ -166,23 +165,26 @@ const activate = (): void => {
 };
 
 watch(() => props.label, syncForm);
-watchEffect(() => {
-  if (state.ready) syncForm();
-});
+useEffect(
+  () => {
+    if (state.ready) syncForm();
+  },
+  { flush: "pre" }
+);
 useEffect(() => {
   host.dataset.kind = frozen.kind;
 });
 void nextTick();
 
 onBeforeMount(syncForm);
-onMount(() => {
+onMounted(() => {
   input.value?.focus();
   renderItem({ item: injected.label, index: count.value });
 });
 onBeforeUpdate(syncForm);
 onUpdated(syncForm);
 onBeforeUnmount(syncForm);
-onUnmount(syncForm);
+onUnmounted(syncForm);
 onActivated(syncForm);
 onDeactivated(syncForm);
 onErrorCaptured(() => false);
@@ -240,7 +242,7 @@ import {
   useExtend,
   usePlugin,
   useRef,
-  useTheme,
+  theme,
   useVariant
 } from "@elfui/core";
 import { TypedChild } from "./fixtures/typed-child";
@@ -256,7 +258,7 @@ usePlugin({
   }
 });
 
-const disposeTheme = useTheme("elf-api-lab-parent", \`
+const disposeTheme = theme("elf-api-lab-parent", \`
   color: var(--api-lab-color);
 \`, { id: "api-lab-parent" });
 const ExtendedChild = useExtend(TypedChild).name("elf-api-lab-extended").build();

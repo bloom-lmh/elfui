@@ -11,7 +11,7 @@
 //       return { ... }
 //     })
 //
-// 注意：这些 helpers 只能在 setup 同步期间调用（同 onMount/inject 等约束）。
+// 注意：这些 helpers 只能在 setup 同步期间调用（同 onMounted/inject 等约束）。
 
 import { useEffect } from "@elfui/reactivity";
 
@@ -19,7 +19,7 @@ import { getHostAttrs } from "./attrs";
 import { resolveAppConfig, warn } from "./config";
 import { DEV as __DEV__ } from "./dev";
 import { getCurrentInstance } from "./lifecycle";
-import { onBeforeUnmount, onMount } from "./lifecycle";
+import { onBeforeUnmount, onMounted } from "./lifecycle";
 
 const failNoInstance = (api: string): never => {
   throw new Error(__DEV__ ? `[${api}] 必须在 setup 同步执行期间调用。` : `[${api}] no instance`);
@@ -83,7 +83,7 @@ export const useEventListener = <E extends Event>(
   options?: boolean | AddEventListenerOptions
 ): void => {
   if (!target) return;
-  onMount(() => {
+  onMounted(() => {
     target.addEventListener(event, handler as EventListener, options);
   });
   onBeforeUnmount(() => {

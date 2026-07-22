@@ -106,9 +106,12 @@ interface CodegenContext {
   scopeNames: Set<string>;
   includePropsInScope: boolean;
   ctxName: string;
+  hoistPrefix: string;
 }
 
 const fresh = (ctx: CodegenContext, prefix: string): string => `_${prefix}${ctx.uid++}`;
+const freshHoist = (ctx: CodegenContext, prefix: string): string =>
+  `_${ctx.hoistPrefix}_${prefix}${ctx.uid++}`;
 
 const use = (ctx: CodegenContext, h: Helper): Helper => {
   ctx.used.add(h);
@@ -353,6 +356,7 @@ const templateAttrToProp = (name: string): string =>
 /** 把模板字符串编译成 ESM 源码字符串 */
 export const codegen = (template: string, options: CodegenOptions = {}): CodegenResult => {
   const ast = parse(template, options);
+  const fnName = options.functionName ?? "render";
   const ctx: CodegenContext = {
     used: new Set(),
     uid: 0,
@@ -360,9 +364,9 @@ export const codegen = (template: string, options: CodegenOptions = {}): Codegen
     expressionMode: options.expressionMode ?? "with",
     scopeNames: new Set(options.scopeNames ?? []),
     includePropsInScope: options.includePropsInScope ?? false,
-    ctxName: "ctx"
+    ctxName: "ctx",
+    hoistPrefix: fnName.replace(/[^A-Za-z0-9_$]/gu, "_")
   };
-  const fnName = options.functionName ?? "render";
   const runtimeImport = options.runtimeImport ?? "@elfui/core/internal";
 
   const childExpr = genChildren(ast.children, ctx);
@@ -373,7 +377,8 @@ export const codegen = (template: string, options: CodegenOptions = {}): Codegen
       ? ""
       : `import { ${helpers.join(", ")} } from ${escapeStr(runtimeImport)};\n\n`;
 
-  const code = `${importLine}export default function ${fnName}(${renderCtxParam(ctx)}) {\n  return ${childExpr};\n}\n`;
+  const hoists = ctx.buf.length === 0 ? "" : `${ctx.buf.join("\n")}\n\n`;
+  const code = `${importLine}${hoists}export default function ${fnName}(${renderCtxParam(ctx)}) {\n  return ${childExpr};\n}\n`;
 
   return { code, helpers, ast };
 };
@@ -420,11 +425,97 @@ const genNode = (node: TemplateChildNode, ctx: CodegenContext): string => {
     }
     case NodeTypes.COMMENT:
       return `document.createComment(${escapeStr((node as { content: string }).content)})`;
-    case NodeTypes.ELEMENT:
-      return genElement(node as ElementNode, ctx);
+    case NodeTypes.ELEMENT: {
+      const element = node as ElementNode;
+      return isHoistableStaticTree(element)
+        ? genHoistedStaticTree(element, ctx)
+        : genElement(element, ctx);
+    }
     default:
       return `document.createTextNode("")`;
   }
+};
+
+const STATIC_TREE_MIN_NODES = 6;
+const STATIC_BOUNDARY_TAGS = new Set([
+  "Teleport",
+  "KeepAlive",
+  "Transition",
+  "TransitionGroup",
+  "Suspense",
+  "component",
+  "template",
+  "slot"
+]);
+
+const countStaticTreeNodes = (node: TemplateChildNode): number => {
+  if (node.type !== NodeTypes.ELEMENT) return 1;
+  const element = node as ElementNode;
+  let count = 1;
+  for (const child of element.children) count += countStaticTreeNodes(child);
+  return count;
+};
+
+const isStaticTreeNode = (node: TemplateChildNode): boolean => {
+  if (node.type === NodeTypes.TEXT || node.type === NodeTypes.COMMENT) return true;
+  if (node.type !== NodeTypes.ELEMENT) return false;
+
+  const element = node as ElementNode;
+  if (
+    STATIC_BOUNDARY_TAGS.has(element.tag) ||
+    /^[A-Z]/u.test(element.tag) ||
+    (!isSvgElementTag(element.tag) && element.tag.includes("-"))
+  ) {
+    return false;
+  }
+  for (const prop of element.props) {
+    if (prop.type === AttrTypes.DIRECTIVE) return false;
+    if (prop.name === "ref") return false;
+  }
+  return element.children.every(isStaticTreeNode);
+};
+
+const isHoistableStaticTree = (node: ElementNode): boolean =>
+  isStaticTreeNode(node) && countStaticTreeNodes(node) >= STATIC_TREE_MIN_NODES;
+
+const genStaticTreeConstruction = (node: TemplateChildNode, ctx: CodegenContext): string => {
+  if (node.type === NodeTypes.TEXT) {
+    return `document.createTextNode(${escapeStr((node as TextNode).content)})`;
+  }
+  if (node.type === NodeTypes.COMMENT) {
+    return `document.createComment(${escapeStr((node as { content: string }).content)})`;
+  }
+
+  const element = node as ElementNode;
+  const elVar = fresh(ctx, "staticEl");
+  const stmts: string[] = [];
+  if (isSvgElementTag(element.tag)) {
+    stmts.push(
+      `const ${elVar} = document.createElementNS(${escapeStr(SVG_NS)}, ${escapeStr(element.tag)})`
+    );
+  } else {
+    stmts.push(`const ${elVar} = document.createElement(${escapeStr(element.tag)})`);
+  }
+  for (const prop of element.props) {
+    if (prop.type !== AttrTypes.ATTRIBUTE) continue;
+    const value = prop.value === true ? "" : prop.value;
+    stmts.push(`${elVar}.setAttribute(${escapeStr(prop.name)}, ${escapeStr(value)})`);
+  }
+  for (const child of element.children) {
+    stmts.push(`${elVar}.appendChild(${genStaticTreeConstruction(child, ctx)})`);
+  }
+  stmts.push(`return ${elVar}`);
+  return `(() => { ${stmts.join("; ")} })()`;
+};
+
+const genHoistedStaticTree = (node: ElementNode, ctx: CodegenContext): string => {
+  const cached = freshHoist(ctx, "static");
+  const clone = freshHoist(ctx, "cloneStatic");
+  const type = ctx.expressionMode === "scope" ? ": Node | undefined" : "";
+  ctx.buf.push(
+    `let ${cached}${type};\nconst ${clone} = () => { if (!${cached}) ${cached} = ${genStaticTreeConstruction(node, ctx)}; return ${cached}.cloneNode(true); };`
+  );
+  return `${clone}()`;
 };
 
 // ---------- element ----------

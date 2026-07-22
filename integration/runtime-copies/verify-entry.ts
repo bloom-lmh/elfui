@@ -1,7 +1,13 @@
 import type * as RuntimeModule from "@elfui/runtime";
-import type { resolveDirective } from "@elfui/runtime/internal";
+import type {
+  registerGlobalDirective,
+  resetDirectives,
+  resolveDirective
+} from "@elfui/runtime/internal";
 
 type RuntimeCopy = typeof RuntimeModule & {
+  registerGlobalDirective: typeof registerGlobalDirective;
+  resetDirectives: typeof resetDirectives;
   resolveDirective: typeof resolveDirective;
 };
 
@@ -39,8 +45,8 @@ const run = (): { cases: Array<{ name: string; status: "passed" }> } => {
   second.resetDirectives();
   const firstDirective = { mounted: () => undefined };
   const secondDirective = { mounted: () => undefined };
-  first.directive("copy-owned", firstDirective);
-  second.directive("copy-owned", secondDirective);
+  first.registerGlobalDirective("copy-owned", firstDirective);
+  second.registerGlobalDirective("copy-owned", secondDirective);
   check(
     first.resolveDirective("copy-owned") === firstDirective,
     "first runtime lost its directive"

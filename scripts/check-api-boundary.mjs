@@ -46,10 +46,24 @@ assertMissing(
     "extend",
     "html",
     "MacroHtmlTemplate",
+    "computed",
+    "directive",
+    "onMount",
+    "onUnmount",
     "setTemplateCompiler",
+    "useTheme",
+    "watchEffect",
+    "watchPostEffect",
+    "watchSyncEffect",
     "variant"
   ],
   "主入口只能暴露宏组件、对象式和稳定用户 API；链式 builder / runtime compiler 留在 @elfui/chain。"
+);
+
+assertMissing(
+  "@elfui/reactivity",
+  ["watchEffect", "watchPostEffect", "watchSyncEffect", "WatchEffectFn"],
+  "自动依赖副作用统一使用 useEffect；明确数据源监听统一使用 watch。"
 );
 
 assertMissing(
@@ -78,6 +92,7 @@ assertMissing(
   "@elfui/runtime",
   [
     "createComponent",
+    "directive",
     "ElementBuilder",
     "extend",
     "setTemplateCompiler",
@@ -88,7 +103,10 @@ assertMissing(
     "list",
     "mark",
     "onObject",
+    "onMount",
+    "onUnmount",
     "prop",
+    "resetDirectives",
     "setCurrentInstance",
     "setScopedSlot",
     "setTemplateRef",

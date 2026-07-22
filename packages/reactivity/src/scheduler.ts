@@ -2,7 +2,7 @@
 //
 // 设计：
 // - 两条独立队列：pre / post（与 Vue / 组件渲染时序对齐）
-//   * pre：在组件 patch 之前 flush（默认 effect / watchEffect）
+//   * pre：在组件 patch 之前 flush（useEffect/watch 的可选策略）
 //   * post：在组件 patch 之后 flush（DOM 更新完毕、可读 layout 等）
 // - 同一 microtask 内：先 flush pre 再 flush post
 // - 每条队列内 Set 去重；flush 期间新 push 进的 job 在本轮一并处理
@@ -28,7 +28,7 @@ let isFlushingSync = false;
 
 const resolvedPromise = Promise.resolve();
 
-/** pre 队列：默认入口（effect / watchEffect / watch flush:"pre"） */
+/** pre 队列：useEffect/watch flush:"pre" 的调度入口 */
 export const queueJob = (job: SchedulerJob): void => {
   if (preSet.has(job)) return;
   preSet.add(job);

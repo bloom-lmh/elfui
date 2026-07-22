@@ -11,9 +11,7 @@ import {
   onBeforeUnmount,
   onBeforeUpdate,
   onErrorCaptured,
-  onMount,
   onMounted,
-  onUnmount,
   onUnmounted,
   onUpdated
 } from "../lifecycle";
@@ -409,16 +407,16 @@ describe("Props", () => {
 });
 
 describe("生命周期", () => {
-  it("onMounted / onUnmounted 与旧命名共享同一时序", async () => {
+  it("同一阶段支持注册多个 mounted / unmounted hook", async () => {
     const tag = nextTag();
     const order: string[] = [];
     defineCustomElement({
       tag,
       setup: () => {
-        onMount(() => order.push("mount"));
-        onMounted(() => order.push("mounted"));
-        onUnmount(() => order.push("unmount"));
-        onUnmounted(() => order.push("unmounted"));
+        onMounted(() => order.push("mounted:first"));
+        onMounted(() => order.push("mounted:second"));
+        onUnmounted(() => order.push("unmounted:first"));
+        onUnmounted(() => order.push("unmounted:second"));
         return {};
       },
       render: () => document.createElement("div")
@@ -426,10 +424,15 @@ describe("生命周期", () => {
     const el = document.createElement(tag);
 
     document.body.appendChild(el);
-    expect(order).toEqual(["mount", "mounted"]);
+    expect(order).toEqual(["mounted:first", "mounted:second"]);
     el.remove();
     await flushDisconnect();
-    expect(order).toEqual(["mount", "mounted", "unmount", "unmounted"]);
+    expect(order).toEqual([
+      "mounted:first",
+      "mounted:second",
+      "unmounted:first",
+      "unmounted:second"
+    ]);
   });
 
   it("同步组件在 DOM 和 template ref 就绪后才 mounted", () => {
@@ -716,13 +719,13 @@ describe("生命周期", () => {
     expect(refs[1]?.value?.isConnected).toBe(true);
   });
 
-  it("onMount 在挂载后调用", () => {
+  it("onMounted 在挂载后调用", () => {
     const tag = nextTag();
     const spy = vi.fn();
     defineCustomElement({
       tag,
       setup: () => {
-        onMount(spy);
+        onMounted(spy);
         return {};
       },
       render: () => document.createElement("div")
@@ -733,14 +736,14 @@ describe("生命周期", () => {
     document.body.removeChild(el);
   });
 
-  it("onBeforeMount 在 render 之前、onMount 之后挂载之前调用", () => {
+  it("onBeforeMount 在 render 之前、onMounted 在挂载之后调用", () => {
     const tag = nextTag();
     const order: string[] = [];
     defineCustomElement({
       tag,
       setup: () => {
         onBeforeMount(() => order.push("beforeMount"));
-        onMount(() => order.push("mount"));
+        onMounted(() => order.push("mounted"));
         return {};
       },
       render: () => {
@@ -750,17 +753,111 @@ describe("生命周期", () => {
     });
     const el = document.createElement(tag);
     document.body.appendChild(el);
-    expect(order).toEqual(["beforeMount", "render", "mount"]);
+    expect(order).toEqual(["beforeMount", "render", "mounted"]);
     document.body.removeChild(el);
   });
 
-  it("onUnmount 在断开后调用（异步）", async () => {
+  it("onMounted 返回的清理函数在 DOM 释放前按后注册先清理执行", async () => {
+    const tag = nextTag();
+    const order: string[] = [];
+    const renderedNode = document.createElement("div");
+    defineCustomElement({
+      tag,
+      setup: () => {
+        onMounted(() => {
+          order.push("mounted:first");
+          return () => {
+            expect(renderedNode.parentNode).not.toBeNull();
+            order.push("cleanup:first");
+          };
+        });
+        onMounted(() => {
+          order.push("mounted:second");
+          return () => order.push("cleanup:second");
+        });
+        onBeforeUnmount(() => order.push("beforeUnmount"));
+        onUnmounted(() => order.push("unmounted"));
+        return {};
+      },
+      render: () => renderedNode
+    });
+    const el = document.createElement(tag);
+    document.body.appendChild(el);
+    expect(order).toEqual(["mounted:first", "mounted:second"]);
+
+    el.remove();
+    await flushDisconnect();
+    expect(order).toEqual([
+      "mounted:first",
+      "mounted:second",
+      "beforeUnmount",
+      "cleanup:second",
+      "cleanup:first",
+      "unmounted"
+    ]);
+  });
+
+  it("异步 mounted 在卸载后返回清理函数时立即执行", async () => {
+    const tag = nextTag();
+    const cleanup = vi.fn();
+    let resolveCleanup!: (value: () => void) => void;
+    defineCustomElement({
+      tag,
+      setup: () => {
+        onMounted(
+          () =>
+            new Promise<() => void>((resolve) => {
+              resolveCleanup = resolve;
+            })
+        );
+        return {};
+      },
+      render: () => document.createElement("div")
+    });
+    const el = document.createElement(tag);
+    document.body.appendChild(el);
+    el.remove();
+    await flushDisconnect();
+
+    resolveCleanup(cleanup);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it("mounted 清理异常进入组件错误链", async () => {
+    const tag = nextTag();
+    const errors: string[] = [];
+    defineCustomElement({
+      tag,
+      setup: () => {
+        onErrorCaptured((error) => {
+          errors.push((error as Error).message);
+          return false;
+        });
+        onMounted(() => () => {
+          throw new Error("mounted cleanup boom");
+        });
+        onMounted(() => () => Promise.reject(new Error("async cleanup boom")));
+        return {};
+      },
+      render: () => document.createElement("div")
+    });
+    const el = document.createElement(tag);
+    document.body.appendChild(el);
+    el.remove();
+    await flushDisconnect();
+    await Promise.resolve();
+    expect(errors).toEqual(["mounted cleanup boom", "async cleanup boom"]);
+  });
+
+  it("onUnmounted 在断开后调用（异步）", async () => {
     const tag = nextTag();
     const spy = vi.fn();
     defineCustomElement({
       tag,
       setup: () => {
-        onUnmount(spy);
+        onUnmounted(spy);
         return {};
       },
       render: () => document.createElement("div")
@@ -772,14 +869,14 @@ describe("生命周期", () => {
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
-  it("onBeforeUnmount 在 onUnmount 之前", async () => {
+  it("onBeforeUnmount 在 onUnmounted 之前", async () => {
     const tag = nextTag();
     const order: string[] = [];
     defineCustomElement({
       tag,
       setup: () => {
         onBeforeUnmount(() => order.push("before"));
-        onUnmount(() => order.push("after"));
+        onUnmounted(() => order.push("after"));
         return {};
       },
       render: () => document.createElement("div")
@@ -797,7 +894,7 @@ describe("生命周期", () => {
     defineCustomElement({
       tag,
       setup: () => {
-        onUnmount(unmount);
+        onUnmounted(unmount);
         return {};
       },
       render: () => document.createElement("div")

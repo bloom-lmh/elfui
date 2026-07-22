@@ -78,9 +78,6 @@ export {
   useShallowReactive,
   useShallowRef,
   watch,
-  watchEffect,
-  watchPostEffect,
-  watchSyncEffect,
   type Computed,
   type ComputedSource,
   type EffectCleanup,
@@ -97,7 +94,6 @@ export {
   type WatchCallback,
   type WatchCleanup,
   type WatchCleanupRegister,
-  type WatchEffectFn,
   type WatchOptions,
   type WatchSource,
   type WatchSourceOldValues,
@@ -105,9 +101,6 @@ export {
   type WatchSourceValues,
   type WatchStopHandle
 } from "@elfui/reactivity";
-
-// 兼容 Vue 命名：computed = useComputed
-export { useComputed as computed } from "@elfui/reactivity";
 
 // 稳定 runtime 用户面 API
 //
@@ -126,11 +119,13 @@ export {
   onBeforeUpdate,
   onDeactivated,
   onErrorCaptured,
-  onMount,
   onMounted,
-  onUnmount,
   onUnmounted,
   onUpdated,
+  type LifecycleCleanup,
+  type LifecycleHook,
+  type MountedHook,
+  type MountedHookResult,
   type ComponentDefinition,
   type ComponentEmitMap,
   type ElfElementConstructor,
@@ -146,9 +141,6 @@ export {
   type SetupFn
 } from "@elfui/runtime";
 
-// 宏组件 / 对象式命名入口：主包使用 use*，链式包仍使用 extend / variant。
-export { theme as useTheme } from "@elfui/runtime";
-
 // 协作能力 + 常用 host / form helper
 //
 // 注：以下属于 internal / 编译产物使用的 API，主入口不再导出，
@@ -159,8 +151,7 @@ export { theme as useTheme } from "@elfui/runtime";
 export {
   // Light DOM 投射：ui-kit Dialog/Drawer 和宏组件迁移兼容主路径会用到。
   projectLightDom,
-  // 自定义指令注册（用户层）
-  directive,
+  // 自定义指令类型；局部注册使用 defineDirective，应用级注册使用 app.directive。
   type DirectiveBinding,
   type DirectiveDefinition,
   type DirectiveFn,

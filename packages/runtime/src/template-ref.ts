@@ -2,7 +2,7 @@
 //
 // 模板里写 `<input ref="myInput" />`，setup 里用：
 //   const myInput = useTemplateRef<HTMLInputElement>("myInput");
-//   onMount(() => myInput.value?.focus());
+//   onMounted(() => myInput.value?.focus());
 //
 // 实现：
 // - 编译器识别 ref="字面量" 属性，调用 setTemplateRef(host, name, el) 注册

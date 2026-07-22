@@ -41,6 +41,60 @@ describe("B3.6 codegen", () => {
     expect(helpers).toContain("text");
   });
 
+  it("较大纯静态子树使用模块级懒缓存并克隆独立节点", () => {
+    const { code, helpers } = codegen(
+      `<section class="card"><h1>Title</h1><p>Body</p><footer>Foot</footer></section>`
+    );
+    const render = evalCode(code, helpers);
+
+    expect(code).toContain("cloneNode(true)");
+    expect(code.indexOf("document.createElement")).toBeLessThan(
+      code.indexOf("export default function render")
+    );
+
+    const first = render(makeCtx({})) as HTMLElement;
+    const second = render(makeCtx({})) as HTMLElement;
+    expect(first).not.toBe(second);
+    expect(first.querySelector("h1")).not.toBe(second.querySelector("h1"));
+    expect(first.textContent).toBe("TitleBodyFoot");
+  });
+
+  it("不同 render 函数的模块级静态缓存名称互不冲突", () => {
+    const template = `<section><h1>Title</h1><p>Body</p><footer>Foot</footer></section>`;
+    const first = codegen(template, { functionName: "renderFirst" }).code;
+    const second = codegen(template, { functionName: "renderSecond" }).code;
+
+    expect(first).toContain("_renderFirst_static");
+    expect(second).toContain("_renderSecond_static");
+    expect(second).not.toContain("_renderFirst_static");
+  });
+
+  it("动态外层复用内部静态子树", async () => {
+    const { code, helpers } = codegen(
+      `<div>{{ count }}<section class="static"><i>fixed </i><b>stable </b><em>tail</em></section></div>`
+    );
+    const render = evalCode(code, helpers);
+    const count = useRef(0);
+    const root = render(makeCtx({ count })) as HTMLElement;
+    document.body.appendChild(root);
+
+    expect(code).toContain("cloneNode(true)");
+    const staticNode = root.querySelector(".static");
+    count.set(1);
+    await Promise.resolve();
+    expect(root.querySelector(".static")).toBe(staticNode);
+    expect(root.textContent).toBe("1fixed stable tail");
+  });
+
+  it("ref、指令与自定义组件不会被静态提升", () => {
+    const children = `<span>a</span><span>b</span><span>c</span>`;
+    expect(codegen(`<div ref="root">${children}</div>`).code).not.toContain("cloneNode(true)");
+    expect(codegen(`<div v-show="visible">${children}</div>`).code).not.toContain(
+      "cloneNode(true)"
+    );
+    expect(codegen(`<elf-card>${children}</elf-card>`).code).not.toContain("cloneNode(true)");
+  });
+
   it("为动态 binding 生成模板行列元数据", () => {
     const { code } = codegen(`<div>\n  {{ msg }}\n  <span :title="msg">x</span>\n</div>`);
 

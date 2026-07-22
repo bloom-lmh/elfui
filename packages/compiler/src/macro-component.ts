@@ -97,13 +97,12 @@ declare module "@elfui/core" {
   export const provide: any;
   export const inject: any;
   export const createInjectionKey: any;
-  export const onMount: any;
-  export const onUnmount: any;
+  export const onMounted: any;
+  export const onUnmounted: any;
   export const onUpdated: any;
   export const onBeforeUpdate: any;
   export const nextTick: any;
   export const watch: any;
-  export const watchEffect: any;
 }
 `;
 
@@ -120,7 +119,7 @@ const macroNames = new Set([
   "useComponents"
 ]);
 
-const moduleSideEffectCalls = new Set(["globalStyle", "theme", "usePlugin", "useTheme"]);
+const moduleSideEffectCalls = new Set(["globalStyle", "theme", "usePlugin"]);
 const moduleLevelDeclarationCalls = new Set(["useExtend", "useVariant"]);
 
 export interface MacroComponentCompileOptions {

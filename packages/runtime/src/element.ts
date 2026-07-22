@@ -36,6 +36,7 @@ import { attachInstanceToHost, detachInstanceFromHost, findParentInstance } from
 import { clearTemplateRefs } from "./template-ref";
 import {
   callHooks,
+  callMountedCleanups,
   createInstance,
   getCurrentInstance,
   setCurrentInstance,
@@ -537,6 +538,7 @@ export const defineCustomElement = (
         this.__instance,
         "component beforeUnmount hook"
       );
+      callMountedCleanups(this.__instance);
       this.__instance.isUnmounted = true;
       this.__scope?.stop();
       this.__scope = null;
@@ -583,7 +585,7 @@ export const defineCustomElement = (
         return;
       }
       instance.isMounted = true;
-      callHooks(instance.mountedHooks, instance, "component mounted hook");
+      callHooks(instance.mountedHooks, instance, "component mounted hook", true);
       if (__DEV__) {
         const hostRef = new WeakRef(this);
         const instanceRef = new WeakRef(instance);

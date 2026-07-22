@@ -1,6 +1,10 @@
 import * as runtime from "@elfui/runtime";
-import { resolveDirective } from "@elfui/runtime/internal";
+import {
+  registerGlobalDirective,
+  resetDirectives,
+  resolveDirective
+} from "@elfui/runtime/internal";
 
-const exposed = { ...runtime, resolveDirective };
+const exposed = { ...runtime, registerGlobalDirective, resetDirectives, resolveDirective };
 
 (globalThis as unknown as { __elfRuntimeCopyB?: typeof exposed }).__elfRuntimeCopyB = exposed;

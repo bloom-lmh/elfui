@@ -1,13 +1,12 @@
-// watch / watchEffect — 监听器入口
+// watch — 明确数据源监听入口
 //
 // 设计：
 // - watch(src, cb, options?)：明确数据源（State / getter / 数组）+ 回调 (newVal, oldVal, onCleanup)
 //   * 不立即执行回调；状态变化时才触发
 //   * immediate: true 时首次也触发
 //   * deep: true 时对对象 state 深度遍历建立追踪
-// - watchEffect(fn, options?)：自动追踪依赖（等价 useEffect 别名 + Vue 心智）
-//   * 立即执行一次以收集依赖
-// - flush 时机：sync / pre / post（与 useEffect 一致）
+// - 自动追踪副作用统一使用 useEffect(fn, options?)
+// - flush 时机：sync / pre / post
 // - cleanup：cb 第三个参数 onCleanup，或 onWatcherCleanup() 注册
 //
 // 与 Vue watch 差异：
@@ -65,13 +64,11 @@ export interface WatchStopHandle {
   (): void;
 }
 
-export type WatchEffectFn = (onCleanup: WatchCleanupRegister) => void | WatchCleanup;
-
-// 保存"当前正在运行的 watch effect"的 cleanup register，让 onWatcherCleanup() 能找到它
+// 保存当前 watch callback 的 cleanup register，让 onWatcherCleanup() 能找到它
 let activeCleanupRegister: WatchCleanupRegister | null = null;
 
 /**
- * 注册一个清理回调；只能在 watch 的 cb 或 watchEffect 的 fn 同步执行期间调用。
+ * 注册一个清理回调；只能在 watch 的 cb 同步执行期间调用。
  *
  * @example
  *   watch(count, () => {
@@ -81,8 +78,7 @@ let activeCleanupRegister: WatchCleanupRegister | null = null;
  */
 export const onWatcherCleanup = (cleanup: WatchCleanup): void => {
   if (!activeCleanupRegister) {
-    if (__DEV__)
-      console.warn("[onWatcherCleanup] 必须在 watch 回调或 watchEffect 函数同步执行期间调用。");
+    if (__DEV__) console.warn("[onWatcherCleanup] 必须在 watch 回调同步执行期间调用。");
     return;
   }
   activeCleanupRegister(cleanup);
@@ -197,71 +193,6 @@ export function watch(
     effectInstance.stop();
   };
 }
-
-// ------------ watchEffect ------------
-
-/**
- * 立即执行一次以收集依赖；之后依赖变化重跑。
- * 等价于 useEffect，保留 Vue 心智。
- */
-export const watchEffect = (
-  fn: WatchEffectFn,
-  options: Omit<WatchOptions, "deep" | "immediate"> = {}
-): WatchStopHandle => {
-  let cleanups: WatchCleanup[] = [];
-
-  const runCleanups = (): void => {
-    if (cleanups.length === 0) return;
-    const list = cleanups;
-    cleanups = [];
-    for (const f of list) {
-      try {
-        f();
-      } catch (err) {
-        if (__DEV__) console.error("[watchEffect] cleanup error:", err);
-        else console.error(err);
-      }
-    }
-  };
-
-  const register: WatchCleanupRegister = (f) => {
-    cleanups.push(f);
-  };
-
-  const runner = (): void => {
-    runCleanups();
-    activeCleanupRegister = register;
-    try {
-      const result = fn(register);
-      if (typeof result === "function") {
-        cleanups.push(result);
-      }
-    } finally {
-      activeCleanupRegister = null;
-    }
-  };
-
-  const flush = options.flush ?? "pre";
-  const scheduler = createScheduler(flush, () => effectInstance.run());
-
-  const effectInstance = new ReactiveEffect(runner, scheduler);
-  // 立即执行一次
-  effectInstance.run();
-
-  return () => {
-    runCleanups();
-    if (options.onStop) options.onStop();
-    effectInstance.stop();
-  };
-};
-
-/** watchPostEffect — flush: "post" 的快捷别名 */
-export const watchPostEffect = (fn: WatchEffectFn): WatchStopHandle =>
-  watchEffect(fn, { flush: "post" });
-
-/** watchSyncEffect — flush: "sync" 的快捷别名 */
-export const watchSyncEffect = (fn: WatchEffectFn): WatchStopHandle =>
-  watchEffect(fn, { flush: "sync" });
 
 // ------------ helpers ------------
 

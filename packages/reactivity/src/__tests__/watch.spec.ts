@@ -1,27 +1,15 @@
-﻿// A4 watch / watchEffect 验收测试
+﻿// A4 watch 验收测试
 //
 // 覆盖：
 // - watch(state, cb) / watch(getter, cb) / watch([a, b], cb)
 // - immediate / deep
 // - flush: sync / pre / post
 // - cleanup：onCleanup 参数 / onWatcherCleanup
-// - watchEffect 自动追踪
-// - watchPostEffect / watchSyncEffect 别名
 // - stop 卸载
 
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  flushSync,
-  nextTick,
-  onWatcherCleanup,
-  useRef,
-  useReactive,
-  watch,
-  watchEffect,
-  watchPostEffect,
-  watchSyncEffect
-} from "../index";
+import { flushSync, nextTick, onWatcherCleanup, useRef, useReactive, watch } from "../index";
 
 describe("watch — 数据源形态", () => {
   it("state 直接传入", async () => {
@@ -167,87 +155,6 @@ describe("watch — cleanup", () => {
     await nextTick();
     stop();
     expect(cleanups).toEqual([1]);
-  });
-});
-
-describe("watchEffect", () => {
-  it("立即执行一次以收集依赖", async () => {
-    const count = useRef(0);
-    const spy = vi.fn();
-    watchEffect(() => {
-      spy(count.value);
-    });
-    expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy).toHaveBeenLastCalledWith(0);
-    count.value = 5;
-    await nextTick();
-    expect(spy).toHaveBeenLastCalledWith(5);
-  });
-
-  it("onCleanup 参数", async () => {
-    const a = useRef(0);
-    const cleanups: number[] = [];
-    watchEffect((onCleanup) => {
-      const v = a.value;
-      onCleanup(() => cleanups.push(v));
-    });
-    a.value = 1;
-    await nextTick();
-    a.value = 2;
-    await nextTick();
-    // 第二次重跑前清理第一次（v=1 时收集的 cleanup）
-    expect(cleanups).toEqual([0, 1]);
-  });
-
-  it("onWatcherCleanup 注册", async () => {
-    const a = useRef(0);
-    const cleanups: number[] = [];
-    watchEffect(() => {
-      const v = a.value;
-      onWatcherCleanup(() => cleanups.push(v));
-    });
-    a.value = 1;
-    await nextTick();
-    a.value = 2;
-    await nextTick();
-    expect(cleanups).toEqual([0, 1]);
-  });
-
-  it("watchPostEffect 等价 flush:post", async () => {
-    const a = useRef(0);
-    const spy = vi.fn();
-    watchPostEffect(() => {
-      spy(a.value);
-    });
-    expect(spy).toHaveBeenCalledTimes(1);
-    a.value = 1;
-    a.value = 2;
-    expect(spy).toHaveBeenCalledTimes(1);
-    await nextTick();
-    expect(spy).toHaveBeenCalledTimes(2);
-  });
-
-  it("watchSyncEffect 等价 flush:sync", () => {
-    const a = useRef(0);
-    const spy = vi.fn();
-    watchSyncEffect(() => {
-      spy(a.value);
-    });
-    a.value = 1;
-    a.value = 2;
-    expect(spy).toHaveBeenCalledTimes(3);
-  });
-
-  it("stop 卸载", async () => {
-    const a = useRef(0);
-    const spy = vi.fn();
-    const stop = watchEffect(() => {
-      spy(a.value);
-    });
-    stop();
-    a.value = 5;
-    await nextTick();
-    expect(spy).toHaveBeenCalledTimes(1);
   });
 });
 

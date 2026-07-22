@@ -3,7 +3,11 @@ import { useComputed, useRef } from "@elfui/reactivity";
 import { defineComponent, type InferPropsOptions } from "../define-component";
 import { directive, type DirectiveBinding, type DirectiveDefinition } from "../directive";
 import type { PropOption, PropType } from "../element";
+import { onMounted } from "../lifecycle";
 import { useModel } from "../use-model";
+
+onMounted(() => () => undefined);
+onMounted(async () => async () => undefined);
 
 defineComponent({
   name: "elf-type-infer",

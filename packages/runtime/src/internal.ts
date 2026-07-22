@@ -30,10 +30,17 @@ export { renderOnce } from "./memo";
 
 export { handleRuntimeError, type RuntimeErrorOwner } from "./error";
 
-export { applyCustomDirective, resolveDirective, type DirectiveDefinition } from "./directive";
+export {
+  applyCustomDirective,
+  directive as registerGlobalDirective,
+  resetDirectives,
+  resolveDirective,
+  type DirectiveDefinition
+} from "./directive";
 
 export {
   callHooks,
+  callMountedCleanups,
   createInstance,
   getCurrentInstance,
   setCurrentInstance,

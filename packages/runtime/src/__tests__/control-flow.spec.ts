@@ -365,6 +365,41 @@ describe("list — v-for", () => {
     cleanup();
   });
 
+  it("同 key 同顺序更新不执行 DOM 移动", () => {
+    const { root, anchor, cleanup } = setupContainer();
+    const items = useRef([
+      { id: "a", name: "A" },
+      { id: "b", name: "B" }
+    ]);
+    list(
+      anchor,
+      () => items.value,
+      (item) => item.id,
+      (item, index) => {
+        const li = document.createElement("li");
+        text(
+          li.appendChild(document.createTextNode("")),
+          () => `${index.value}:${item.value.name}`
+        );
+        return li;
+      }
+    );
+
+    const before = Array.from(root.querySelectorAll("li"));
+    const insertBefore = vi.spyOn(root, "insertBefore");
+    const removeChild = vi.spyOn(root, "removeChild");
+    items.value = [
+      { id: "a", name: "A2" },
+      { id: "b", name: "B2" }
+    ];
+
+    expect(Array.from(root.querySelectorAll("li"))).toEqual(before);
+    expect(root.textContent).toBe("0:A21:B2");
+    expect(insertBefore).not.toHaveBeenCalled();
+    expect(removeChild).not.toHaveBeenCalled();
+    cleanup();
+  });
+
   it("重排后更新 index 并保留节点身份", () => {
     const { root, anchor, cleanup } = setupContainer();
     const a = { id: "a" };

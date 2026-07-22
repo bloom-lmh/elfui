@@ -10,7 +10,7 @@
 // - mounted / updated / beforeUnmount / unmounted
 // - el / binding（含 value、oldValue、arg、modifiers）
 //
-// ElfUI 不实现 created / beforeMount / beforeUpdate（用 onMount + useEffect 完全等价）
+// ElfUI 不实现 created / beforeMount / beforeUpdate（用 onMounted + useEffect 完全等价）
 
 import { effectScope, onScopeDispose, useEffect } from "@elfui/reactivity";
 import { handleRuntimeError } from "./error";

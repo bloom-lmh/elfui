@@ -200,14 +200,14 @@ batch(() => {
 
 `batch()` defers and deduplicates synchronous effects until the outermost batch completes. Compiled template event handlers create this boundary automatically.
 
-| API                         | Purpose                                                        |
-| --------------------------- | -------------------------------------------------------------- |
-| `useRef()`                  | Create a Ref with `.value`, `.set()`, and `.peek()`            |
-| `useReactive()`             | Create a deeply reactive object, array, Map, or Set            |
-| `useComputed()`             | Create lazy derived state                                      |
-| `useEffect()`               | Track dependencies and manage side effects and cleanup         |
-| `watch()` / `watchEffect()` | Observe explicit sources or automatically tracked dependencies |
-| `batch()`                   | Group synchronous writes into one effect notification          |
+| API             | Purpose                                                |
+| --------------- | ------------------------------------------------------ |
+| `useRef()`      | Create a Ref with `.value`, `.set()`, and `.peek()`    |
+| `useReactive()` | Create a deeply reactive object, array, Map, or Set    |
+| `useComputed()` | Create lazy derived state                              |
+| `useEffect()`   | Track dependencies and manage side effects and cleanup |
+| `watch()`       | Observe explicit sources with new and previous values  |
+| `batch()`       | Group synchronous writes into one effect notification  |
 
 ## 🔄 Component lifecycle
 
@@ -237,7 +237,7 @@ onUnmounted(() => {
 Initialize DOM-owning tools after template refs are ready, observe the ref itself, and release the tool during unmount. ECharts is only an integration example and is not bundled with ElfUI:
 
 ```ts
-import { defineHtml, onMounted, onUnmounted, useResizeObserver, useTemplateRef } from "@elfui/core";
+import { defineHtml, onMounted, useResizeObserver, useTemplateRef } from "@elfui/core";
 import * as echarts from "echarts";
 
 const chartRoot = useTemplateRef<HTMLDivElement>("chart");
@@ -246,14 +246,13 @@ let chart: echarts.ECharts | undefined;
 onMounted(() => {
   chart = echarts.init(chartRoot.value!);
   chart.setOption({ series: [{ type: "bar", data: [3, 7, 5] }] });
+  return () => {
+    chart?.dispose();
+    chart = undefined;
+  };
 });
 
 useResizeObserver(chartRoot, () => chart?.resize());
-
-onUnmounted(() => {
-  chart?.dispose();
-  chart = undefined;
-});
 
 export const ChartPanel = defineHtml(`<div ref="chart" style="height: 240px"></div>`);
 ```
@@ -348,6 +347,8 @@ export const FeatureList = defineHtml(`
 | `v-memo`                        | Cache a template region by dependencies    |
 
 Use `defineDirective()` for component-local custom directives and `app.directive()` for application-wide directives.
+
+The beta.8 API surface keeps `onMounted`, `onUnmounted`, `useComputed`, `useEffect`, `watch`, `theme`, `defineDirective`, and `app.directive`. The former `onMount`, `onUnmount`, `computed`, `watchEffect`, `watchPostEffect`, `watchSyncEffect`, `useTheme`, and process-wide `directive()` exports have been removed.
 
 ## 🔔 Events
 

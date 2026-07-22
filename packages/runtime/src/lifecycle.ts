@@ -13,7 +13,10 @@ import {
 } from "./devtools";
 import { DEV as __DEV__ } from "./dev";
 
+export type LifecycleCleanup = () => void;
 export type LifecycleHook = () => void;
+export type MountedHookResult = void | LifecycleCleanup;
+export type MountedHook = () => MountedHookResult | Promise<MountedHookResult>;
 export type AttributeChangedHook = (
   name: string,
   oldValue: string | null,
@@ -36,7 +39,8 @@ export interface ComponentInstance {
   /** 由组件 host 注入，统一转发 setup/render/lifecycle 错误。 */
   handleError?: (error: unknown, info: string) => void;
   beforeMountHooks: LifecycleHook[];
-  mountedHooks: LifecycleHook[];
+  mountedHooks: MountedHook[];
+  mountedCleanupHooks: LifecycleCleanup[];
   beforeUnmountHooks: LifecycleHook[];
   unmountedHooks: LifecycleHook[];
   beforeUpdateHooks: LifecycleHook[];
@@ -74,14 +78,15 @@ const inject =
     (currentInstance[key] as unknown as Array<unknown>).push(fn);
   };
 
-export const onMount = inject("mountedHooks");
-/** Vue 风格兼容别名；与 onMount 注册到同一生命周期队列。 */
-export const onMounted = onMount;
+const injectMounted = inject("mountedHooks");
+export function onMounted(fn: MountedHook): void;
+export function onMounted(fn: LifecycleHook): void;
+export function onMounted(fn: MountedHook | LifecycleHook): void {
+  injectMounted(fn as MountedHook);
+}
 export const onBeforeMount = inject("beforeMountHooks");
 export const onBeforeUnmount = inject("beforeUnmountHooks");
-export const onUnmount = inject("unmountedHooks");
-/** Vue 风格兼容别名；与 onUnmount 注册到同一生命周期队列。 */
-export const onUnmounted = onUnmount;
+export const onUnmounted = inject("unmountedHooks");
 export const onBeforeUpdate = inject("beforeUpdateHooks");
 export const onUpdated = inject("updatedHooks");
 export const onAttributeChanged = inject("attrChangedHooks");
@@ -105,6 +110,7 @@ export const createInstance = (
   isUnmounted: false,
   beforeMountHooks: [],
   mountedHooks: [],
+  mountedCleanupHooks: [],
   beforeUnmountHooks: [],
   unmountedHooks: [],
   beforeUpdateHooks: [],
@@ -127,9 +133,10 @@ export const createInstance = (
 
 /** 调用一组钩子，错误隔离 */
 export const callHooks = (
-  hooks: LifecycleHook[],
+  hooks: ReadonlyArray<() => unknown>,
   instance?: ComponentInstance,
-  info: string = "component lifecycle hook"
+  info: string = "component lifecycle hook",
+  captureMountedCleanup = false
 ): void => {
   const reportError = (error: unknown): void => {
     if (instance?.handleError) instance.handleError(error, info);
@@ -140,16 +147,55 @@ export const callHooks = (
   for (const fn of hooks) {
     try {
       const result = fn() as unknown;
+      if (captureMountedCleanup && typeof result === "function") {
+        instance?.mountedCleanupHooks.push(result as LifecycleCleanup);
+        continue;
+      }
       if (
         result !== null &&
         result !== undefined &&
         (typeof result === "object" || typeof result === "function") &&
         typeof (result as { then?: unknown }).then === "function"
       ) {
-        void Promise.resolve(result).catch(reportError);
+        const pending = Promise.resolve(result);
+        if (!captureMountedCleanup) {
+          void pending.catch(reportError);
+          continue;
+        }
+        void pending.then((resolved) => {
+          if (typeof resolved !== "function" || !instance) return;
+          const cleanup = resolved as LifecycleCleanup;
+          if (instance.isUnmounted) {
+            try {
+              void Promise.resolve(cleanup()).catch(reportError);
+            } catch (error) {
+              reportError(error);
+            }
+          } else {
+            instance.mountedCleanupHooks.push(cleanup);
+          }
+        }, reportError);
       }
     } catch (err) {
       reportError(err);
+    }
+  }
+};
+
+/** 按后注册先清理执行 mounted 返回的资源清理函数。 */
+export const callMountedCleanups = (instance: ComponentInstance): void => {
+  const cleanups = instance.mountedCleanupHooks.splice(0).reverse();
+  const reportError = (error: unknown): void => {
+    if (instance.handleError) instance.handleError(error, "component mounted cleanup");
+    else if (__DEV__) console.error("[lifecycle] mounted cleanup error:", error);
+    else console.error(error);
+  };
+
+  for (const cleanup of cleanups) {
+    try {
+      void Promise.resolve(cleanup()).catch(reportError);
+    } catch (error) {
+      reportError(error);
     }
   }
 };

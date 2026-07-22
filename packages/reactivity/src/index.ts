@@ -62,14 +62,10 @@ export {
 
 export {
   watch,
-  watchEffect,
-  watchPostEffect,
-  watchSyncEffect,
   onWatcherCleanup,
   type WatchCallback,
   type WatchCleanup,
   type WatchCleanupRegister,
-  type WatchEffectFn,
   type WatchOptions,
   type WatchSource,
   type WatchSourceValue,

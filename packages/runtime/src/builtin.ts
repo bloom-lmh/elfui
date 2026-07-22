@@ -335,7 +335,7 @@ export const keepAlive = (
     }
 
     anchor.parentNode?.insertBefore(entry.el, anchor);
-    // 触发 activated（首次创建时也算 activated；onMount 会先于 activated 调用）
+    // 触发 activated（首次创建时也算 activated；onMounted 会先于 activated 调用）
     queueMicrotask(() => {
       if (disposed || active !== entry || !entry.el.isConnected) return;
       const inst = getInstanceFromHost(entry!.el);

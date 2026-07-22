@@ -37,6 +37,21 @@ const aliasPlugin = {
   }
 };
 
+const staticRows = Array.from(
+  { length: 20 },
+  (_, index) => `<div class="row"><span>Static row ${index}</span></div>`
+).join("");
+const { code: staticRenderModule } = (await import("../packages/compiler/dist/codegen.js")).codegen(
+  `<section class="card"><h1>Static title</h1>${staticRows}</section>`,
+  {
+    functionName: "renderHoistedStatic"
+  }
+);
+const staticRenderCode = staticRenderModule.replace(
+  "export default function renderHoistedStatic",
+  "function renderHoistedStatic"
+);
+
 const entry = `
 import { effectScope, useRef } from "@elfui/reactivity";
 import { defineCustomElement } from "@elfui/runtime";
@@ -65,7 +80,50 @@ defineCustomElement({
   }
 });
 
+defineCustomElement({
+  tag: "elf-browser-bench-static-direct",
+  render() {
+    const section = document.createElement("section");
+    section.setAttribute("class", "card");
+    const heading = document.createElement("h1");
+    heading.appendChild(document.createTextNode("Static title"));
+    section.appendChild(heading);
+    for (let index = 0; index < 20; index++) {
+      const row = document.createElement("div");
+      row.setAttribute("class", "row");
+      const label = document.createElement("span");
+      label.appendChild(document.createTextNode("Static row " + index));
+      row.appendChild(label);
+      section.appendChild(row);
+    }
+    return section;
+  }
+});
+
+${staticRenderCode}
+
+defineCustomElement({
+  tag: "elf-browser-bench-static-hoisted",
+  render: renderHoistedStatic
+});
+
+const mountStaticShadows = (tag, count) => {
+  const root = document.createElement("main");
+  document.body.appendChild(root);
+  for (let i = 0; i < count; i++) root.appendChild(document.createElement(tag));
+  if (root.querySelector(tag)?.shadowRoot?.querySelector("h1")?.textContent !== "Static title") {
+    throw new Error("static shadow mount failed");
+  }
+  root.remove();
+};
+
 globalThis.__elfBrowserBench = {
+  staticShadowDirect(count) {
+    mountStaticShadows("elf-browser-bench-static-direct", count);
+  },
+  staticShadowHoisted(count) {
+    mountStaticShadows("elf-browser-bench-static-hoisted", count);
+  },
   helloMount(count) {
     const root = document.createElement("main");
     document.body.appendChild(root);
@@ -370,6 +428,8 @@ const runCase = async (label, fn, params, options = {}) => {
     results.push(await runCase("table partial update 1k cells", "tableUpdate", [100, 10]));
     results.push(await runCase("directive mount/update 500", "directiveUpdate", [500]));
     results.push(await runCase("shadow components 1k", "shadowMount", [1000], { iterations: 3 }));
+    results.push(await runCase("static shadow direct 1k", "staticShadowDirect", [1000]));
+    results.push(await runCase("static shadow hoisted 1k", "staticShadowHoisted", [1000]));
     results.push(await runCase("event dispatch 1k", "eventDispatch", [1000]));
     const memory = globalThis.__elfBrowserBench.memoryRelease(500, 5);
     const payload = {

@@ -11,8 +11,7 @@ type EvaluatedModule = Record<string, unknown>;
 
 const elfuiRuntimeShim = {
   ...reactivity,
-  ...runtime,
-  computed: reactivity.useComputed
+  ...runtime
 };
 
 const evalMacroModule = (code: string, dev: boolean | "absent" = true): EvaluatedModule => {
@@ -56,7 +55,7 @@ const compileRuntimeMacro = (
 afterEach(() => {
   document.body.innerHTML = "";
   vi.restoreAllMocks();
-  runtime.resetDirectives();
+  runtimeInternal.resetDirectives();
   runtime.resetConfig();
   delete (globalThis as { __elfMacroRuntimeLog?: string[] }).__elfMacroRuntimeLog;
   delete (globalThis as { __elfMacroTemplateRef?: Element | null }).__elfMacroTemplateRef;
@@ -271,8 +270,8 @@ export const ImportedProps = defineHtml(\`<p>\${props.value}</p>\`);
 import {
   defineHtml,
   onBeforeUpdate,
-  onMount,
-  onUnmount,
+  onMounted,
+  onUnmounted,
   onUpdated,
   usePlugin,
   useRef
@@ -294,10 +293,10 @@ const inc = (): void => {
   count.set(count.peek() + 1);
 };
 
-onMount(() => log.push("mount"));
+onMounted(() => log.push("mount"));
 onBeforeUpdate(() => log.push("beforeUpdate"));
 onUpdated(() => log.push("updated"));
-onUnmount(() => log.push("unmount"));
+onUnmounted(() => log.push("unmount"));
 
 export const MacroLifecycleProbe = defineHtml(\`
   <button v-macro-mark @click=\${inc}>\${count}</button>

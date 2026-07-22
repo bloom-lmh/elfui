@@ -242,6 +242,24 @@ export const list = <T>(
       }
     }
 
+    // 最常见的更新路径：长度和 key 顺序都没有变化。
+    // 此时只需刷新 item/index state，避免为 keyed diff 分配 next、Set、Map 和 LIS 数组。
+    if (prev.length === newItems.length) {
+      let sameKeyOrder = true;
+      for (let i = 0; i < prev.length; i++) {
+        if ((prev[i] as ListItem<T>).key !== (newKeys[i] as string | number)) {
+          sameKeyOrder = false;
+          break;
+        }
+      }
+      if (sameKeyOrder) {
+        for (let i = 0; i < prev.length; i++) {
+          updateListItem(prev[i] as ListItem<T>, newItems[i] as T, i);
+        }
+        return;
+      }
+    }
+
     const next: Array<ListItem<T> | null> = new Array(newItems.length).fill(null);
     const newIndexToOldIndex = new Array<number>(newItems.length).fill(0);
     const usedOldItems = new Set<ListItem<T>>();

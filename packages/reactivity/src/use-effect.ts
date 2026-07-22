@@ -1,6 +1,6 @@
 // useEffect — ElfUI 的副作用入口
 //
-// 设计差异（相对 React useEffect 与 Vue watchEffect）：
+// 设计差异（相对 React useEffect）：
 // - 自动依赖追踪：访问 state 即收集，无需依赖数组（解决 React 闭包陷阱与依赖数组心智）
 // - cleanup 返回值：useEffect(() => { ...; return () => clean })
 //   每次重跑前自动调用上一次的 cleanup，组件卸载也调用最后一次的 cleanup
@@ -21,8 +21,7 @@ export type EffectCleanup = () => void;
 export type EffectFn = () => void | EffectCleanup;
 
 export interface UseEffectOptions {
-  /** sync: 写入即同步重跑（默认行为，与 watchEffect("sync") 等价）；
-   *  pre / post: 进入 microtask 队列批量合并 */
+  /** sync: 写入即同步重跑（默认行为）；pre / post: 进入 microtask 队列批量合并 */
   flush?: "sync" | "pre" | "post";
   /** stop 时调用一次 */
   onStop?: () => void;

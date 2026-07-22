@@ -11,13 +11,12 @@ import {
   onActivated,
   onDeactivated,
   onMounted,
-  onUnmount,
-  resetDirectives,
+  onUnmounted,
   teleport,
   useAppConfig,
   type ElfElementConstructor
 } from "@elfui/runtime";
-import { resolveDirective } from "@elfui/runtime/internal";
+import { resetDirectives, resolveDirective } from "@elfui/runtime/internal";
 
 import { createApp, type ElfUIApp } from "../app";
 
@@ -286,7 +285,7 @@ describe("createApp", () => {
     document.body.innerHTML = '<div id="app"></div>';
     const cleanup = vi.fn();
     const Root = defineTestElement("unmount", () => {
-      onUnmount(cleanup);
+      onUnmounted(cleanup);
       return {};
     });
     const app = createApp(Root);
@@ -320,7 +319,7 @@ describe("createApp", () => {
       onMounted(() => current.mounted++);
       onActivated(() => current.activated++);
       onDeactivated(() => current.deactivated++);
-      onUnmount(() => current.unmounted++);
+      onUnmounted(() => current.unmounted++);
       return {};
     });
     const childTag = ensureCustomElement(Child);
@@ -384,7 +383,7 @@ describe("createApp", () => {
     const unmounted: string[] = [];
     const Child = defineTestElement("keep-alive-lru-child", (_props, ctx) => {
       const name = ctx.host.dataset.key!;
-      onUnmount(() => unmounted.push(name));
+      onUnmounted(() => unmounted.push(name));
       return {};
     });
     const childTag = ensureCustomElement(Child);

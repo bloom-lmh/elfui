@@ -3,7 +3,7 @@
 import { useEffect } from "@elfui/reactivity";
 
 import { useEventListener } from "./hooks";
-import { onBeforeUnmount, onMount, onMounted } from "./lifecycle";
+import { onBeforeUnmount, onMounted } from "./lifecycle";
 
 /** 获取容器内所有可聚焦元素 */
 const FOCUSABLE = [
@@ -30,7 +30,7 @@ export const useFocusTrap = (target: HTMLElement | null | undefined): void => {
   if (!target) return;
   let prevActive: HTMLElement | null = null;
 
-  onMount(() => {
+  onMounted(() => {
     prevActive = document.activeElement as HTMLElement | null;
     // 自动聚焦第一个可聚焦元素
     const first = queryFocusables(target)[0];

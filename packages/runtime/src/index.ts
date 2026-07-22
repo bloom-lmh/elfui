@@ -11,14 +11,15 @@ export {
   onBeforeUpdate,
   onDeactivated,
   onErrorCaptured,
-  onMount,
   onMounted,
-  onUnmount,
   onUnmounted,
   onUpdated,
   type AttributeChangedHook,
   type ErrorCapturedHook,
-  type LifecycleHook
+  type LifecycleCleanup,
+  type LifecycleHook,
+  type MountedHook,
+  type MountedHookResult
 } from "./lifecycle";
 
 export {
@@ -32,8 +33,6 @@ export {
 export { useScopedSlot, type ScopedSlotFn } from "./scoped-slots";
 
 export {
-  directive,
-  resetDirectives,
   type DirectiveBinding,
   type DirectiveDefinition,
   type DirectiveFn,

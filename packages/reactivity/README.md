@@ -14,4 +14,4 @@ batch(() => {
 });
 ```
 
-Use `useRef` for primitive state, `useReactive` for objects and arrays, and `useComputed`, `watch`, or `watchEffect` for derived state and effects.
+Use `useRef` for primitive state, `useReactive` for objects and arrays, `useComputed` for derived state, `useEffect` for automatically tracked effects, and `watch` for explicit sources and old/new values.

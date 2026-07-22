@@ -10,15 +10,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  effectScope,
-  getCurrentScope,
-  onScopeDispose,
-  useEffect,
-  useRef,
-  watch,
-  watchEffect
-} from "../index";
+import { effectScope, getCurrentScope, onScopeDispose, useEffect, useRef, watch } from "../index";
 
 describe("effectScope 基础", () => {
   it("scope.run 内创建的 effect 会被 scope.stop 销毁", () => {
@@ -41,7 +33,7 @@ describe("effectScope 基础", () => {
     expect(spy).toHaveBeenCalledTimes(2); // 已停止，不再触发
   });
 
-  it("scope 内多个 effect / watchEffect 一并销毁", async () => {
+  it("scope 内多个 effect 一并销毁", async () => {
     const a = useRef(0);
     const b = useRef(0);
     const spyA = vi.fn();
@@ -52,9 +44,12 @@ describe("effectScope 基础", () => {
       useEffect(() => {
         spyA(a.value);
       });
-      watchEffect(() => {
-        spyB(b.value);
-      });
+      useEffect(
+        () => {
+          spyB(b.value);
+        },
+        { flush: "pre" }
+      );
     });
     expect(spyA).toHaveBeenCalledTimes(1);
     expect(spyB).toHaveBeenCalledTimes(1);
