@@ -205,6 +205,16 @@ interface ModelMacro {
   typeArgs: string;
 }
 
+interface MacroDirective {
+  localName: string;
+  definition: string;
+  expression: ts.Expression;
+  references: Set<string>;
+  staticName: string;
+}
+
+const DIRECTIVE_SETUP_MARKER = "\0elfui:directive:";
+
 interface TemplateExport {
   exportName: "default" | string;
   localName?: string;
@@ -304,7 +314,7 @@ interface TransformState {
   props: Map<string, string>;
   emits: Set<string>;
   styles: string[];
-  directives: Map<string, string>;
+  directives: Map<string, MacroDirective>;
   components: Map<string, string>;
   options: Map<string, string>;
   templateVars: Map<string, TemplateInfo & { lazyRegister: boolean }>;
@@ -1210,7 +1220,18 @@ const collectUseDirective = (
     return;
   }
 
-  state.directives.set(name, textOf(definition, state));
+  // Delay the final placement until every setup binding is known. Module-safe
+  // definitions stay available on ComponentDefinition.directives; definitions
+  // that capture setup bindings are created per component instance.
+  state.setupStatements.push(`${DIRECTIVE_SETUP_MARKER}${name}`);
+  state.exposed.add(localName);
+  state.directives.set(name, {
+    localName,
+    definition: textOf(definition, state),
+    expression: definition,
+    references: collectIdentifierReferences(definition),
+    staticName: `__elfStaticDirective${state.directives.size}`
+  });
 };
 
 const collectTypedEmitNames = (call: ts.CallExpression, state: TransformState): void => {
@@ -2310,15 +2331,34 @@ const buildGeneratedModule = (
     "defineComponent as __elfDefineComponent",
     ...dedupe(state.macroRuntimeImports)
   ];
+  const staticDirectives = collectStaticDirectives(state);
+  const instanceDirectives = collectInstanceDirectives(state);
   const renderRuntimeImports = dedupe(components.flatMap((component) => component.renderHelpers));
+  if (instanceDirectives.length > 0) {
+    renderRuntimeImports.push("ELF_LOCAL_DIRECTIVES as __elfLocalDirectivesKey");
+  }
   const modelRuntimeImports =
     state.modelMacros.length > 0 ? ["useModel as __elfRuntimeUseModel"] : [];
 
   const propsCode = renderProps(state);
   const emitsCode = renderEmits(state);
   const stylesCode = renderStyles(state);
-  const directivesCode = renderDirectives(state);
   const componentsCode = renderComponents(state);
+
+  const sharedDeclarations = [
+    `const __elfPropsOptions = ${propsCode};`,
+    `const __elfEmits = ${emitsCode};`,
+    `const __elfStyles = ${stylesCode};`,
+    `const __elfComponents = ${componentsCode};`
+  ];
+  for (const [, directive] of staticDirectives) {
+    sharedDeclarations.push(`const ${directive.staticName} = ${directive.definition};`);
+  }
+  if (staticDirectives.length > 0) {
+    sharedDeclarations.push(
+      `const __elfDirectives = ${renderDirectiveEntries(staticDirectives, (directive) => directive.staticName)};`
+    );
+  }
 
   return {
     runtimeImport: state.runtimeImport,
@@ -2329,17 +2369,13 @@ const buildGeneratedModule = (
     modelRuntimeImports,
     preservedImports: state.imports,
     topLevelStatements: state.topLevel,
-    sharedDeclarations: [
-      `const __elfPropsOptions = ${propsCode};`,
-      `const __elfEmits = ${emitsCode};`,
-      `const __elfStyles = ${stylesCode};`,
-      `const __elfDirectives = ${directivesCode};`,
-      `const __elfComponents = ${componentsCode};`
-    ],
+    sharedDeclarations,
     renderFunctions: components.map((component) => component.renderCode),
     typeAliases: renderTypeAliases(state),
     setupFactory: renderSetup(state),
-    componentFactories: components.map((component) => renderComponent(component, state))
+    componentFactories: components.map((component) =>
+      renderComponent(component, state, staticDirectives.length > 0)
+    )
   };
 };
 
@@ -2484,11 +2520,38 @@ const renderStyles = (state: TransformState): string => {
   return `[${state.styles.join(", ")}]`;
 };
 
-const renderDirectives = (state: TransformState): string => {
-  if (state.directives.size === 0) return "{}";
-  return `{ ${Array.from(state.directives, ([key, value]) => `${objectKey(key)}: ${value}`).join(
-    ", "
-  )} }`;
+type DirectiveEntry = [string, MacroDirective];
+
+const isModuleSafeDirective = (directive: MacroDirective, state: TransformState): boolean => {
+  const expression = stripExpression(directive.expression);
+  if (
+    !ts.isIdentifier(expression) &&
+    !ts.isObjectLiteralExpression(expression) &&
+    !ts.isArrowFunction(expression) &&
+    !ts.isFunctionExpression(expression)
+  ) {
+    return false;
+  }
+  for (const reference of directive.references) {
+    if (reference !== directive.localName && state.exposed.has(reference)) return false;
+  }
+  return true;
+};
+
+const collectStaticDirectives = (state: TransformState): DirectiveEntry[] =>
+  Array.from(state.directives).filter(([, directive]) => isModuleSafeDirective(directive, state));
+
+const collectInstanceDirectives = (state: TransformState): DirectiveEntry[] =>
+  Array.from(state.directives).filter(([, directive]) => !isModuleSafeDirective(directive, state));
+
+const renderDirectiveEntries = (
+  entries: readonly DirectiveEntry[],
+  renderValue: (directive: MacroDirective) => string
+): string => {
+  if (entries.length === 0) return "{}";
+  return `{ ${entries
+    .map(([key, directive]) => `${objectKey(key)}: ${renderValue(directive)}`)
+    .join(", ")} }`;
 };
 
 const renderComponents = (state: TransformState): string => {
@@ -2556,6 +2619,17 @@ const renderSetup = (state: TransformState): string => {
   }
 
   for (const statement of state.setupStatements) {
+    if (statement.startsWith(DIRECTIVE_SETUP_MARKER)) {
+      const name = statement.slice(DIRECTIVE_SETUP_MARKER.length);
+      const directive = state.directives.get(name);
+      if (directive) {
+        const definition = isModuleSafeDirective(directive, state)
+          ? directive.staticName
+          : directive.definition;
+        code.line(`  const ${directive.localName} = ${definition};`);
+      }
+      continue;
+    }
     for (const line of indent(statement, "  ").split(/\r\n|\r|\n/)) {
       code.line(line);
     }
@@ -2566,26 +2640,37 @@ const renderSetup = (state: TransformState): string => {
   }
 
   const exposed = Array.from(state.exposed);
-  code.line(`  return ${renderReturnObject(exposed)};`);
+  code.line(`  return ${renderReturnObject(exposed, state)};`);
   code.line("};");
   return code.toString();
 };
 
-const renderReturnObject = (names: string[]): string => {
-  if (names.length === 0) return "{}";
-  return `{ ${names.join(", ")} }`;
+const renderReturnObject = (names: string[], state: TransformState): string => {
+  const entries = [...names];
+  const instanceDirectives = collectInstanceDirectives(state);
+  if (instanceDirectives.length > 0) {
+    entries.push(
+      `[__elfLocalDirectivesKey]: ${renderDirectiveEntries(instanceDirectives, (directive) => directive.localName)}`
+    );
+  }
+  if (entries.length === 0) return "{}";
+  return `{ ${entries.join(", ")} }`;
 };
 
-const renderComponent = (component: InternalCompiledComponent, state: TransformState): string => {
+const renderComponent = (
+  component: InternalCompiledComponent,
+  state: TransformState,
+  hasStaticDirectives: boolean
+): string => {
   const fields = [
     `name: ${JSON.stringify(component.name)}`,
     "props: __elfPropsOptions",
     "emits: __elfEmits",
     "setup: __elfSetup",
     `render: ${component.renderName}`,
-    "styles: __elfStyles",
-    "directives: __elfDirectives"
+    "styles: __elfStyles"
   ];
+  if (hasStaticDirectives) fields.push("directives: __elfDirectives");
   const optionComponents = state.options.get("components") ?? null;
   if (state.components.size > 0 || optionComponents) {
     fields.push(
@@ -2803,6 +2888,16 @@ const collectBindingNames = (name: ts.BindingName, out: Set<string>): void => {
   for (const element of name.elements) {
     if (ts.isBindingElement(element)) collectBindingNames(element.name, out);
   }
+};
+
+const collectIdentifierReferences = (node: ts.Node): Set<string> => {
+  const references = new Set<string>();
+  const visit = (current: ts.Node): void => {
+    if (ts.isIdentifier(current)) references.add(current.text);
+    ts.forEachChild(current, visit);
+  };
+  visit(node);
+  return references;
 };
 
 const stringLiteralValue = (node: ts.Expression): string | null => {

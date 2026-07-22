@@ -222,7 +222,8 @@ export const ApiLabField = defineHtml<ApiLabProps, ApiLabEmits, ApiLabSlots>(\`
     expect(result.code).toContain('formControl: { defaultValue: "" }');
     expect(result.code).toContain('from "@elfui/core/internal"');
     expect(result.code).not.toContain('from "@elfui/runtime');
-    expect(result.code).toContain('const __elfDirectives = { "api-focus":');
+    expect(result.code).toContain("const __elfStaticDirective0 = {");
+    expect(result.code).toContain('const __elfDirectives = { "api-focus": __elfStaticDirective0 }');
     expect(result.code).toContain("onActivated(syncForm);");
     expect(result.code).toContain("useFormControlContext<string>();");
     expect(result.code).toContain("useScopedSlot<{ item: string; index: number }>");

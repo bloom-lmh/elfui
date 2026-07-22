@@ -356,7 +356,9 @@ export const SearchField = defineHtml(`<input v-auto-focus />`);
 
 应用级指令使用 `app.directive()` 注册。同名时组件局部指令优先。
 
-beta.8 的公开 API 统一保留 `onMounted`、`onUnmounted`、`useComputed`、`useEffect`、`watch`、`theme`、`defineDirective` 和 `app.directive`；旧的 `onMount`、`onUnmount`、`computed`、`watchEffect`、`watchPostEffect`、`watchSyncEffect`、`useTheme` 与进程级 `directive()` 导出已删除。
+局部指令可以捕获 props、ref、host、常量和辅助函数。捕获的 setup 状态按组件实例隔离；模块安全的定义仍保持静态，不产生额外实例分配。
+
+当前 beta.10 的公开 API 统一保留 `onMounted`、`onUnmounted`、`useComputed`、`useEffect`、`watch`、`theme`、`defineDirective` 和 `app.directive`；旧的 `onMount`、`onUnmount`、`computed`、`watchEffect`、`watchPostEffect`、`watchSyncEffect`、`useTheme` 与进程级 `directive()` 导出已删除。
 
 ## 🔔 事件
 

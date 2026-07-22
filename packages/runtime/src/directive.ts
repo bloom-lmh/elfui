@@ -17,6 +17,9 @@ import { handleRuntimeError } from "./error";
 
 const APP_DIRECTIVES_KEY: unique symbol = Symbol.for("elfui.app.directives") as never;
 
+/** 编译器用于把组件实例级局部指令从 setup 传给渲染上下文。 */
+export const ELF_LOCAL_DIRECTIVES = Symbol.for("elfui.local.directives");
+
 export interface DirectiveBinding<V = unknown> {
   /** 当前值 */
   value: V;

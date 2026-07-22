@@ -360,11 +360,14 @@ export const LocalDirectiveProbe = defineHtml(\`
       { filename: "LocalDirectiveProbe.ts", templateTypeCheck: false }
     );
     expectNoDiagnostics(result);
-    expect(result.code).toContain("const __elfDirectives = { dual:");
+    expect(result.code).toContain("const __elfStaticDirective0 = {");
+    expect(result.code).toContain("const __elfDirectives = { dual: __elfStaticDirective0 }");
+    expect(result.code).not.toContain("ELF_LOCAL_DIRECTIVES as __elfLocalDirectivesKey");
     expect(result.code).toMatch(/resolveDirective\("dual", _ctx\d+\.directives, _ctx\d+\.host\)/);
 
     const exports = evalMacroModule(result.code);
     const ctor = exports.LocalDirectiveProbe as runtime.ElfElementConstructor;
+    expect(ctor.__elfDefinition.directives?.dual).toBeTruthy();
     const el = document.createElement(runtime.ensureCustomElement(ctor));
     const appDirective = {
       mounted: () => log.push("app")
@@ -391,6 +394,61 @@ export const LocalDirectiveProbe = defineHtml(\`
       ])
     );
     expect(log).not.toContain("app");
+  });
+
+  it("preserves local directive closures and isolates captured setup state per instance", async () => {
+    const result = compileRuntimeMacro(
+      `
+import { defineDirective, defineHtml, defineProps, useRef } from "@elfui/core";
+
+const props = defineProps({ prefix: { type: String, default: "local" } });
+const mountCount = useRef(0);
+const suffix = "content";
+
+function formatContent(value: unknown): string {
+  return props.prefix + ":" + String(value) + ":" + suffix;
+}
+
+const mountContent = (element: HTMLElement, value: unknown): void => {
+  const count = mountCount.peek() + 1;
+  mountCount.set(count);
+  element.textContent = formatContent(value) + ":" + count;
+};
+
+const content = defineDirective<string, HTMLLIElement>((element, binding) => {
+  mountContent(element, binding.value);
+});
+
+const items = ["a", "b"];
+
+export const DirectiveClosureProbe = defineHtml(\`
+  <ul><li v-for="item in items" :key="item" v-content=\${item}></li></ul>
+\`);
+      `,
+      { filename: "DirectiveClosureProbe.ts", templateTypeCheck: false }
+    );
+    expectNoDiagnostics(result);
+    expect(result.code).toContain("const content = (element, binding) =>");
+    expect(result.code).toContain("[__elfLocalDirectivesKey]: { content: content }");
+    expect(result.code).not.toMatch(/const __elfDirectives\s*=/);
+
+    const exports = evalMacroModule(result.code);
+    const ctor = exports.DirectiveClosureProbe as runtime.ElfElementConstructor;
+    const tag = runtime.ensureCustomElement(ctor);
+    const first = document.createElement(tag);
+    const second = document.createElement(tag);
+    first.setAttribute("prefix", "first");
+    second.setAttribute("prefix", "second");
+    document.body.append(first, second);
+    await nextMicrotask();
+    await nextMicrotask();
+
+    expect(
+      Array.from((first.shadowRoot ?? first).querySelectorAll("li"), (item) => item.textContent)
+    ).toEqual(["first:a:content:1", "first:b:content:2"]);
+    expect(
+      Array.from((second.shadowRoot ?? second).querySelectorAll("li"), (item) => item.textContent)
+    ).toEqual(["second:a:content:1", "second:b:content:2"]);
   });
 
   it("rejects legacy or unassigned defineDirective macro calls", () => {

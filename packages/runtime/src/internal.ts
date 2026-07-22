@@ -33,6 +33,7 @@ export { handleRuntimeError, type RuntimeErrorOwner } from "./error";
 export {
   applyCustomDirective,
   directive as registerGlobalDirective,
+  ELF_LOCAL_DIRECTIVES,
   resetDirectives,
   resolveDirective,
   type DirectiveDefinition

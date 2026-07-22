@@ -17,6 +17,7 @@
     "fix-local-directive-context",
     "flexible-observer-targets",
     "gentle-events-contract",
+    "instance-directive-captures",
     "kind-template-values",
     "lean-expression-ir",
     "package-metadata",

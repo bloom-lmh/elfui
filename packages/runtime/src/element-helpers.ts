@@ -4,6 +4,7 @@ import { getHostAttrs } from "./attrs";
 import { resolveAppConfig } from "./config";
 import { DEV as __DEV__ } from "./dev";
 import { emitDevtoolsRuntimeEvent } from "./devtools";
+import { ELF_LOCAL_DIRECTIVES } from "./directive";
 import { createRenderState } from "./unwrap";
 import type {
   ComponentDefinition,
@@ -151,6 +152,14 @@ export const buildRenderCtx = (
   directives?: Record<string, unknown>,
   components?: ComponentDefinition["components"]
 ): RenderContext => {
+  const instanceDirectives = (setupState as Record<PropertyKey, unknown>)[ELF_LOCAL_DIRECTIVES] as
+    | Record<string, unknown>
+    | undefined;
+  const resolvedDirectives = instanceDirectives
+    ? directives
+      ? { ...directives, ...instanceDirectives }
+      : instanceDirectives
+    : directives;
   const systemState: Record<string, unknown> = {
     $emit: emit,
     $host: host,
@@ -166,7 +175,7 @@ export const buildRenderCtx = (
     host,
     shadow
   };
-  if (directives) renderCtx.directives = directives;
+  if (resolvedDirectives) renderCtx.directives = resolvedDirectives;
   if (components) renderCtx.components = components;
   return renderCtx;
 };
