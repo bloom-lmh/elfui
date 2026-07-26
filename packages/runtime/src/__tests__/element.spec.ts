@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { useEffect, useRef } from "@elfui/reactivity";
+import { useEffect, useReactive, useRef } from "@elfui/reactivity";
 
 import { defineCustomElement, ensureCustomElement } from "../element";
 import {
@@ -15,7 +15,7 @@ import {
   onUnmounted,
   onUpdated
 } from "../lifecycle";
-import { text } from "../bindings";
+import { prop, text } from "../bindings";
 import { branch, list, mark } from "../control-flow";
 import { setTemplateRef, useTemplateRef } from "../template-ref";
 
@@ -402,6 +402,110 @@ describe("Props", () => {
     el.items = nextArray;
     expect(el.config).toBe(nextObject);
     expect(el.items).toBe(nextArray);
+    el.remove();
+  });
+
+  it("响应式对象和数组作为 prop 值整体替换时保持子组件订阅", () => {
+    const tag = nextTag();
+    const rowsSource = useRef(["old"]);
+    const configSource = useRef({ mode: "initial" });
+    let observedRows: string[] = [];
+    let observedMode = "";
+
+    defineCustomElement({
+      tag,
+      props: {
+        rows: { type: Array, default: () => [] },
+        config: { type: Object, default: () => ({}) }
+      },
+      setup: (props) => {
+        useEffect(() => {
+          observedRows = [...(props.rows as string[])];
+          observedMode = String((props.config as { mode?: string }).mode ?? "");
+        });
+        return {};
+      },
+      render: () => document.createElement("div")
+    });
+
+    const el = document.createElement(tag) as HTMLElement & {
+      rows: string[];
+      config: { mode: string };
+    };
+    prop(el, "rows", () => rowsSource.value);
+    prop(el, "config", () => configSource.value);
+    document.body.appendChild(el);
+
+    expect(observedRows).toEqual(["old"]);
+    expect(observedMode).toBe("initial");
+
+    rowsSource.set(["new"]);
+    configSource.set({ mode: "next" });
+
+    expect(el.rows).toBe(rowsSource.value);
+    expect(el.config).toBe(configSource.value);
+    expect(observedRows).toEqual(["new"]);
+    expect(observedMode).toBe("next");
+    el.remove();
+  });
+
+  it("真正的 Ref 作为 prop 容器时仍保持直接订阅", () => {
+    const tag = nextTag();
+    const rows = useRef(["old"]);
+    let observedRows: string[] = [];
+
+    defineCustomElement({
+      tag,
+      props: { rows: { type: Array, default: () => [] } },
+      setup: (props) => {
+        useEffect(() => {
+          observedRows = [...(props.rows as string[])];
+        });
+        return {};
+      },
+      render: () => document.createElement("div")
+    });
+
+    const el = document.createElement(tag) as HTMLElement & { rows: string[] };
+    (el as unknown as { rows: ReturnType<typeof useRef<string[]>> }).rows = rows;
+    document.body.appendChild(el);
+
+    expect(el.rows).toBe(rows.value);
+    expect(observedRows).toEqual(["old"]);
+
+    rows.set(["new"]);
+
+    expect(el.rows).toBe(rows.value);
+    expect(observedRows).toEqual(["new"]);
+    el.remove();
+  });
+
+  it("useReactive 创建的对象作为 prop 值替换时不会被当作 Ref 容器", () => {
+    const tag = nextTag();
+    let observedMode = "";
+
+    defineCustomElement({
+      tag,
+      props: { config: { type: Object, default: () => ({}) } },
+      setup: (props) => {
+        useEffect(() => {
+          observedMode = String((props.config as { mode?: string }).mode ?? "");
+        });
+        return {};
+      },
+      render: () => document.createElement("div")
+    });
+
+    const el = document.createElement(tag) as HTMLElement & { config: { mode: string } };
+    el.config = useReactive({ mode: "initial" });
+    document.body.appendChild(el);
+    expect(observedMode).toBe("initial");
+
+    const next = useReactive({ mode: "next" });
+    el.config = next;
+
+    expect(el.config).toBe(next);
+    expect(observedMode).toBe("next");
     el.remove();
   });
 });

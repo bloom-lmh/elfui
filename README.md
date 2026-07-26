@@ -362,7 +362,7 @@ Use `app.directive()` for application-wide directives. A component-local definit
 
 Local directives may capture props, refs, hosts, constants, and helper functions. Captured setup state stays isolated per component instance; module-safe definitions remain static.
 
-The current beta.10 API surface keeps `onMounted`, `onUnmounted`, `useComputed`, `useEffect`, `watch`, `theme`, `defineDirective`, and `app.directive`. The former `onMount`, `onUnmount`, `computed`, `watchEffect`, `watchPostEffect`, `watchSyncEffect`, `useTheme`, and process-wide `directive()` exports have been removed.
+The current beta.11 API surface keeps `onMounted`, `onUnmounted`, `useComputed`, `useEffect`, `watch`, `theme`, `defineDirective`, and `app.directive`. The former `onMount`, `onUnmount`, `computed`, `watchEffect`, `watchPostEffect`, `watchSyncEffect`, `useTheme`, and process-wide `directive()` exports have been removed.
 
 ## 🔔 Events
 

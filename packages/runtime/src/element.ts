@@ -13,14 +13,7 @@
 // - definition 由 createComponent() 链式 builder 收集
 // - props / setup / template-render / styles / formAssociated 等都通过 definition 传入
 
-import {
-  effectScope,
-  isRef,
-  isState,
-  useReactive,
-  useShallowRef,
-  type useRef
-} from "@elfui/reactivity";
+import { effectScope, isRef, useReactive, useShallowRef, type useRef } from "@elfui/reactivity";
 
 import { getHostAttrs, disposeHostAttrs } from "./attrs";
 import { DEV as __DEV__ } from "./dev";
@@ -276,7 +269,10 @@ export const defineCustomElement = (
           },
           set: (value: unknown) => {
             if (!this.__mounted) this.__preMountPropValues.set(key, value);
-            if (isState(value)) {
+            // Only an actual Ref may replace the prop's reactive container. Reactive
+            // objects and arrays are prop values, so write them through the stable
+            // shallow Ref that existing child effects already subscribe to.
+            if (isRef(value)) {
               this.__propStates.set(key, value as unknown as ReturnType<typeof useRef>);
               return;
             }

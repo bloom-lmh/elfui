@@ -16,6 +16,7 @@
     "direct-macro-literals",
     "fix-local-directive-context",
     "flexible-observer-targets",
+    "fresh-prop-containers",
     "gentle-events-contract",
     "instance-directive-captures",
     "kind-template-values",
