@@ -82,4 +82,19 @@ describe("render state facade", () => {
     expect(props.count).toBe(2);
     expect(props.other).toBe(true);
   });
+
+  it("uses Fragment defaults for missing and explicitly undefined props", () => {
+    const compact = useRef<unknown>(undefined);
+    const props = createFragmentProps(
+      [() => ({ compact: compact.value })],
+      [() => ({ compact: false, tone: "neutral" })]
+    );
+
+    expect(props.compact).toBe(false);
+    expect(props.tone).toBe("neutral");
+    expect(Object.keys(props)).toEqual(["compact", "tone"]);
+
+    compact.set(true);
+    expect(props.compact).toBe(true);
+  });
 });

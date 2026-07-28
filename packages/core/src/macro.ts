@@ -101,9 +101,9 @@ export type MacroFragment<Props extends object = Record<string, unknown>> = {
   readonly __elfFragmentProps?: Readonly<Props>;
 };
 
-export function defineFragment<Props extends object = Record<string, unknown>>(
-  _render: (props: Readonly<Props>) => string
-): MacroFragment<Props> {
+export function defineFragment<Args extends readonly unknown[]>(
+  _render: (...args: Args) => string
+): MacroFragment<Record<string, unknown>> {
   return macroOnly("defineFragment");
 }
 

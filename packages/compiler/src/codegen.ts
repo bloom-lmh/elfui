@@ -75,6 +75,7 @@ export interface FragmentCodegenDefinition {
   name: string;
   template: string;
   scopeNames: readonly string[];
+  defaultValues?: ReadonlyArray<{ name: string; expression: string }>;
   renderName: string;
   debugSource?: CodegenTemplateDebugSource;
 }
@@ -802,6 +803,10 @@ const genFragmentCall = (
   const propsVar = fresh(ctx, "fragmentProps");
   const childCtx = fresh(ctx, "fragmentCtx");
   const sources: string[] = [];
+  const defaultSources = (fragment.defaultValues ?? []).map(
+    ({ name, expression }) =>
+      `() => ({ ${escapeStr(name)}: (${wrapGetter(expression, ctx)})(${currentCtx(ctx)}) })`
+  );
 
   for (const prop of node.props) {
     if (prop.type === AttrTypes.ATTRIBUTE) {
@@ -833,7 +838,7 @@ const genFragmentCall = (
     }
   }
 
-  return `(() => { const ${propsVar} = createFragmentProps([${sources.join(", ")}]); const ${childCtx} = { ...${currentCtx(ctx)}, props: ${propsVar}, state: extendRenderState(extendRenderState(${currentCtx(ctx)}.state, ${propsVar}), { props: ${propsVar} }) }; return ${fragment.renderName}(${childCtx}); })()`;
+  return `(() => { const ${propsVar} = createFragmentProps([${sources.join(", ")}]${defaultSources.length > 0 ? `, [${defaultSources.join(", ")}]` : ""}); const ${childCtx} = { ...${currentCtx(ctx)}, props: ${propsVar}, state: extendRenderState(extendRenderState(${currentCtx(ctx)}.state, ${propsVar}), { props: ${propsVar} }) }; return ${fragment.renderName}(${childCtx}); })()`;
 };
 
 const genTemplateFragment = (node: ElementNode, ctx: CodegenContext): string => {

@@ -113,9 +113,9 @@ export const AnonymousListFragmentProbe = defineHtml(
     const result = compileRuntimeMacro(
       `
 import { defineFragment, defineHtml, useRef } from "@elfui/core";
-interface CardProps { item: { id: string; label: string }; }
-const Card = defineFragment<CardProps>(
-  ({ item }) => \`<article class="card">\${item.label}</article>\`
+interface CardItem { id: string; label: string; }
+const Card = defineFragment(
+  (item: CardItem, compact = false) => \`<article class="card" :class=\${compact ? "compact" : ""} :data-compact=\${String(compact)}>\${item.label}</article>\`
 );
 const items = useRef([{ id: "a", label: "Alpha" }]);
 const replaceItems = (): void => items.set([{ id: "b", label: "Beta" }]);
@@ -139,6 +139,8 @@ export const FragmentProbe = defineHtml(\`
 
     const root = el.shadowRoot ?? el;
     expect(root.querySelector("article.card")?.textContent).toBe("Alpha");
+    expect(root.querySelector("article.card")?.classList.contains("compact")).toBe(false);
+    expect(root.querySelector("article.card")?.getAttribute("data-compact")).toBe("false");
     expect(root.querySelector("card")).toBeNull();
     root.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(root.querySelector("article.card")?.textContent).toBe("Beta");
@@ -148,12 +150,9 @@ export const FragmentProbe = defineHtml(\`
     const result = compileRuntimeMacro(
       `
 import { defineFragment, defineHtml, useRef } from "@elfui/core";
-interface CardProps {
-  label: string;
-  item: { label: string };
-}
-const Card = defineFragment<CardProps>(
-  (props) => \`<article class="card">\${props.label}|\${props.item.label}</article>\`
+interface CardItem { label: string; }
+const Card = defineFragment(
+  (label: string, item: CardItem) => \`<article class="card">\${label}|\${item.label}</article>\`
 );
 const label = useRef("Alpha");
 const item = useRef({ label: "One" });
@@ -193,8 +192,8 @@ export const FragmentReactivePropsProbe = defineHtml(\`
       `
 import { defineFragment, defineHtml, useRef } from "@elfui/core";
 interface BadgeProps { label: string; }
-const Badge = defineFragment<BadgeProps>(
-  ({ label }) => \`<strong class="badge">\${label}</strong>\`
+const Badge = defineFragment(
+  (label: string) => \`<strong class="badge">\${label}</strong>\`
 );
 const badgeProps = useRef<BadgeProps>({ label: "Alpha" });
 const update = (): void => badgeProps.set({ label: "Beta" });
@@ -233,8 +232,8 @@ interface ActionProps {
   label: string;
   onSelect: (event: Event) => void;
 }
-const Action = defineFragment<ActionProps>(
-  (props) => \`<button class="action" @click=\${props.onSelect}>\${props.label}</button>\`
+const Action = defineFragment(
+  (label: string, onSelect: ActionProps["onSelect"]) => \`<button class="action" @click=\${onSelect}>\${label}</button>\`
 );
 const count = useRef(0);
 const select = (): void => count.set(count.peek() + 1);
@@ -264,8 +263,7 @@ export const FragmentEventProbe = defineHtml(\`
     const result = compileMacroComponent(
       `
 import { defineFragment, defineHtml, fragment } from "@elfui/core";
-interface CardProps { label: string; }
-const Card = defineFragment<CardProps>(({ label }) => \`<strong>\${label}</strong>\`);
+const Card = defineFragment((label: string) => \`<strong>\${label}</strong>\`);
 const labels = ["A"];
 export const FragmentMetadata = defineHtml(\`
   <Card label="named" />
@@ -289,7 +287,7 @@ export const FragmentMetadata = defineHtml(\`
     ]);
     expect(result.metadata.fragments[0]).toMatchObject({
       name: "Card",
-      propsType: "CardProps",
+      propsType: "{ label: string }",
       ownerComponents: ["elf-fragment-metadata"],
       identity: "not-applicable"
     });
@@ -321,12 +319,48 @@ export const CycleProbe = defineHtml(\`<First />\`);
     );
   });
 
+  it("reports legacy generic, destructured, and rest Fragment parameters", () => {
+    const legacyGeneric = compileMacroComponent(
+      `
+import { defineFragment, defineHtml } from "@elfui/core";
+interface CardProps { label: string; }
+const Card = defineFragment<CardProps>((label) => \`<span>\${label}</span>\`);
+export const Probe = defineHtml(\`<Card label="legacy" />\`);
+      `,
+      { filename: "FragmentLegacyGeneric.ts", templateTypeCheck: false }
+    );
+    expect(legacyGeneric.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "ELF_MACRO_DEFINE_FRAGMENT_TYPE_ARGUMENT" })
+      ])
+    );
+
+    for (const [filename, parameter] of [
+      ["FragmentDestructure.ts", "{ label }: { label: string }"],
+      ["FragmentRest.ts", "...labels: string[]"]
+    ] as const) {
+      const result = compileMacroComponent(
+        `
+import { defineFragment, defineHtml } from "@elfui/core";
+const Card = defineFragment((${parameter}) => \`<span>card</span>\`);
+export const Probe = defineHtml(\`<Card />\`);
+        `,
+        { filename, templateTypeCheck: false }
+      );
+      expect(result.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ code: "ELF_MACRO_DEFINE_FRAGMENT_PARAMETER" })
+        ])
+      );
+    }
+  });
+
   it("type-checks named fragment attributes", () => {
     const valid = compileMacroComponent(
       `
 import { defineFragment, defineHtml } from "@elfui/core";
-interface CardProps { item: { id: string; label: string }; }
-const Card = defineFragment<CardProps>(({ item }) => \`<span>\${item.label}</span>\`);
+interface CardItem { id: string; label: string; }
+const Card = defineFragment((item: CardItem) => \`<span>\${item.label}</span>\`);
 const items = [{ id: "a", label: "Alpha" }];
 export const FragmentTypeProbe = defineHtml(\`<Card v-for="item in items" :item="item" />\`);
       `,
@@ -337,8 +371,8 @@ export const FragmentTypeProbe = defineHtml(\`<Card v-for="item in items" :item=
     const invalid = compileMacroComponent(
       `
 import { defineFragment, defineHtml } from "@elfui/core";
-interface CardProps { item: { id: string; label: string }; }
-const Card = defineFragment<CardProps>(({ item }) => \`<span>\${item.label}</span>\`);
+interface CardItem { id: string; label: string; }
+const Card = defineFragment((item: CardItem) => \`<span>\${item.label}</span>\`);
 export const FragmentTypeProbe = defineHtml(\`<Card :missing="value" />\`);
       `,
       { filename: "FragmentTypeProbeInvalid.ts", templateTypeCheck: true }

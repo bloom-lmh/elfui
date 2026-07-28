@@ -57,7 +57,9 @@ emit("click", "bad");
 defineEmits<ButtonEmits>(["missing"]);
 
 const _Button = defineHtml<ButtonProps, ButtonEmits, ButtonSlots>(`<button></button>`);
-const _Card = defineFragment<{ label: string }>(({ label }) => `<span>${label}</span>`);
+const _Card = defineFragment(
+  (label: string, compact = false) => `<span>${label}:${compact}</span>`
+);
 type CardProps = NonNullable<(typeof _Card)["__elfFragmentProps"]>;
 const cardProps: CardProps = { label: "ok" };
 void cardProps;

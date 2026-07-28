@@ -15,6 +15,7 @@
     "calm-array-effects",
     "closed-shadow-devtools-channel",
     "direct-macro-literals",
+    "expanded-fragment-parameters",
     "fix-local-directive-context",
     "flexible-observer-targets",
     "fresh-prop-containers",

@@ -44,12 +44,21 @@ const fragmentPropsObject = (value: unknown): Record<PropertyKey, unknown> | nul
  * and template attribute ordering.
  */
 export const createFragmentProps = (
-  sources: readonly FragmentPropsSource[]
+  sources: readonly FragmentPropsSource[],
+  defaults: readonly FragmentPropsSource[] = []
 ): Record<string, unknown> =>
   new Proxy(Object.create(null) as Record<string, unknown>, {
     get(_target, key) {
       for (let index = sources.length - 1; index >= 0; index--) {
         const source = fragmentPropsObject(sources[index]!());
+        if (source && Reflect.has(source, key)) {
+          const value = Reflect.get(source, key, source);
+          if (value !== undefined) return value;
+          break;
+        }
+      }
+      for (let index = defaults.length - 1; index >= 0; index--) {
+        const source = fragmentPropsObject(defaults[index]!());
         if (source && Reflect.has(source, key)) return Reflect.get(source, key, source);
       }
       return undefined;
@@ -59,10 +68,19 @@ export const createFragmentProps = (
         const source = fragmentPropsObject(sources[index]!());
         if (source && Reflect.has(source, key)) return true;
       }
+      for (let index = defaults.length - 1; index >= 0; index--) {
+        const source = fragmentPropsObject(defaults[index]!());
+        if (source && Reflect.has(source, key)) return true;
+      }
       return false;
     },
     ownKeys() {
       const keys = new Set<string | symbol>();
+      for (const getSource of defaults) {
+        const source = fragmentPropsObject(getSource());
+        if (!source) continue;
+        for (const key of Reflect.ownKeys(source)) keys.add(key);
+      }
       for (const getSource of sources) {
         const source = fragmentPropsObject(getSource());
         if (!source) continue;
@@ -73,6 +91,12 @@ export const createFragmentProps = (
     getOwnPropertyDescriptor(_target, key) {
       for (let index = sources.length - 1; index >= 0; index--) {
         const source = fragmentPropsObject(sources[index]!());
+        if (source && Reflect.has(source, key)) {
+          return { configurable: true, enumerable: true };
+        }
+      }
+      for (let index = defaults.length - 1; index >= 0; index--) {
+        const source = fragmentPropsObject(defaults[index]!());
         if (source && Reflect.has(source, key)) {
           return { configurable: true, enumerable: true };
         }

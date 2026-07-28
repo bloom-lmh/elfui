@@ -65,7 +65,7 @@ declare module "@elfui/core" {
           : MacroDefaultValue<T>;
   export type MacroInferProps<T extends Record<string, unknown>> = Readonly<{ [K in keyof T]: MacroPropValue<T[K]> }>;
   export function defineHtml<Props extends object = Record<string, unknown>, Emits extends MacroEmitShape<Emits> = Record<string, unknown[]>, Slots extends object = object>(template: string): ElfElementConstructor<Props, MacroEmitTuples<Emits>, Slots>;
-  export function defineFragment<Props extends object = Record<string, unknown>>(render: (props: Readonly<Props>) => string): MacroFragment<Props>;
+  export function defineFragment<Args extends readonly unknown[]>(render: (...args: Args) => string): MacroFragment<Record<string, unknown>>;
   export function fragment(strings: TemplateStringsArray, ...values: unknown[]): string;
   export const defineName: any;
   export const defineOptions: any;
@@ -299,6 +299,7 @@ interface MacroFragment {
   sourceEnd: number;
   propsType?: string;
   scopeNames: string[];
+  defaultValues?: Array<{ name: string; expression: string }>;
   renderName: string;
 }
 
@@ -906,7 +907,7 @@ const getDefineFragmentTemplate = (
       code: "ELF_MACRO_DEFINE_FRAGMENT_USAGE",
       message: "defineFragment 只接受一个返回模板字符串的函数参数。",
       node: value,
-      hint: "示例：const Card = defineFragment<Props>(({ item }) => `<div>${item.label}</div>`);"
+      hint: "示例：const Card = defineFragment((item: Item, compact = false) => `<div>${item.label}</div>`);"
     });
     return null;
   }
@@ -919,6 +920,48 @@ const getDefineFragmentTemplate = (
       node: render
     });
     return null;
+  }
+
+  if (value.typeArguments?.length) {
+    addDiagnostic(state, {
+      code: "ELF_MACRO_DEFINE_FRAGMENT_TYPE_ARGUMENT",
+      message: "defineFragment 不再接受 Props 泛型，请直接为展开参数标注类型。",
+      node: value.typeArguments[0]!,
+      hint: "改为 defineFragment((item: Item, compact = false) => `...`)。"
+    });
+    return null;
+  }
+
+  const scopeNames: string[] = [];
+  const defaultValues: Array<{ name: string; expression: string }> = [];
+  const propMembers: string[] = [];
+  const seenNames = new Set<string>();
+  for (const parameter of render.parameters) {
+    if (parameter.dotDotDotToken || !ts.isIdentifier(parameter.name)) {
+      addDiagnostic(state, {
+        code: "ELF_MACRO_DEFINE_FRAGMENT_PARAMETER",
+        message: "defineFragment 只支持展开的具名参数和默认参数。",
+        node: parameter,
+        hint: "使用 (item: Item, compact = false)，不要使用对象/数组解构或 rest 参数。"
+      });
+      return null;
+    }
+    const name = parameter.name.text;
+    if (seenNames.has(name)) {
+      addDiagnostic(state, {
+        code: "ELF_MACRO_DEFINE_FRAGMENT_PARAMETER",
+        message: `defineFragment 参数 "${name}" 重复声明。`,
+        node: parameter
+      });
+      return null;
+    }
+    seenNames.add(name);
+    scopeNames.push(name);
+    if (parameter.initializer) {
+      defaultValues.push({ name, expression: textOf(parameter.initializer, state) });
+    }
+    const optional = !!parameter.questionToken || !!parameter.initializer;
+    propMembers.push(`${name}${optional ? "?" : ""}: ${fragmentParameterType(parameter, state)}`);
   }
 
   const returned = ts.isBlock(render.body)
@@ -939,18 +982,34 @@ const getDefineFragmentTemplate = (
   }
 
   const compiled = compileHtmlTemplate(template, state);
-  const scopeNames = render.parameters.flatMap((parameter) =>
-    collectBindingNamesForFragment(parameter.name)
-  );
   return {
     localName,
     template: compiled.template,
     sourceStart: compiled.sourceStart,
     sourceEnd: compiled.sourceEnd,
     scopeNames,
+    ...(defaultValues.length > 0 ? { defaultValues } : {}),
     renderName: `__elfRenderFragment_${localName.replace(/[^A-Za-z0-9_$]/gu, "_")}`,
-    ...(value.typeArguments?.[0] ? { propsType: textOf(value.typeArguments[0], state) } : {})
+    propsType: `{ ${propMembers.join("; ")} }`
   };
+};
+
+const fragmentParameterType = (
+  parameter: ts.ParameterDeclaration,
+  state: TransformState
+): string => {
+  if (parameter.type) return textOf(parameter.type, state);
+  const value = parameter.initializer ? stripExpression(parameter.initializer) : null;
+  if (!value) return "unknown";
+  if (ts.isStringLiteralLike(value)) return "string";
+  if (ts.isNumericLiteral(value)) return "number";
+  if (value.kind === ts.SyntaxKind.TrueKeyword || value.kind === ts.SyntaxKind.FalseKeyword) {
+    return "boolean";
+  }
+  if (value.kind === ts.SyntaxKind.NullKeyword) return "null";
+  if (ts.isArrayLiteralExpression(value)) return "unknown[]";
+  if (ts.isObjectLiteralExpression(value)) return "Record<string, unknown>";
+  return "unknown";
 };
 
 const collectBindingNamesForFragment = (name: ts.BindingName): string[] => {
@@ -992,7 +1051,7 @@ const collectMacroCall = (
       addDiagnostic(state, {
         code: "ELF_MACRO_DEFINE_FRAGMENT_USAGE",
         message:
-          "defineFragment 必须赋值给当前文件内的 const 变量，例如 const Card = defineFragment<Props>((props) => `...`);",
+          "defineFragment 必须赋值给当前文件内的 const 变量，例如 const Card = defineFragment((item: Item) => `...`);",
         node: call,
         hint: "不要导出、重新赋值或把 defineFragment 传入 useComponents()。"
       });
@@ -2708,6 +2767,7 @@ const renderPrecompiledTemplate = (
       name: fragment.localName,
       template: fragment.template,
       scopeNames: fragment.scopeNames,
+      ...(fragment.defaultValues ? { defaultValues: fragment.defaultValues } : {}),
       renderName: fragment.renderName,
       debugSource: templateDebugSource(state, fragment.sourceStart, fragment.localName)
     };

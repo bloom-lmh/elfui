@@ -194,43 +194,6 @@ export const SaveField = defineHtml(`
 `);
 ```
 
-### Local template fragments
-
-The fragment APIs require matching Core and Vite plugin versions.
-
-Fragments are compile-time-only template slices. They do not register a Custom Element,
-create a Shadow Root, or own a separate lifecycle.
-
-```ts
-import { defineFragment, defineHtml, fragment } from "@elfui/core";
-
-interface CardProps {
-  item: { label: string; value: number };
-}
-
-const Card = defineFragment<CardProps>(
-  ({ item }) => `
-    <article class="card">
-      <span>${item.label}</span>
-      <strong>${item.value}</strong>
-    </article>
-  `
-);
-
-export const Dashboard = defineHtml(`
-  <section>
-    <Card v-for="item in items" :key="item.label" :item="item" />
-    ${fragment`<footer class="summary">Summary</footer>`}
-  </section>
-`);
-```
-
-`defineFragment()` must be assigned to a local `const` and cannot be exported or registered.
-Its readonly `:prop` and `v-bind` view stays connected to outer reactive state, so updates patch
-the affected DOM bindings without recreating the Fragment nodes.
-Use `defineHtml()` when a template needs its own lifecycle, public component contract, or
-cross-file registration.
-
 ## ⚡ Reactivity
 
 Use `useRef` for primitives or replaceable values, and `useReactive` for objects, arrays, and collections:
