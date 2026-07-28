@@ -140,17 +140,19 @@ createApp(Counter).mount("#app");
 
 A Macro component combines ordinary top-level TypeScript with an exported `defineHtml(\`...\`)` template:
 
-| API               | Purpose                                                            |
-| ----------------- | ------------------------------------------------------------------ |
-| `defineProps()`   | Declare external properties and their types                        |
-| `defineEmits()`   | Declare component events                                           |
-| `defineModel()`   | Declare a `v-model` contract                                       |
-| `defineSlots()`   | Declare the slot contract                                          |
-| `defineOptions()` | Configure Shadow DOM, form control behavior, and component options |
-| `defineStyle()`   | Declare component styles                                           |
-| `defineExpose()`  | Expose instance methods to a parent                                |
-| `useComponents()` | Register local components used by the template                     |
-| `defineHtml()`    | Define and export the component template                           |
+| API                | Purpose                                                            |
+| ------------------ | ------------------------------------------------------------------ |
+| `defineProps()`    | Declare external properties and their types                        |
+| `defineEmits()`    | Declare component events                                           |
+| `defineModel()`    | Declare a `v-model` contract                                       |
+| `defineSlots()`    | Declare the slot contract                                          |
+| `defineOptions()`  | Configure Shadow DOM, form control behavior, and component options |
+| `defineStyle()`    | Declare component styles                                           |
+| `defineExpose()`   | Expose instance methods to a parent                                |
+| `useComponents()`  | Register local components used by the template                     |
+| `fragment`         | Inline an anonymous compile-time template fragment                 |
+| `defineFragment()` | Define a local typed fragment used with component-like attributes  |
+| `defineHtml()`     | Define and export the component template                           |
 
 ```ts
 import {
@@ -176,6 +178,42 @@ export const SaveField = defineHtml(`
   <slot></slot>
 `);
 ```
+
+### Local template fragments
+
+The fragment APIs are part of the next beta development line and require the matching Core and
+Vite plugin build.
+
+Fragments are compile-time-only template slices. They do not register a Custom Element,
+create a Shadow Root, or own a separate lifecycle.
+
+```ts
+import { defineFragment, defineHtml, fragment } from "@elfui/core";
+
+interface CardProps {
+  item: { label: string; value: number };
+}
+
+const Card = defineFragment<CardProps>(
+  ({ item }) => `
+    <article class="card">
+      <span>${item.label}</span>
+      <strong>${item.value}</strong>
+    </article>
+  `
+);
+
+export const Dashboard = defineHtml(`
+  <section>
+    <Card v-for="item in items" :key="item.label" :item="item" />
+    ${fragment`<footer class="summary">Summary</footer>`}
+  </section>
+`);
+```
+
+`defineFragment()` must be assigned to a local `const` and cannot be exported or registered.
+Use `defineHtml()` when a template needs its own lifecycle, public component contract, or
+cross-file registration.
 
 ## ⚡ Reactivity
 
@@ -362,7 +400,7 @@ Use `app.directive()` for application-wide directives. A component-local definit
 
 Local directives may capture props, refs, hosts, constants, and helper functions. Captured setup state stays isolated per component instance; module-safe definitions remain static.
 
-The current beta.11 API surface keeps `onMounted`, `onUnmounted`, `useComputed`, `useEffect`, `watch`, `theme`, `defineDirective`, and `app.directive`. The former `onMount`, `onUnmount`, `computed`, `watchEffect`, `watchPostEffect`, `watchSyncEffect`, `useTheme`, and process-wide `directive()` exports have been removed.
+The current beta.12 API surface keeps `onMounted`, `onUnmounted`, `useComputed`, `useEffect`, `watch`, `theme`, `defineDirective`, and `app.directive`. The former `onMount`, `onUnmount`, `computed`, `watchEffect`, `watchPostEffect`, `watchSyncEffect`, `useTheme`, and process-wide `directive()` exports have been removed.
 
 ## 🔔 Events
 

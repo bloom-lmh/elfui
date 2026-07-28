@@ -21,6 +21,7 @@
     "instance-directive-captures",
     "kind-template-values",
     "lean-expression-ir",
+    "local-template-fragments",
     "package-metadata",
     "portable-template-refs",
     "quiet-dev-boundary",

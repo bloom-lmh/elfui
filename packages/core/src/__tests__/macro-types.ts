@@ -3,10 +3,12 @@ import type { DirectiveDefinition } from "@elfui/runtime";
 import {
   defineDirective,
   defineEmits,
+  defineFragment,
   defineExpose,
   defineHtml,
   defineProps,
-  defineStyle
+  defineStyle,
+  fragment
 } from "../macro";
 
 interface ButtonProps {
@@ -55,6 +57,13 @@ emit("click", "bad");
 defineEmits<ButtonEmits>(["missing"]);
 
 const _Button = defineHtml<ButtonProps, ButtonEmits, ButtonSlots>(`<button></button>`);
+const _Card = defineFragment<{ label: string }>(({ label }) => `<span>${label}</span>`);
+type CardProps = NonNullable<(typeof _Card)["__elfFragmentProps"]>;
+const cardProps: CardProps = { label: "ok" };
+void cardProps;
+const _anonymous = fragment`<span>inline</span>`;
+const anonymousTemplate: string = _anonymous;
+void anonymousTemplate;
 
 defineStyle(":host { display: block; }", ".button { cursor: pointer; }");
 

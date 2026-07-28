@@ -62,6 +62,115 @@ afterEach(() => {
 });
 
 describe("M9.7 macro runtime coverage", () => {
+  it("expands an anonymous fragment tagged template in place", () => {
+    const result = compileRuntimeMacro(
+      `
+import { defineHtml, fragment, useRef } from "@elfui/core";
+const label = useRef("Anonymous");
+export const AnonymousFragmentProbe = defineHtml(
+  \`<section>\${fragment\`<strong class="label">\${label}</strong>\`}</section>\`
+);
+      `,
+      { filename: "AnonymousFragmentProbe.ts", templateTypeCheck: false }
+    );
+    expectNoDiagnostics(result);
+    expect(result.code).not.toContain("fragment`");
+
+    const exports = evalMacroModule(result.code);
+    const ctor = exports.AnonymousFragmentProbe as runtime.ElfElementConstructor;
+    const el = document.createElement(runtime.ensureCustomElement(ctor));
+    document.body.appendChild(el);
+
+    const root = el.shadowRoot ?? el;
+    expect(root.querySelector("strong.label")?.textContent).toBe("Anonymous");
+  });
+
+  it("renders anonymous fragments returned from an array map", () => {
+    const result = compileRuntimeMacro(
+      `
+import { defineHtml, fragment, useRef } from "@elfui/core";
+const items = useRef([{ id: "a", label: "Alpha" }, { id: "b", label: "Beta" }]);
+export const AnonymousListFragmentProbe = defineHtml(
+  \`<section>\${items.map((item) => fragment\`<strong class="label">\${item.label}</strong>\`)}</section>\`
+);
+      `,
+      { filename: "AnonymousListFragmentProbe.ts", templateTypeCheck: false }
+    );
+    expectNoDiagnostics(result);
+
+    const exports = evalMacroModule(result.code);
+    const ctor = exports.AnonymousListFragmentProbe as runtime.ElfElementConstructor;
+    const el = document.createElement(runtime.ensureCustomElement(ctor));
+    document.body.appendChild(el);
+
+    const root = el.shadowRoot ?? el;
+    expect(
+      Array.from(root.querySelectorAll("strong.label")).map((node) => node.textContent)
+    ).toEqual(["Alpha", "Beta"]);
+  });
+
+  it("expands a typed local defineFragment without creating a custom element", () => {
+    const result = compileRuntimeMacro(
+      `
+import { defineFragment, defineHtml, useRef } from "@elfui/core";
+interface CardProps { item: { id: string; label: string }; }
+const Card = defineFragment<CardProps>(
+  ({ item }) => \`<article class="card">\${item.label}</article>\`
+);
+const items = useRef([{ id: "a", label: "Alpha" }]);
+const replaceItems = (): void => items.set([{ id: "b", label: "Beta" }]);
+export const FragmentProbe = defineHtml(\`
+  <section>
+    <button @click=\${replaceItems}>replace</button>
+    <Card v-for="item in items" :key="item.id" :item="item" />
+  </section>
+\`);
+      `,
+      { filename: "FragmentProbe.ts", templateTypeCheck: false }
+    );
+    expectNoDiagnostics(result);
+    expect(result.code).toContain("__elfRenderFragment_Card");
+    expect(result.code).not.toContain('resolveComponentTag("Card"');
+
+    const exports = evalMacroModule(result.code);
+    const ctor = exports.FragmentProbe as runtime.ElfElementConstructor;
+    const el = document.createElement(runtime.ensureCustomElement(ctor));
+    document.body.appendChild(el);
+
+    const root = el.shadowRoot ?? el;
+    expect(root.querySelector("article.card")?.textContent).toBe("Alpha");
+    expect(root.querySelector("card")).toBeNull();
+    root.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(root.querySelector("article.card")?.textContent).toBe("Beta");
+  });
+
+  it("type-checks named fragment attributes", () => {
+    const valid = compileMacroComponent(
+      `
+import { defineFragment, defineHtml } from "@elfui/core";
+interface CardProps { item: { id: string; label: string }; }
+const Card = defineFragment<CardProps>(({ item }) => \`<span>\${item.label}</span>\`);
+const items = [{ id: "a", label: "Alpha" }];
+export const FragmentTypeProbe = defineHtml(\`<Card v-for="item in items" :item="item" />\`);
+      `,
+      { filename: "FragmentTypeProbe.ts", templateTypeCheck: true }
+    );
+    expectNoDiagnostics(valid);
+
+    const invalid = compileMacroComponent(
+      `
+import { defineFragment, defineHtml } from "@elfui/core";
+interface CardProps { item: { id: string; label: string }; }
+const Card = defineFragment<CardProps>(({ item }) => \`<span>\${item.label}</span>\`);
+export const FragmentTypeProbe = defineHtml(\`<Card :missing="value" />\`);
+      `,
+      { filename: "FragmentTypeProbeInvalid.ts", templateTypeCheck: true }
+    );
+    expect(invalid.diagnostics.some((diagnostic) => diagnostic.code === "ELF_TEMPLATE_TYPE")).toBe(
+      true
+    );
+  });
+
   it("compiles direct template literals without eager interpolation", () => {
     const result = compileRuntimeMacro(
       `
