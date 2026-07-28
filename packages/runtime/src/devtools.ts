@@ -8,6 +8,7 @@ const LOGICAL_PARENT_KEY: unique symbol = Symbol.for("elfui.devtools.logical-par
 const COMPONENT_CONTEXT_KEY: unique symbol = Symbol.for(
   "elfui.devtools.component-context"
 ) as never;
+const TEMPLATE_NODE_KEY: unique symbol = Symbol.for("elfui.devtools.template-node") as never;
 
 export interface ElfUIDevtoolsDebugState {
   id: string;
@@ -27,6 +28,60 @@ export interface ElfUIDevtoolsSourceLocation {
   endLine?: number;
   endColumn?: number;
 }
+
+export interface ElfUIDevtoolsTemplateNodeInfo {
+  sourceId: string;
+  templateNodeId: string;
+  fragment?: string;
+  source: ElfUIDevtoolsSourceLocation;
+}
+
+export const attachDevtoolsTemplateNode = (
+  node: Node,
+  sourceId: string,
+  fragment: string,
+  line: number,
+  column: number,
+  endLine: number,
+  endColumn: number
+): void => {
+  if (!__DEV__) return;
+  const owner = fragment || "component";
+  const tag = node instanceof Element ? node.localName : node.nodeName.toLowerCase();
+  const info: ElfUIDevtoolsTemplateNodeInfo = {
+    sourceId,
+    templateNodeId: `${sourceId}:${owner}:${tag}:${line}:${column}`,
+    ...(fragment ? { fragment } : {}),
+    source: { file: sourceId, line, column, endLine, endColumn }
+  };
+  Object.defineProperty(node, TEMPLATE_NODE_KEY, {
+    value: info,
+    configurable: true
+  });
+};
+
+export const cloneDevtoolsTemplateTree = <T extends Node>(node: T): T => {
+  const clone = node.cloneNode(true) as T;
+  if (!__DEV__) return clone;
+  const copy = (source: Node, target: Node): void => {
+    const info = (source as unknown as Record<symbol, unknown>)[TEMPLATE_NODE_KEY];
+    if (info) {
+      Object.defineProperty(target, TEMPLATE_NODE_KEY, {
+        value: info,
+        configurable: true
+      });
+    }
+    const sourceChildren = source.childNodes;
+    const targetChildren = target.childNodes;
+    for (let index = 0; index < sourceChildren.length; index += 1) {
+      const sourceChild = sourceChildren[index];
+      const targetChild = targetChildren[index];
+      if (sourceChild && targetChild) copy(sourceChild, targetChild);
+    }
+  };
+  copy(node, clone);
+  return clone;
+};
 
 export interface ElfUIDevtoolsComponentRegistration {
   id: string;

@@ -57,8 +57,18 @@ export interface CodegenOptions extends ParserOptions {
   includePropsInScope?: boolean;
   fragments?: Readonly<Record<string, FragmentCodegenDefinition>>;
   inlineFragments?: Readonly<Record<string, string>>;
+  inlineFragmentDebugSources?: Readonly<Record<string, CodegenTemplateDebugSource>>;
   inlineFragmentRenders?: Readonly<Record<string, FragmentCodegenDefinition>>;
   inlineFragmentLists?: Readonly<Record<string, InlineFragmentListCodegenDefinition>>;
+  /** Development-only DOM node to original template source association. */
+  debugSource?: CodegenTemplateDebugSource;
+}
+
+export interface CodegenTemplateDebugSource {
+  sourceId: string;
+  line: number;
+  column: number;
+  fragment?: string;
 }
 
 export interface FragmentCodegenDefinition {
@@ -66,6 +76,7 @@ export interface FragmentCodegenDefinition {
   template: string;
   scopeNames: readonly string[];
   renderName: string;
+  debugSource?: CodegenTemplateDebugSource;
 }
 
 export interface InlineFragmentListCodegenDefinition {
@@ -112,6 +123,8 @@ type Helper =
   | "createFragmentProps"
   | "extendRenderState"
   | "handleRuntimeError"
+  | "attachDevtoolsTemplateNode"
+  | "cloneDevtoolsTemplateTree"
   | "transition"
   | "transitionGroup"
   | "keepAlive"
@@ -127,10 +140,12 @@ interface CodegenContext {
   includePropsInScope: boolean;
   fragments: Readonly<Record<string, FragmentCodegenDefinition>>;
   inlineFragments: Readonly<Record<string, string>>;
+  inlineFragmentDebugSources: Readonly<Record<string, CodegenTemplateDebugSource>>;
   inlineFragmentRenders: Readonly<Record<string, FragmentCodegenDefinition>>;
   inlineFragmentLists: Readonly<Record<string, InlineFragmentListCodegenDefinition>>;
   ctxName: string;
   hoistPrefix: string;
+  debugSource?: CodegenTemplateDebugSource;
 }
 
 const fresh = (ctx: CodegenContext, prefix: string): string => `_${prefix}${ctx.uid++}`;
@@ -311,6 +326,27 @@ const escapeStr = (s: string): string => JSON.stringify(s);
 const bindingDebug = (loc: SourceLoc, name?: string): string =>
   `{ ${name ? `name: ${escapeStr(name)}, ` : ""}source: { line: ${loc.start.line}, column: ${loc.start.column} } }`;
 
+const absoluteTemplatePosition = (
+  position: SourceLoc["start"],
+  debug: CodegenTemplateDebugSource
+): { line: number; column: number } => ({
+  line: debug.line + position.line - 1,
+  column: position.line === 1 ? debug.column + position.column - 1 : position.column
+});
+
+const templateNodeDebug = (
+  element: string,
+  node: ElementNode,
+  ctx: CodegenContext
+): string | null => {
+  const debug = ctx.debugSource;
+  if (!debug) return null;
+  use(ctx, "attachDevtoolsTemplateNode");
+  const start = absoluteTemplatePosition(node.loc.start, debug);
+  const end = absoluteTemplatePosition(node.loc.end, debug);
+  return `if (typeof __DEV__ === "undefined" || __DEV__) attachDevtoolsTemplateNode(${element}, ${escapeStr(debug.sourceId)}, ${escapeStr(debug.fragment ?? "")}, ${start.line}, ${start.column}, ${end.line}, ${end.column})`;
+};
+
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 const SVG_TAGS = new Set([
@@ -390,10 +426,12 @@ export const codegen = (template: string, options: CodegenOptions = {}): Codegen
     includePropsInScope: options.includePropsInScope ?? false,
     fragments: options.fragments ?? {},
     inlineFragments: options.inlineFragments ?? {},
+    inlineFragmentDebugSources: options.inlineFragmentDebugSources ?? {},
     inlineFragmentRenders: options.inlineFragmentRenders ?? {},
     inlineFragmentLists: options.inlineFragmentLists ?? {},
     ctxName: "ctx",
-    hoistPrefix: fnName.replace(/[^A-Za-z0-9_$]/gu, "_")
+    hoistPrefix: fnName.replace(/[^A-Za-z0-9_$]/gu, "_"),
+    ...(options.debugSource ? { debugSource: options.debugSource } : {})
   };
   const runtimeImport = options.runtimeImport ?? "@elfui/core/internal";
 
@@ -412,7 +450,8 @@ export const codegen = (template: string, options: CodegenOptions = {}): Codegen
     const fragmentGenerated = codegen(fragment.template, {
       ...fragmentCodegenOptions,
       functionName: fragment.renderName,
-      scopeNames: [...(options.scopeNames ?? []), ...fragment.scopeNames]
+      scopeNames: [...(options.scopeNames ?? []), ...fragment.scopeNames],
+      ...(fragment.debugSource ? { debugSource: fragment.debugSource } : {})
     });
     for (const helper of fragmentGenerated.helpers) use(ctx, helper as Helper);
     fragmentCodes.push(
@@ -430,7 +469,8 @@ export const codegen = (template: string, options: CodegenOptions = {}): Codegen
     const fragmentGenerated = codegen(fragment.template, {
       ...fragmentCodegenOptions,
       functionName: bodyName,
-      scopeNames: [...(options.scopeNames ?? []), ...fragment.scopeNames]
+      scopeNames: [...(options.scopeNames ?? []), ...fragment.scopeNames],
+      ...(fragment.debugSource ? { debugSource: fragment.debugSource } : {})
     });
     for (const helper of fragmentGenerated.helpers) use(ctx, helper as Helper);
     use(ctx, "extendRenderState");
@@ -501,7 +541,11 @@ const genNode = (node: TemplateChildNode, ctx: CodegenContext): string => {
       }
       const inlineTemplate = ctx.inlineFragments[interpolation.content.trim()];
       if (inlineTemplate !== undefined) {
-        return genInlineFragment(inlineTemplate, ctx);
+        return genInlineFragment(
+          inlineTemplate,
+          ctx.inlineFragmentDebugSources[interpolation.content.trim()],
+          ctx
+        );
       }
       use(ctx, "text");
       return `(() => { const ${t} = document.createTextNode(""); text(${t}, () => (${wrapGetter(interpolation.content, ctx)})(${currentCtx(ctx)}), ${bindingDebug(interpolation.contentLoc)}); return ${t}; })()`;
@@ -519,9 +563,18 @@ const genNode = (node: TemplateChildNode, ctx: CodegenContext): string => {
   }
 };
 
-const genInlineFragment = (template: string, ctx: CodegenContext): string => {
+const genInlineFragment = (
+  template: string,
+  debugSource: CodegenTemplateDebugSource | undefined,
+  ctx: CodegenContext
+): string => {
   const ast = parse(template);
-  return genFragment(ast.children, ctx);
+  const previous = ctx.debugSource;
+  if (debugSource) ctx.debugSource = debugSource;
+  const result = genFragment(ast.children, ctx);
+  if (previous) ctx.debugSource = previous;
+  else delete ctx.debugSource;
+  return result;
 };
 
 const genInlineFragmentList = (
@@ -602,6 +655,8 @@ const genStaticTreeConstruction = (node: TemplateChildNode, ctx: CodegenContext)
   } else {
     stmts.push(`const ${elVar} = document.createElement(${escapeStr(element.tag)})`);
   }
+  const debug = templateNodeDebug(elVar, element, ctx);
+  if (debug) stmts.push(debug);
   for (const prop of element.props) {
     if (prop.type !== AttrTypes.ATTRIBUTE) continue;
     const value = prop.value === true ? "" : prop.value;
@@ -618,8 +673,13 @@ const genHoistedStaticTree = (node: ElementNode, ctx: CodegenContext): string =>
   const cached = freshHoist(ctx, "static");
   const clone = freshHoist(ctx, "cloneStatic");
   const type = ctx.expressionMode === "scope" ? ": Node | undefined" : "";
+  const construction = genStaticTreeConstruction(node, ctx);
+  const cloneExpression = ctx.debugSource
+    ? `(typeof __DEV__ === "undefined" || __DEV__) ? cloneDevtoolsTemplateTree(${cached}) : ${cached}.cloneNode(true)`
+    : `${cached}.cloneNode(true)`;
+  if (ctx.debugSource) use(ctx, "cloneDevtoolsTemplateTree");
   ctx.buf.push(
-    `let ${cached}${type};\nconst ${clone} = () => { if (!${cached}) ${cached} = ${genStaticTreeConstruction(node, ctx)}; return ${cached}.cloneNode(true); };`
+    `let ${cached}${type};\nconst ${clone} = () => { if (!${cached}) ${cached} = ${construction}; return ${cloneExpression}; };`
   );
   return `${clone}()`;
 };
@@ -686,6 +746,8 @@ const genPlain = (node: ElementNode, ctx: CodegenContext): string => {
       `const ${elVar} = document.createElement(resolveComponentTag(${escapeStr(node.tag)}, ${currentCtx(ctx)}.components))`
     );
   }
+  const debug = templateNodeDebug(elVar, node, ctx);
+  if (debug) stmts.push(debug);
 
   for (const p of node.props) {
     if (p.type === AttrTypes.ATTRIBUTE) {
@@ -1121,6 +1183,8 @@ const genKeepAlive = (node: ElementNode, ctx: CodegenContext): string => {
     `const __tag = typeof __c === "string" ? __c : (__c && __c.__elfDefinition && __c.__elfDefinition.tag)`,
     `const ${elVar} = typeof __c === "function" && !__tag ? new __c() : document.createElement(typeof __c === "function" && __tag ? ensureCustomElement(__c) : (__tag || "span"))`
   ];
+  const debug = templateNodeDebug(elVar, child, ctx);
+  if (debug) childStmts.push(debug);
   for (const p of child.props) {
     if (p.type === AttrTypes.ATTRIBUTE && p.name !== "is") {
       childStmts.push(genAttribute(elVar, p, ctx));
@@ -1350,6 +1414,8 @@ const genTransitionGroup = (node: ElementNode, ctx: CodegenContext): string => {
 
   const elVar = fresh(ctx, "host");
   const stmts: string[] = [`const ${elVar} = document.createElement(${tagExpr})`];
+  const debug = templateNodeDebug(elVar, node, ctx);
+  if (debug) stmts.push(debug);
 
   for (const p of node.props) {
     const isTransitionProp =

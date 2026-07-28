@@ -77,6 +77,7 @@ export {
   useHostStyle,
   useRenderRoot,
   useShadowRoot,
+  type DefineExposeOptions,
   type HostClassValue
 } from "./hooks";
 

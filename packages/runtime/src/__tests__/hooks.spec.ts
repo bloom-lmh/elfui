@@ -395,4 +395,25 @@ describe("defineExpose", () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("[defineExpose]"));
     warn.mockRestore();
   });
+
+  it("允许显式声明符合组件语义的原生方法覆盖", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const tag = next();
+    createComponent()
+      .name(tag)
+      .setup(() => {
+        defineExpose({ focus: () => "inner-focus" }, { overrideNative: ["focus"] });
+        return {};
+      })
+      .render(() => document.createElement("div"))
+      .register();
+
+    const element = document.createElement(tag) as HTMLElement & { focus: () => string };
+    document.body.appendChild(element);
+    await tick();
+
+    expect(element.focus()).toBe("inner-focus");
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
 });

@@ -148,6 +148,16 @@ createApp(Counter).mount("#app");
 | `useComponents()` | 注册当前模板依赖的局部组件          |
 | `defineHtml()`    | 定义并导出组件模板                  |
 
+`defineExpose()` 默认会在开发态提示与宿主原生成员的命名冲突。组件确实需要增强
+`focus()`、`blur()` 等原生语义时，应显式声明允许覆盖：
+
+```ts
+defineExpose({ focus: () => input.value?.focus() }, { overrideNative: ["focus"] });
+```
+
+普通命令方法优先使用不冲突的业务名称，例如 `scrollToOption()`，不要覆盖
+`HTMLElement.scrollTo()`。
+
 ```ts
 import {
   defineEmits,
@@ -415,6 +425,10 @@ app.mount("#app");
 ```
 
 同一页面可以创建多个 App；每个 App 只能成功挂载一次，并可通过 `app.unmount()` 卸载。无效 selector、目标容器尚不存在或挂载准备失败时，可以修正原因后在同一 App 上重试 `mount()`。
+
+依赖注入按组件逻辑父链解析，可以跨 open/closed Shadow Root，也会在 `Teleport` 到
+`body` 后保留原 Provider 与 App 上下文；嵌套 Provider 以最近者优先。需要动态更新时应
+provide 一个 `useRef()` 或其他响应式对象，后注册的子 Custom Element 会读取当前值。
 
 ## 🧱 内置组件
 

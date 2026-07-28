@@ -5,7 +5,7 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { useRef } from "@elfui/reactivity";
+import { effectScope, useRef } from "@elfui/reactivity";
 
 import { dynamicComponent, keepAlive, projectLightDom, teleport } from "../builtin";
 
@@ -33,6 +33,25 @@ describe("D1 Teleport", () => {
 
     expect(target.querySelector("p")?.textContent).toBe("teleported");
     expect(host.firstChild?.nodeType).toBe(8); // Comment
+  });
+
+  it("所属作用域停止后移除已传送节点", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    const scope = effectScope();
+    scope.run(() => {
+      teleport(target, false, () => {
+        const node = document.createElement("p");
+        node.textContent = "temporary";
+        return node;
+      });
+    });
+    await tick();
+    expect(target.textContent).toBe("temporary");
+
+    scope.stop();
+
+    expect(target.textContent).toBe("");
   });
 
   it("disabled=true 内容回到锚点位置", async () => {

@@ -158,6 +158,17 @@ A Macro component combines ordinary top-level TypeScript with an exported `defin
 | `defineFragment()` | Define a local typed fragment used with component-like attributes  |
 | `defineHtml()`     | Define and export the component template                           |
 
+`defineExpose()` warns in development when an exposed name collides with a native host member.
+When a component intentionally enhances native semantics such as `focus()` or `blur()`, declare
+the override explicitly:
+
+```ts
+defineExpose({ focus: () => input.value?.focus() }, { overrideNative: ["focus"] });
+```
+
+Prefer a non-conflicting command name such as `scrollToOption()` instead of replacing
+`HTMLElement.scrollTo()`.
+
 ```ts
 import {
   defineEmits,
@@ -472,6 +483,11 @@ app.use(() => {
 ```
 
 You can create multiple applications on the same page. Each application can mount successfully once and can later be removed with `app.unmount()`. If an invalid selector, a missing target, or mount preparation causes the attempt to fail, fix the cause and retry `mount()` on the same application.
+
+Dependency injection follows the logical component parent chain. It crosses open or closed Shadow
+Roots and preserves the original Provider and App context after `Teleport` moves content to `body`.
+The nearest nested Provider wins. Provide a `useRef()` or another reactive object when consumers
+must observe updates; Custom Elements inserted later read the current provided value.
 
 ## 🧱 Built-in components
 

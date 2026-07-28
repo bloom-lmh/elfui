@@ -9,7 +9,11 @@ import {
   type SourceLoc,
   type TemplateChildNode
 } from "@elfui/compiler-template";
-import { codegen, type FragmentCodegenDefinition } from "./codegen";
+import {
+  codegen,
+  type CodegenTemplateDebugSource,
+  type FragmentCodegenDefinition
+} from "./codegen";
 import type { ElfDiagnostic, ElfDiagnosticSeverity } from "./diagnostic";
 import { ELFUI_COMPILER_PROTOCOL_VERSION } from "./protocol";
 
@@ -568,6 +572,8 @@ export const compileMacroComponent = (
       template.template,
       renderName,
       scopeNames,
+      state,
+      template.sourceStart,
       state.fragments,
       state.inlineFragments,
       state.inlineFragmentRenders,
@@ -2671,10 +2677,26 @@ const internalRuntimeImport = (runtimeImport: string): string =>
 
 const oneLineExpression = (expression: string): string => expression.trim().replace(/\s+/g, " ");
 
+const templateDebugSource = (
+  state: TransformState,
+  sourceStart: number,
+  fragment?: string
+): CodegenTemplateDebugSource => {
+  const position = state.sourceFile.getLineAndCharacterOfPosition(sourceStart);
+  return {
+    sourceId: state.sourceId,
+    line: position.line + 1,
+    column: position.character + 1,
+    ...(fragment ? { fragment } : {})
+  };
+};
+
 const renderPrecompiledTemplate = (
   template: string,
   functionName: string,
   scopeNames: readonly string[],
+  state: TransformState,
+  sourceStart: number,
   fragments: ReadonlyMap<string, MacroFragment> = new Map(),
   inlineFragments: ReadonlyMap<string, MacroInlineFragment> = new Map(),
   inlineFragmentRenders: ReadonlyMap<string, MacroInlineFragment> = new Map(),
@@ -2686,7 +2708,8 @@ const renderPrecompiledTemplate = (
       name: fragment.localName,
       template: fragment.template,
       scopeNames: fragment.scopeNames,
-      renderName: fragment.renderName
+      renderName: fragment.renderName,
+      debugSource: templateDebugSource(state, fragment.sourceStart, fragment.localName)
     };
   }
   const generated = codegen(template, {
@@ -2699,6 +2722,12 @@ const renderPrecompiledTemplate = (
     inlineFragments: Object.fromEntries(
       Array.from(inlineFragments, ([key, fragment]) => [key, fragment.template])
     ),
+    inlineFragmentDebugSources: Object.fromEntries(
+      Array.from(inlineFragments, ([key, fragment]) => [
+        key,
+        templateDebugSource(state, fragment.sourceStart, fragment.localName)
+      ])
+    ),
     inlineFragmentRenders: Object.fromEntries(
       Array.from(inlineFragmentRenders, ([key, fragment]) => [
         key,
@@ -2706,11 +2735,13 @@ const renderPrecompiledTemplate = (
           name: fragment.localName,
           template: fragment.template,
           scopeNames: fragment.scopeNames,
-          renderName: fragment.renderName
+          renderName: fragment.renderName,
+          debugSource: templateDebugSource(state, fragment.sourceStart, fragment.localName)
         }
       ])
     ),
-    inlineFragmentLists: Object.fromEntries(inlineFragmentLists)
+    inlineFragmentLists: Object.fromEntries(inlineFragmentLists),
+    debugSource: templateDebugSource(state, sourceStart)
   });
   const code = generated.code
     .replace(/^import\s+\{[^}]*\}\s+from\s+["'][^"']+["'];?\s*/u, "")

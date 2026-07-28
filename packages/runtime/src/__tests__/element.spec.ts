@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useEffect, useReactive, useRef } from "@elfui/reactivity";
 
 import { defineCustomElement, ensureCustomElement } from "../element";
+import { defineExpose } from "../hooks";
 import {
   onAttributeChanged,
   onBeforeMount,
@@ -568,6 +569,40 @@ describe("生命周期", () => {
     document.body.appendChild(document.createElement(tag));
 
     expect(order).toEqual(["setup", "beforeMount", "render", "ref", "mounted"]);
+  });
+
+  it("父组件 mounted 时可通过 template ref 调用子组件 expose", () => {
+    const childTag = nextTag();
+    defineCustomElement({
+      tag: childTag,
+      setup: () => {
+        defineExpose({ readValue: () => "ready" });
+        return {};
+      },
+      render: () => document.createElement("span")
+    });
+
+    let exposedValue = "missing";
+    const parentTag = nextTag();
+    defineCustomElement({
+      tag: parentTag,
+      setup: () => {
+        const childRef = useTemplateRef<HTMLElement & { readValue(): string }>("child");
+        onMounted(() => {
+          exposedValue = childRef.value?.readValue() ?? "missing";
+        });
+        return {};
+      },
+      render: (ctx) => {
+        const child = document.createElement(childTag);
+        setTemplateRef(ctx.host, "child", child);
+        return child;
+      }
+    });
+
+    document.body.appendChild(document.createElement(parentTag));
+
+    expect(exposedValue).toBe("ready");
   });
 
   it("async setup 完成最终 DOM 和 template ref 后才 mounted", async () => {

@@ -49,7 +49,15 @@ if (result.code.includes("...ctx.props")) {
 if (result.code.includes("const { count, increment }")) {
   throw new Error("generated bindings destructured setup fields they do not reference");
 }
-const minified = await transform(result.code, {
+const developmentMinified = await transform(result.code, {
+  format: "esm",
+  legalComments: "none",
+  loader: "ts",
+  minify: true,
+  target: "es2022"
+});
+const productionMinified = await transform(result.code, {
+  define: { __DEV__: "false" },
   format: "esm",
   legalComments: "none",
   loader: "ts",
@@ -63,7 +71,8 @@ const specializeFixture = (code, index) =>
     .replaceAll("Fixture 0", `Fixture ${index}`);
 const compiled = Array.from({ length: 100 }, (_, index) => ({
   code: specializeFixture(result.code, index),
-  minified: specializeFixture(minified.code, index)
+  developmentMinified: specializeFixture(developmentMinified.code, index),
+  productionMinified: specializeFixture(productionMinified.code, index)
 }));
 
 const sizes = [1, 10, 100].map((count) => {
@@ -71,17 +80,27 @@ const sizes = [1, 10, 100].map((count) => {
     .slice(0, count)
     .map((fixture) => fixture.code)
     .join("\n");
-  const minified = compiled
+  const developmentMinified = compiled
     .slice(0, count)
-    .map((fixture) => fixture.minified)
+    .map((fixture) => fixture.developmentMinified)
     .join("\n");
-  const bytes = Buffer.from(minified);
+  const productionMinified = compiled
+    .slice(0, count)
+    .map((fixture) => fixture.productionMinified)
+    .join("\n");
+  const developmentBytes = Buffer.from(developmentMinified);
+  const productionBytes = Buffer.from(productionMinified);
   return {
     components: count,
     raw: Buffer.byteLength(raw),
-    min: bytes.byteLength,
-    gzip: gzipSync(bytes, { level: 9 }).byteLength,
-    brotli: brotliCompressSync(bytes, {
+    devMin: developmentBytes.byteLength,
+    devGzip: gzipSync(developmentBytes, { level: 9 }).byteLength,
+    devBrotli: brotliCompressSync(developmentBytes, {
+      params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 11 }
+    }).byteLength,
+    min: productionBytes.byteLength,
+    gzip: gzipSync(productionBytes, { level: 9 }).byteLength,
+    brotli: brotliCompressSync(productionBytes, {
       params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 11 }
     }).byteLength
   };
@@ -118,7 +137,10 @@ if (
   !hundredComponentSize ||
   hundredComponentSize.min > 220 * 1024 ||
   hundredComponentSize.gzip > 3200 ||
-  hundredComponentSize.brotli > 1400
+  hundredComponentSize.brotli > 1400 ||
+  hundredComponentSize.devMin > 250 * 1024 ||
+  hundredComponentSize.devGzip > 4600 ||
+  hundredComponentSize.devBrotli > 1900
 ) {
   throw new Error(
     `generated code size regression: ${JSON.stringify(hundredComponentSize ?? null)}`
@@ -131,17 +153,17 @@ if (allocations.uniqueRootFacades !== 1 || allocations.uniqueLocalFacades !== 1_
 
 const formatBytes = (value) => `${(value / 1024).toFixed(2)} KB`;
 const table = [
-  "| Components | Raw | Min | Gzip | Brotli | Gzip / component |",
-  "| ---: | ---: | ---: | ---: | ---: | ---: |",
+  "| Components | Dev raw | Dev min | Dev gzip | Prod min | Prod gzip | Prod Brotli | Prod gzip / component |",
+  "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
   ...sizes.map(
     (row) =>
-      `| ${row.components} | ${formatBytes(row.raw)} | ${formatBytes(row.min)} | ${formatBytes(row.gzip)} | ${formatBytes(row.brotli)} | ${(row.gzip / row.components).toFixed(1)} B |`
+      `| ${row.components} | ${formatBytes(row.raw)} | ${formatBytes(row.devMin)} | ${formatBytes(row.devGzip)} | ${formatBytes(row.min)} | ${formatBytes(row.gzip)} | ${formatBytes(row.brotli)} | ${(row.gzip / row.components).toFixed(1)} B |`
   )
 ].join("\n");
 
 const report = `# ElfUI Generated Code Benchmark
 
-> Generated on ${new Date().toISOString()}. Sizes cover compiler output only; runtime packages are excluded.
+> Generated on ${new Date().toISOString()}. Sizes cover compiler output only; runtime packages are excluded. Production sizes replace \`__DEV__\` with \`false\`; development sizes retain diagnostic instrumentation.
 
 ## Generated Code Size
 

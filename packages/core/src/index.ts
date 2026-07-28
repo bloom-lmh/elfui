@@ -197,6 +197,7 @@ export {
   useHostStyle,
   useRenderRoot,
   useShadowRoot,
+  type DefineExposeOptions,
   type HostClassValue,
   // 高阶交互 hooks
   useEscapeKey,

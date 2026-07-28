@@ -3,7 +3,11 @@ import { useRef } from "@elfui/reactivity";
 
 import { text } from "../bindings";
 import { show } from "../control-flow";
-import { setDevtoolsComponentContext } from "../devtools";
+import {
+  attachDevtoolsTemplateNode,
+  cloneDevtoolsTemplateTree,
+  setDevtoolsComponentContext
+} from "../devtools";
 import { createInstance, runWithUpdateHooks } from "../lifecycle";
 
 describe("development DevTools hook", () => {
@@ -88,6 +92,25 @@ describe("development DevTools hook", () => {
           }
         }
       ]
+    });
+  });
+
+  it("preserves template node metadata when cloning hoisted static trees", () => {
+    const key = Symbol.for("elfui.devtools.template-node");
+    const root = document.createElement("section");
+    const child = document.createElement("span");
+    root.appendChild(child);
+    attachDevtoolsTemplateNode(root, "src/Card.ts", "", 3, 1, 5, 1);
+    attachDevtoolsTemplateNode(child, "src/Card.ts", "CardBody", 4, 3, 4, 16);
+
+    const clone = cloneDevtoolsTemplateTree(root);
+
+    expect((clone as unknown as Record<symbol, unknown>)[key]).toMatchObject({
+      templateNodeId: "src/Card.ts:component:section:3:1"
+    });
+    expect((clone.firstElementChild as unknown as Record<symbol, unknown>)[key]).toMatchObject({
+      templateNodeId: "src/Card.ts:CardBody:span:4:3",
+      fragment: "CardBody"
     });
   });
 });

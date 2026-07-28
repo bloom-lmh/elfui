@@ -484,6 +484,10 @@ export const defineCustomElement = (
                 const rootNode = definition.render(renderCtx);
                 const target: ShadowRoot | HTMLElement = this.__shadow ?? this;
                 this.__appendRenderedNode(target, rootNode);
+                // Custom Element reactions run while the parent is still rendering. Flush those
+                // children after the final DOM exists but before the parent's mounted hooks, so a
+                // parent template ref can safely call APIs installed by the child's setup/expose.
+                this.__flushPendingChildren();
               }
               this.__finishMount(instance);
             }
@@ -495,12 +499,7 @@ export const defineCustomElement = (
           }
         });
 
-        this.__setupDone = true;
-        const pending = this.__pendingChildren;
-        this.__pendingChildren = [];
-        for (const childStart of pending) {
-          childStart();
-        }
+        this.__flushPendingChildren();
       };
 
       const parent = findUnsetupParent(this);
@@ -667,6 +666,13 @@ export const defineCustomElement = (
           ? withDevtoolsComponentContext(this.__instance.devtools.id, render)
           : render();
       this.__appendRenderedNode(target, rootNode);
+    }
+
+    private __flushPendingChildren(): void {
+      this.__setupDone = true;
+      const pending = this.__pendingChildren;
+      this.__pendingChildren = [];
+      for (const childStart of pending) childStart();
     }
 
     public attributeChangedCallback(

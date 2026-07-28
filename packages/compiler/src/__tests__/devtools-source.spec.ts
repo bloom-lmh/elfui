@@ -97,6 +97,37 @@ describe("macro component DevTools source metadata", () => {
     });
   });
 
+  it("emits development-only source markers for component and Fragment DOM nodes", () => {
+    const result = compileMacroComponent(
+      `import { defineFragment, defineHtml } from "@elfui/core";
+
+const Badge = defineFragment(() => \`
+  <span class="badge">badge</span>
+\`);
+
+export const Card = defineHtml(\`
+  <article>
+    <header><h2>Title</h2></header>
+    <main><Badge /></main>
+    <footer><button>Save</button></footer>
+    <aside><b>1</b><b>2</b><b>3</b><b>4</b><b>5</b></aside>
+  </article>
+\`);`,
+      {
+        filename: "C:\\workspace\\src\\Card.ts",
+        sourceId: "src/Card.ts",
+        templateTypeCheck: false
+      }
+    );
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.code).toContain("attachDevtoolsTemplateNode");
+    expect(result.code).toContain("cloneDevtoolsTemplateTree");
+    expect(result.code).toContain('attachDevtoolsTemplateNode(_el0, "src/Card.ts", "", 8, 3');
+    expect(result.code).toContain('"src/Card.ts", "Badge", 4, 3');
+    expect(result.code).toContain('if (typeof __DEV__ === "undefined" || __DEV__)');
+  });
+
   it("creates identical project-relative IDs for Windows and POSIX paths", () => {
     expect(createStableSourceId("C:\\workspace\\src\\Card.elf.ts?direct", "C:\\workspace")).toBe(
       "src/Card.elf.ts"

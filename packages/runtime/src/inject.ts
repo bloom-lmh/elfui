@@ -25,6 +25,9 @@ export const createInjectionKey = <T = unknown>(description?: string): Injection
 /** 实例上挂载 provides 的属性 key */
 export const PROVIDES_KEY: unique symbol = Symbol.for("elfui.provides") as any;
 const APP_PROVIDES_KEY: unique symbol = Symbol.for("elfui.app.provides") as any;
+const LOGICAL_PARENT_INSTANCE_KEY: unique symbol = Symbol.for(
+  "elfui.logical-parent-instance"
+) as any;
 /** host element 上挂载 instance 引用的属性 key */
 const INSTANCE_KEY: unique symbol = Symbol.for("elfui.instance") as any;
 
@@ -52,12 +55,29 @@ export const getInstanceFromHost = (host: HTMLElement): ComponentInstance | null
   return readInstanceFromHost(host);
 };
 
+/** 为 Teleport 等脱离真实 DOM 父链的子树保留组件逻辑父级。 */
+export const attachLogicalParentInstance = (node: Node, parent: ComponentInstance | null): void => {
+  if (!parent) return;
+  if (node.nodeType === 11) {
+    for (const child of node.childNodes) attachLogicalParentInstance(child, parent);
+    return;
+  }
+  Object.defineProperty(node, LOGICAL_PARENT_INSTANCE_KEY, {
+    value: parent,
+    configurable: true
+  });
+};
+
 /** 沿真实 DOM / ShadowRoot 链查找最近的父组件实例。 */
 export const findParentInstance = (host: HTMLElement): ComponentInstance | null => {
+  const directLogicalParent = readLogicalParentInstance(host);
+  if (directLogicalParent && !directLogicalParent.isUnmounted) return directLogicalParent;
   let current: Node | null = host.parentNode;
   while (current) {
     const instance = readInstanceFromHost(current);
     if (instance && !instance.isUnmounted) return instance;
+    const logicalParent = readLogicalParentInstance(current);
+    if (logicalParent && !logicalParent.isUnmounted) return logicalParent;
     if (current.parentNode) {
       current = current.parentNode;
     } else if (current.nodeType === 11 && "host" in current) {
@@ -74,6 +94,14 @@ const readInstanceFromHost = (host: Node): ComponentInstance | null => {
   return (
     ((host as unknown as Record<symbol, unknown>)[INSTANCE_KEY] as ComponentInstance | undefined) ??
     null
+  );
+};
+
+const readLogicalParentInstance = (node: Node): ComponentInstance | null => {
+  return (
+    ((node as unknown as Record<symbol, unknown>)[LOGICAL_PARENT_INSTANCE_KEY] as
+      | ComponentInstance
+      | undefined) ?? null
   );
 };
 
@@ -118,32 +146,20 @@ export function inject(key: symbol | string, defaultValue?: unknown): unknown {
     return defaultValue;
   }
 
-  // 从当前实例 host 开始向上查找
-  let current: Node | null = instance.host;
+  // 沿组件逻辑父链查找。Teleport 子树即使离开真实 DOM 位置，也仍属于原组件树。
+  let current: ComponentInstance | null = instance;
   while (current) {
-    const appProvides = readAppProvidesFromHost(current);
-    if (appProvides && appProvides.has(key)) {
-      return appProvides.get(key);
-    }
-
-    const inst = readInstanceFromHost(current) as InstanceWithProvides | null;
-    if (inst && inst !== instance) {
-      const provides = inst[PROVIDES_KEY];
+    if (current !== instance) {
+      const provides = (current as InstanceWithProvides)[PROVIDES_KEY];
       if (provides && provides.has(key)) {
         return provides.get(key);
       }
     }
-    // 向上：parentNode 优先；进入 ShadowRoot 时跳到 .host
-    if (current.parentNode) {
-      current = current.parentNode;
-    } else if (
-      current.nodeType === 11 /* DOCUMENT_FRAGMENT_NODE，ShadowRoot 也是 11 */ &&
-      "host" in current
-    ) {
-      current = (current as ShadowRoot).host;
-    } else {
-      break;
+    const appProvides = readAppProvidesFromHost(current.host);
+    if (appProvides && appProvides.has(key)) {
+      return appProvides.get(key);
     }
+    current = current.parent;
   }
   return defaultValue;
 }

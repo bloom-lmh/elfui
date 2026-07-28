@@ -28,6 +28,7 @@
     "reliable-resource-teardown",
     "robust-interpolation-parser",
     "safe-ssr-registration",
+    "sharp-template-inspector",
     "stable-host-properties",
     "stable-mounted-lifecycle",
     "steady-beta-thirteen",

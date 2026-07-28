@@ -207,20 +207,36 @@ export const useHostClass = (getter: () => HostClassValue): void => {
   });
 };
 
+export interface DefineExposeOptions {
+  /**
+   * 明确允许覆盖 HTMLElement 或组件 host 上已有的成员。
+   * `true` 允许本次全部覆盖；字符串数组只允许列出的名称。
+   */
+  overrideNative?: boolean | readonly string[];
+}
+
 /** 把对象暴露为 host 的公共 property，外部 `el.method()` 可调用
  *
  *   defineExpose({ focus: () => input.value?.focus() })
  *   // 之后 document.querySelector('elf-input').focus()
  */
-export const defineExpose = <T extends object>(exposed: T): void => {
+export const defineExpose = <T extends object>(
+  exposed: T,
+  options: DefineExposeOptions = {}
+): void => {
   const instance = getCurrentInstance();
   const host = useHost();
   if (!host) return;
   const exposedRecord = exposed as Record<string, unknown>;
   if (__DEV__ && instance) instance.devtools.exposed = exposedRecord;
   for (const k of Object.keys(exposed)) {
-    if (__DEV__ && k in host) {
-      warn(`[defineExpose] "${k}" 会覆盖 host 上已有的属性或方法。`);
+    const overrideAllowed =
+      options.overrideNative === true ||
+      (Array.isArray(options.overrideNative) && options.overrideNative.includes(k));
+    if (__DEV__ && k in host && !overrideAllowed) {
+      warn(
+        `[defineExpose] "${k}" 会覆盖 host 上已有的属性或方法；请改名，或通过 { overrideNative: ["${k}"] } 明确声明。`
+      );
     }
     Object.defineProperty(host, k, {
       get: () => exposedRecord[k],

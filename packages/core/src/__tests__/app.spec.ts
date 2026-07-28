@@ -188,6 +188,28 @@ describe("createApp", () => {
     await Promise.resolve();
   });
 
+  it("keeps app provide context and cleanup across Teleport", async () => {
+    document.body.innerHTML = '<div id="app"></div><div id="target"></div>';
+    const key = Symbol("teleport-app-provider");
+    const Child = defineTestElement("teleport-inject-child", () => ({
+      value: inject(key, "missing")
+    }));
+    const childTag = ensureCustomElement(Child);
+    const Root = defineTestElement("teleport-inject-parent", undefined, () =>
+      teleport("#target", false, () => document.createElement(childTag))
+    );
+    const app = createApp(Root).provide(key, "from-app");
+
+    app.mount("#app");
+    await Promise.resolve();
+
+    expect(document.querySelector("#target")?.textContent).toBe("from-app");
+
+    app.unmount();
+    await Promise.resolve();
+    expect(document.querySelector("#target")?.textContent).toBe("");
+  });
+
   it("keeps a cached component under its logical owner", async () => {
     document.body.innerHTML = '<div id="app"></div>';
     const events: Array<Record<string, unknown>> = [];

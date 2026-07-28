@@ -158,6 +158,15 @@ const main = async () => {
       }
     });
     assertNoDynamicCode(macroGenerated);
+    for (const marker of [
+      "elfui.devtools.template-node",
+      "attachDevtoolsTemplateNode",
+      "templateNodeId"
+    ]) {
+      if (macroGenerated.output.includes(marker)) {
+        throw new Error(`production macro bundle retained DevTools template marker: ${marker}`);
+      }
+    }
   } finally {
     await cleanup();
   }

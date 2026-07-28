@@ -11,7 +11,7 @@ import { effectScope, getCurrentScope, onScopeDispose, useEffect } from "@elfui/
 import { DEV as __DEV__ } from "./dev";
 import { ensureCustomElement } from "./element";
 import { attachDevtoolsLogicalParent } from "./devtools";
-import { getInstanceFromHost } from "./inject";
+import { attachLogicalParentInstance, getInstanceFromHost } from "./inject";
 import { callHooks, getCurrentInstance } from "./lifecycle";
 
 /** KeepAlive 标记 host 不会被卸载（即使从 DOM 中移除） */
@@ -34,13 +34,16 @@ export const teleport = (
   renderChildren: () => Node
 ): Node => {
   const anchor = document.createComment("teleport");
-  const logicalOwner = __DEV__ ? (getCurrentInstance()?.host ?? null) : null;
+  const logicalOwnerInstance = getCurrentInstance();
+  const logicalOwner = __DEV__ ? (logicalOwnerInstance?.host ?? null) : null;
   // 用 effectScope 隔离子内容的 effect
   const scope = effectScope(true);
   let mounted: Node | null = null;
   let lastTarget: Element | null = null;
+  let disposed = false;
 
   const apply = (): void => {
+    if (disposed) return;
     const isDisabled = typeof disabled === "function" ? disabled() : disabled;
     const targetRaw = typeof to === "function" ? to() : to;
     const target =
@@ -51,6 +54,7 @@ export const teleport = (
     // 首次渲染
     if (!mounted) {
       mounted = scope.run(() => renderChildren()) as Node;
+      attachLogicalParentInstance(mounted, logicalOwnerInstance);
       if (__DEV__) attachDevtoolsLogicalParent(mounted, logicalOwner);
     }
 
@@ -80,6 +84,14 @@ export const teleport = (
     } else {
       apply();
     }
+  });
+
+  onScopeDispose(() => {
+    disposed = true;
+    mounted?.parentNode?.removeChild(mounted);
+    mounted = null;
+    lastTarget = null;
+    scope.stop();
   });
 
   return anchor;

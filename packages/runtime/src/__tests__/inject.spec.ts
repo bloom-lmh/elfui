@@ -2,7 +2,10 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { useRef } from "@elfui/reactivity";
+
 import { defineCustomElement } from "../element";
+import { teleport } from "../builtin";
 import { createInjectionKey, hasInjectionContext, inject, provide } from "../inject";
 
 let tagCounter = 0;
@@ -119,6 +122,97 @@ describe("provide / inject", () => {
     expect(captured).toBe(42);
   });
 
+  it("跨 closed ShadowRoot 仍沿内部组件父链查找", () => {
+    const KEY = createInjectionKey<string>("closed-shadow");
+    let captured: string | undefined;
+    const childTag = nextTag();
+    defineCustomElement({
+      tag: childTag,
+      setup: () => {
+        captured = inject(KEY);
+        return {};
+      },
+      render: () => document.createElement("span")
+    });
+
+    const parentTag = nextTag();
+    defineCustomElement({
+      tag: parentTag,
+      shadow: "closed",
+      setup: () => {
+        provide(KEY, "inside-closed");
+        return {};
+      },
+      render: () => document.createElement(childTag)
+    });
+
+    document.body.appendChild(document.createElement(parentTag));
+
+    expect(captured).toBe("inside-closed");
+  });
+
+  it("后插入的 Custom Element 取得当前 Provider 值", () => {
+    const KEY = createInjectionKey<string>("late-child");
+    let container!: HTMLElement;
+    let captured: string | undefined;
+    const parentTag = nextTag();
+    defineCustomElement({
+      tag: parentTag,
+      setup: () => {
+        provide(KEY, "current");
+        return {};
+      },
+      render: () => {
+        container = document.createElement("section");
+        return container;
+      }
+    });
+    document.body.appendChild(document.createElement(parentTag));
+
+    const childTag = nextTag();
+    defineCustomElement({
+      tag: childTag,
+      setup: () => {
+        captured = inject(KEY);
+        return {};
+      },
+      render: () => document.createElement("span")
+    });
+    container.appendChild(document.createElement(childTag));
+
+    expect(captured).toBe("current");
+  });
+
+  it("Provider 传递 Ref 时保留响应式身份", () => {
+    const KEY = createInjectionKey<ReturnType<typeof useRef<string>>>("reactive-provider");
+    const provided = useRef("light");
+    let captured: ReturnType<typeof useRef<string>> | undefined;
+    const childTag = nextTag();
+    defineCustomElement({
+      tag: childTag,
+      setup: () => {
+        captured = inject(KEY);
+        return {};
+      },
+      render: () => document.createElement("span")
+    });
+    const parentTag = nextTag();
+    defineCustomElement({
+      tag: parentTag,
+      setup: () => {
+        provide(KEY, provided);
+        return {};
+      },
+      render: () => document.createElement(childTag)
+    });
+
+    document.body.appendChild(document.createElement(parentTag));
+    provided.set("dark");
+
+    expect(captured).toBe(provided);
+    expect(captured?.value).toBe("dark");
+  });
+
   it("最近的 provider 优先（覆盖）", () => {
     const KEY = createInjectionKey<string>("x");
     let captured: string | undefined = undefined;
@@ -165,6 +259,39 @@ describe("provide / inject", () => {
     document.body.appendChild(root);
 
     expect(captured).toBe("near");
+  });
+
+  it("Teleport 子树保留逻辑 Provider 上下文", async () => {
+    const KEY = createInjectionKey<string>("teleport-context");
+    let captured: string | undefined;
+    const target = document.createElement("div");
+    target.id = "teleport-provider-target";
+    document.body.appendChild(target);
+
+    const childTag = nextTag();
+    defineCustomElement({
+      tag: childTag,
+      setup: () => {
+        captured = inject(KEY, "missing");
+        return {};
+      },
+      render: () => document.createElement("span")
+    });
+
+    const parentTag = nextTag();
+    defineCustomElement({
+      tag: parentTag,
+      setup: () => {
+        provide(KEY, "teleported");
+        return {};
+      },
+      render: () => teleport(target, false, () => document.createElement(childTag))
+    });
+
+    document.body.appendChild(document.createElement(parentTag));
+    await Promise.resolve();
+
+    expect(captured).toBe("teleported");
   });
 
   it("string key 也支持", () => {
