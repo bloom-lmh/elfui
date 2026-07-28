@@ -59,6 +59,8 @@ export {
 
 export { useModel, type ModelRef, type UseModelOptions } from "./use-model";
 
+export { useId } from "./use-id";
+
 export { useTemplateRef } from "./template-ref";
 
 export {

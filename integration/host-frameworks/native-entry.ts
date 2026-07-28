@@ -64,7 +64,9 @@ const run = async () => {
   host.items = items;
   host.handler = handler;
   const form = document.createElement("form");
-  form.appendChild(host);
+  const fieldset = document.createElement("fieldset");
+  fieldset.appendChild(host);
+  form.appendChild(fieldset);
   document.body.appendChild(form);
   const listSection = document.createElement("section");
   listSection.dataset.hostList = "";
@@ -103,6 +105,18 @@ const run = async () => {
   check(updated.items === updatedItems, "mounted array property identity changed");
   check(host.invokeHandler(4) === 9, "mounted function property update failed");
   check(new FormData(form).get("elfValue") === "property-update", "form value update failed");
+  fieldset.disabled = true;
+  check(new FormData(form).get("elfValue") === null, "disabled form value was not excluded");
+  fieldset.disabled = false;
+  check(
+    new FormData(form).get("elfValue") === "property-update",
+    "re-enabled form value was not restored"
+  );
+  form.reset();
+  check(
+    new FormData(form).get("elfValue") === "default",
+    "native form reset did not restore default"
+  );
 
   for (const item of reorderedHostList) {
     const listHost = initialList.get(item.id)!;

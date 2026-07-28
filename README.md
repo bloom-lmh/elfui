@@ -136,6 +136,10 @@ import Counter from "./Counter";
 createApp(Counter).mount("#app");
 ```
 
+Build startup validates that Core, Compiler, and Vite Plugin use the same beta release and compiler
+protocol. A mismatch fails before the first template is compiled and reports the resolved package
+paths and a repair command.
+
 ## 🏗️ Component structure
 
 A Macro component combines ordinary top-level TypeScript with an exported `defineHtml(\`...\`)` template:
@@ -181,8 +185,7 @@ export const SaveField = defineHtml(`
 
 ### Local template fragments
 
-The fragment APIs are part of the next beta development line and require the matching Core and
-Vite plugin build.
+The fragment APIs require matching Core and Vite plugin versions.
 
 Fragments are compile-time-only template slices. They do not register a Custom Element,
 create a Shadow Root, or own a separate lifecycle.
@@ -212,6 +215,8 @@ export const Dashboard = defineHtml(`
 ```
 
 `defineFragment()` must be assigned to a local `const` and cannot be exported or registered.
+Its readonly `:prop` and `v-bind` view stays connected to outer reactive state, so updates patch
+the affected DOM bindings without recreating the Fragment nodes.
 Use `defineHtml()` when a template needs its own lifecycle, public component contract, or
 cross-file registration.
 
@@ -400,7 +405,7 @@ Use `app.directive()` for application-wide directives. A component-local definit
 
 Local directives may capture props, refs, hosts, constants, and helper functions. Captured setup state stays isolated per component instance; module-safe definitions remain static.
 
-The current beta.12 API surface keeps `onMounted`, `onUnmounted`, `useComputed`, `useEffect`, `watch`, `theme`, `defineDirective`, and `app.directive`. The former `onMount`, `onUnmount`, `computed`, `watchEffect`, `watchPostEffect`, `watchSyncEffect`, `useTheme`, and process-wide `directive()` exports have been removed.
+The current beta development API surface keeps `onMounted`, `onUnmounted`, `useComputed`, `useEffect`, `watch`, `theme`, `defineDirective`, and `app.directive`. The former `onMount`, `onUnmount`, `computed`, `watchEffect`, `watchPostEffect`, `watchSyncEffect`, `useTheme`, and process-wide `directive()` exports have been removed.
 
 ## 🔔 Events
 
@@ -456,6 +461,16 @@ app.config.errorHandler = (error) => console.error(error);
 app.mount("#app");
 ```
 
+An App plugin may return a synchronous disposer. `app.unmount()` removes the root component first,
+then runs plugin disposers in reverse installation order:
+
+```ts
+app.use(() => {
+  window.addEventListener("keydown", onKeydown);
+  return () => window.removeEventListener("keydown", onKeydown);
+});
+```
+
 You can create multiple applications on the same page. Each application can mount successfully once and can later be removed with `app.unmount()`. If an invalid selector, a missing target, or mount preparation causes the attempt to fail, fix the cause and retry `mount()` on the same application.
 
 ## 🧱 Built-in components
@@ -471,6 +486,7 @@ You can create multiple applications on the same page. Each application can moun
 
 | API                                | Purpose                                                    |
 | ---------------------------------- | ---------------------------------------------------------- |
+| `useId()`                          | Create a stable, document-unique ID during setup           |
 | `useTemplateRef()`                 | Access template elements or component instances with types |
 | `useHostAttr()` / `useHostClass()` | Reflect reactive state onto the Custom Element host        |
 | `useExtend()` / `useVariant()`     | Extend a base component or create a component variant      |

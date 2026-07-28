@@ -144,6 +144,183 @@ export const FragmentProbe = defineHtml(\`
     expect(root.querySelector("article.card")?.textContent).toBe("Beta");
   });
 
+  it("keeps named Fragment props reactive without recreating the Fragment", async () => {
+    const result = compileRuntimeMacro(
+      `
+import { defineFragment, defineHtml, useRef } from "@elfui/core";
+interface CardProps {
+  label: string;
+  item: { label: string };
+}
+const Card = defineFragment<CardProps>(
+  (props) => \`<article class="card">\${props.label}|\${props.item.label}</article>\`
+);
+const label = useRef("Alpha");
+const item = useRef({ label: "One" });
+const update = (): void => {
+  label.set("Beta");
+  item.set({ label: "Two" });
+};
+export const FragmentReactivePropsProbe = defineHtml(\`
+  <section>
+    <button @click=\${update}>update</button>
+    <Card :label=\${label} :item=\${item} />
+  </section>
+\`);
+      `,
+      { filename: "FragmentReactivePropsProbe.ts", templateTypeCheck: false }
+    );
+    expectNoDiagnostics(result);
+
+    const exports = evalMacroModule(result.code);
+    const ctor = exports.FragmentReactivePropsProbe as runtime.ElfElementConstructor;
+    const el = document.createElement(runtime.ensureCustomElement(ctor));
+    document.body.appendChild(el);
+
+    const root = el.shadowRoot ?? el;
+    const card = root.querySelector("article.card");
+    expect(card?.textContent).toBe("Alpha|One");
+
+    root.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await nextMicrotask();
+
+    expect(root.querySelector("article.card")).toBe(card);
+    expect(card?.textContent).toBe("Beta|Two");
+  });
+
+  it("keeps named Fragment v-bind objects reactive after replacement", async () => {
+    const result = compileRuntimeMacro(
+      `
+import { defineFragment, defineHtml, useRef } from "@elfui/core";
+interface BadgeProps { label: string; }
+const Badge = defineFragment<BadgeProps>(
+  ({ label }) => \`<strong class="badge">\${label}</strong>\`
+);
+const badgeProps = useRef<BadgeProps>({ label: "Alpha" });
+const update = (): void => badgeProps.set({ label: "Beta" });
+export const FragmentReactiveSpreadProbe = defineHtml(\`
+  <section>
+    <button @click=\${update}>update</button>
+    <Badge v-bind=\${badgeProps} />
+  </section>
+\`);
+      `,
+      { filename: "FragmentReactiveSpreadProbe.ts", templateTypeCheck: false }
+    );
+    expectNoDiagnostics(result);
+
+    const exports = evalMacroModule(result.code);
+    const ctor = exports.FragmentReactiveSpreadProbe as runtime.ElfElementConstructor;
+    const el = document.createElement(runtime.ensureCustomElement(ctor));
+    document.body.appendChild(el);
+
+    const root = el.shadowRoot ?? el;
+    const badge = root.querySelector("strong.badge");
+    expect(badge?.textContent).toBe("Alpha");
+
+    root.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await nextMicrotask();
+
+    expect(root.querySelector("strong.badge")).toBe(badge);
+    expect(badge?.textContent).toBe("Beta");
+  });
+
+  it("forwards named Fragment event props through the parent render context", () => {
+    const result = compileRuntimeMacro(
+      `
+import { defineFragment, defineHtml, useRef } from "@elfui/core";
+interface ActionProps {
+  label: string;
+  onSelect: (event: Event) => void;
+}
+const Action = defineFragment<ActionProps>(
+  (props) => \`<button class="action" @click=\${props.onSelect}>\${props.label}</button>\`
+);
+const count = useRef(0);
+const select = (): void => count.set(count.peek() + 1);
+export const FragmentEventProbe = defineHtml(\`
+  <section>
+    <Action label="select" @select=\${select} />
+    <output>\${count}</output>
+  </section>
+\`);
+      `,
+      { filename: "FragmentEventProbe.ts", templateTypeCheck: false }
+    );
+    expectNoDiagnostics(result);
+
+    const exports = evalMacroModule(result.code);
+    const ctor = exports.FragmentEventProbe as runtime.ElfElementConstructor;
+    const el = document.createElement(runtime.ensureCustomElement(ctor));
+    document.body.appendChild(el);
+
+    const root = el.shadowRoot ?? el;
+    expect(root.querySelector("output")?.textContent).toBe("0");
+    root.querySelector("button.action")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(root.querySelector("output")?.textContent).toBe("1");
+  });
+
+  it("emits Metadata v2 ownership and identity information for fragments", () => {
+    const result = compileMacroComponent(
+      `
+import { defineFragment, defineHtml, fragment } from "@elfui/core";
+interface CardProps { label: string; }
+const Card = defineFragment<CardProps>(({ label }) => \`<strong>\${label}</strong>\`);
+const labels = ["A"];
+export const FragmentMetadata = defineHtml(\`
+  <Card label="named" />
+  \${fragment\`<i>inline</i>\`}
+  \${labels.map((label) => fragment\`<span>\${label}</span>\`)}
+\`);
+      `,
+      { filename: "FragmentMetadata.ts", templateTypeCheck: false }
+    );
+
+    expectNoDiagnostics(result);
+    expect(result.metadata).toMatchObject({
+      schemaVersion: 2,
+      compilerProtocol: 1,
+      diagnostics: { errors: 0, warnings: 0 }
+    });
+    expect(result.metadata.fragments.map(({ kind }) => kind)).toEqual([
+      "named",
+      "inline",
+      "inline-list"
+    ]);
+    expect(result.metadata.fragments[0]).toMatchObject({
+      name: "Card",
+      propsType: "CardProps",
+      ownerComponents: ["elf-fragment-metadata"],
+      identity: "not-applicable"
+    });
+    expect(result.metadata.fragments[2]).toMatchObject({
+      ownerComponents: ["elf-fragment-metadata"],
+      identity: "index"
+    });
+  });
+
+  it("reports named Fragment dependency cycles at build time", () => {
+    const result = compileMacroComponent(
+      `
+import { defineFragment, defineHtml } from "@elfui/core";
+const First = defineFragment(() => \`<Second />\`);
+const Second = defineFragment(() => \`<First />\`);
+export const CycleProbe = defineHtml(\`<First />\`);
+      `,
+      { filename: "CycleProbe.ts", templateTypeCheck: false }
+    );
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "ELF_MACRO_FRAGMENT_CYCLE",
+          severity: "error",
+          sourceId: "CycleProbe.ts"
+        })
+      ])
+    );
+  });
+
   it("type-checks named fragment attributes", () => {
     const valid = compileMacroComponent(
       `

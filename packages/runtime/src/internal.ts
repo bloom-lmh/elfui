@@ -64,11 +64,13 @@ export {
 export { setTemplateRef } from "./template-ref";
 
 export {
+  createFragmentProps,
   createRenderState,
   extendRenderState,
   readTemplateValue,
   unwrapStateAccess,
-  writeTemplateValue
+  writeTemplateValue,
+  type FragmentPropsSource
 } from "./unwrap";
 
 export {

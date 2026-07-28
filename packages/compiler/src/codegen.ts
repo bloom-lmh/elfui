@@ -109,6 +109,7 @@ type Helper =
   | "onObject"
   | "unwrapStateAccess"
   | TemplateValueHelper
+  | "createFragmentProps"
   | "extendRenderState"
   | "handleRuntimeError"
   | "transition"
@@ -734,37 +735,43 @@ const genFragmentCall = (
   fragment: FragmentCodegenDefinition,
   ctx: CodegenContext
 ): string => {
+  use(ctx, "createFragmentProps");
   use(ctx, "extendRenderState");
   const propsVar = fresh(ctx, "fragmentProps");
   const childCtx = fresh(ctx, "fragmentCtx");
-  const entries: string[] = [];
+  const sources: string[] = [];
 
   for (const prop of node.props) {
     if (prop.type === AttrTypes.ATTRIBUTE) {
       const key = fragmentPropKey(prop.name);
       if (!key) continue;
       const value = prop.value === true ? "true" : escapeStr(prop.value);
-      entries.push(`${escapeStr(key)}: ${value}`);
+      sources.push(`() => ({ ${escapeStr(key)}: ${value} })`);
       continue;
     }
 
     if (prop.name === "bind") {
       if (!prop.arg) {
-        entries.push(`...(${wrapGetter(prop.exp, ctx)})(${currentCtx(ctx)})`);
+        sources.push(`() => (${wrapGetter(prop.exp, ctx)})(${currentCtx(ctx)})`);
         continue;
       }
       const key = fragmentPropKey(prop.arg);
       if (!key) continue;
-      entries.push(`${escapeStr(key)}: (${wrapGetter(prop.exp, ctx)})(${currentCtx(ctx)})`);
+      sources.push(
+        `() => ({ ${escapeStr(key)}: (${wrapGetter(prop.exp, ctx)})(${currentCtx(ctx)}) })`
+      );
       continue;
     }
 
     if (prop.name === "on" && prop.arg) {
-      entries.push(`${escapeStr(fragmentEventPropKey(prop.arg))}: (${wrapEvent(prop.exp, ctx)})`);
+      const event = wrapEvent(prop.exp, ctx);
+      sources.push(
+        `() => ({ ${escapeStr(fragmentEventPropKey(prop.arg))}: (${renderEventParam(ctx, "__event")}) => (${event})(${currentCtx(ctx)}, __event) })`
+      );
     }
   }
 
-  return `(() => { const ${propsVar} = { ${entries.join(", ")} }; const ${childCtx} = { ...${currentCtx(ctx)}, state: extendRenderState(${currentCtx(ctx)}.state, { ...${propsVar}, props: ${propsVar} }) }; return ${fragment.renderName}(${childCtx}); })()`;
+  return `(() => { const ${propsVar} = createFragmentProps([${sources.join(", ")}]); const ${childCtx} = { ...${currentCtx(ctx)}, props: ${propsVar}, state: extendRenderState(extendRenderState(${currentCtx(ctx)}.state, ${propsVar}), { props: ${propsVar} }) }; return ${fragment.renderName}(${childCtx}); })()`;
 };
 
 const genTemplateFragment = (node: ElementNode, ctx: CodegenContext): string => {

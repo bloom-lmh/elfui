@@ -442,6 +442,59 @@ describe("createApp", () => {
     expect(app.config.globalProperties.pluginReady).toBe(true);
   });
 
+  it("runs plugin cleanup after root unmount in reverse installation order", async () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    const calls: string[] = [];
+    const Root = defineTestElement("plugin-cleanup", () => {
+      onUnmounted(() => calls.push("root"));
+      return {};
+    });
+    const app = createApp(Root)
+      .use(() => {
+        calls.push("install:first");
+        return () => calls.push("cleanup:first");
+      })
+      .use({
+        install() {
+          calls.push("install:second");
+          return () => calls.push("cleanup:second");
+        }
+      });
+
+    app.mount("#app");
+    app.unmount();
+    await Promise.resolve();
+
+    expect(calls).toEqual([
+      "install:first",
+      "install:second",
+      "root",
+      "cleanup:second",
+      "cleanup:first"
+    ]);
+
+    app.unmount();
+    expect(calls).toHaveLength(5);
+  });
+
+  it("isolates plugin cleanup failures through app.config.errorHandler", () => {
+    const Root = defineTestElement("plugin-cleanup-error");
+    const firstCleanup = vi.fn();
+    const error = new Error("cleanup failed");
+    const handler = vi.fn();
+    const app = createApp(Root)
+      .use(() => firstCleanup)
+      .use(() => () => {
+        throw error;
+      });
+    app.config.errorHandler = handler;
+
+    app.unmount();
+
+    expect(handler).toHaveBeenCalledWith(error, "app plugin cleanup");
+    expect(firstCleanup).toHaveBeenCalledTimes(1);
+  });
+
   it("registers components through app.component() with their declared custom-element tag", () => {
     const Root = defineTestElement("component-root");
     const Child = defineTestElement("component-child");

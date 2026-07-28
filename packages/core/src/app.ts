@@ -30,10 +30,13 @@ export interface ElfUIApp<RootComponent extends ElfElementConstructor = ElfEleme
 }
 
 export interface ElfUIAppPluginObject<T = unknown> {
-  install(app: ElfUIApp, options?: T): void;
+  install: ElfUIAppPluginFn<T>;
 }
 
-export type ElfUIAppPluginFn<T = unknown> = (app: ElfUIApp, options?: T) => void;
+export type ElfUIAppPluginCleanup = () => void;
+export type ElfUIAppPluginFn<T = unknown> =
+  | ((app: ElfUIApp, options?: T) => void)
+  | ((app: ElfUIApp, options?: T) => ElfUIAppPluginCleanup);
 export type ElfUIAppPlugin<T = unknown> = ElfUIAppPluginFn<T> | ElfUIAppPluginObject<T>;
 
 type AppErrorCode =
@@ -97,12 +100,26 @@ export const createApp = <RootComponent extends ElfElementConstructor>(
   validateComponent(rootComponent);
 
   const installedPlugins = new WeakSet<object>();
+  const pluginCleanups: ElfUIAppPluginCleanup[] = [];
   const provides = new Map<symbol | string, unknown>();
   const appConfig = createDefaultAppConfig();
   const directives = new Map<string, DirectiveDefinition>();
   let rootInstance: InstanceType<RootComponent> | null = null;
   let mountCalled = false;
   const devtoolsAppId = __DEV__ ? createDevtoolsAppId() : "";
+  const runPluginCleanups = (cleanups: ElfUIAppPluginCleanup[]): void => {
+    for (const cleanup of cleanups) {
+      try {
+        cleanup();
+      } catch (error) {
+        if (appConfig.errorHandler) {
+          appConfig.errorHandler(error, "app plugin cleanup");
+        } else {
+          console.error(error);
+        }
+      }
+    }
+  };
 
   const app: ElfUIApp<RootComponent> = {
     config: appConfig,
@@ -140,6 +157,7 @@ export const createApp = <RootComponent extends ElfElementConstructor>(
     },
 
     unmount(): void {
+      const hadRootInstance = rootInstance !== null;
       if (rootInstance) {
         if (__DEV__) {
           emitDevtoolsRuntimeEvent({ type: "app:unmount", appId: devtoolsAppId });
@@ -147,6 +165,10 @@ export const createApp = <RootComponent extends ElfElementConstructor>(
         rootInstance.remove();
         rootInstance = null;
       }
+      const cleanups = pluginCleanups.splice(0).reverse();
+      if (cleanups.length === 0) return;
+      if (hadRootInstance) queueMicrotask(() => runPluginCleanups(cleanups));
+      else runPluginCleanups(cleanups);
     },
 
     use<T>(plugin: ElfUIAppPlugin<T>, options?: T): ElfUIApp<RootComponent> {
@@ -154,10 +176,12 @@ export const createApp = <RootComponent extends ElfElementConstructor>(
       if (installedPlugins.has(key)) return this;
 
       if (typeof plugin === "function") {
-        plugin(this, options);
+        const cleanup = plugin(this, options);
+        if (typeof cleanup === "function") pluginCleanups.push(cleanup);
         installedPlugins.add(key);
       } else if (plugin && typeof plugin.install === "function") {
-        plugin.install(this, options);
+        const cleanup = plugin.install(this, options);
+        if (typeof cleanup === "function") pluginCleanups.push(cleanup);
         installedPlugins.add(key);
       }
       return this;

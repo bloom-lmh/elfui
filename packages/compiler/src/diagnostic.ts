@@ -1,5 +1,12 @@
 export type ElfDiagnosticSeverity = "error" | "warning";
 
+export interface ElfDiagnosticRange {
+  start: number;
+  end: number;
+  line: number;
+  column: number;
+}
+
 export interface ElfDiagnostic {
   code: string;
   severity: ElfDiagnosticSeverity;
@@ -10,6 +17,14 @@ export interface ElfDiagnostic {
   line?: number;
   column?: number;
   hint?: string;
+  sourceId?: string;
+  expression?: string;
+  component?: string;
+  fragment?: string;
+  generatedStart?: number;
+  generatedEnd?: number;
+  filename?: string;
+  range?: ElfDiagnosticRange;
 }
 
 export interface ElfDiagnosticInit {
@@ -23,6 +38,13 @@ export interface ElfDiagnosticInit {
   line?: number;
   column?: number;
   hint?: string;
+  sourceId?: string;
+  expression?: string;
+  component?: string;
+  fragment?: string;
+  generatedStart?: number;
+  generatedEnd?: number;
+  filename?: string;
 }
 
 export const createElfDiagnostic = (init: ElfDiagnosticInit): ElfDiagnostic => {
@@ -36,6 +58,13 @@ export const createElfDiagnostic = (init: ElfDiagnosticInit): ElfDiagnostic => {
   if (init.start !== undefined) diagnostic.start = init.start;
   if (init.end !== undefined) diagnostic.end = init.end;
   if (init.hint !== undefined) diagnostic.hint = init.hint;
+  if (init.sourceId !== undefined) diagnostic.sourceId = init.sourceId;
+  if (init.expression !== undefined) diagnostic.expression = init.expression;
+  if (init.component !== undefined) diagnostic.component = init.component;
+  if (init.fragment !== undefined) diagnostic.fragment = init.fragment;
+  if (init.generatedStart !== undefined) diagnostic.generatedStart = init.generatedStart;
+  if (init.generatedEnd !== undefined) diagnostic.generatedEnd = init.generatedEnd;
+  diagnostic.filename = init.filename ?? init.file;
 
   if (init.line !== undefined && init.column !== undefined) {
     diagnostic.line = init.line;
@@ -44,6 +73,20 @@ export const createElfDiagnostic = (init: ElfDiagnosticInit): ElfDiagnostic => {
     const location = offsetToLineColumn(init.source, init.start);
     diagnostic.line = location.line;
     diagnostic.column = location.column;
+  }
+
+  if (
+    diagnostic.start !== undefined &&
+    diagnostic.end !== undefined &&
+    diagnostic.line !== undefined &&
+    diagnostic.column !== undefined
+  ) {
+    diagnostic.range = {
+      start: diagnostic.start,
+      end: diagnostic.end,
+      line: diagnostic.line,
+      column: diagnostic.column
+    };
   }
 
   return diagnostic;

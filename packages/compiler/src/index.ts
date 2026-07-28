@@ -24,20 +24,37 @@ export { compile, type CompileOptions, type RenderCtx, type RenderFunction } fro
 export { codegen, type CodegenOptions, type CodegenResult } from "./codegen";
 
 export {
+  ELFUI_COMPILER_PROTOCOL_VERSION,
+  validateElfUIPackageCompatibility,
+  type ElfUIPackageCompatibilityInfo
+} from "./protocol";
+
+export {
   createElfDiagnostic,
   formatElfDiagnostic,
   offsetToLineColumn,
   type ElfDiagnostic,
+  type ElfDiagnosticRange,
   type ElfDiagnosticSeverity
 } from "./diagnostic";
 
 export {
   compileMacroComponent,
+  toMacroComponentMetadataV1,
   type ElfSourceMap,
   type MacroCompiledComponent,
   type MacroComponentCompileOptions,
   type MacroComponentCompileResult,
   type MacroComponentMetadata,
+  type MacroComponentMetadataV1,
+  type MacroDiagnosticSummary,
   type MacroExportedComponentMetadata,
-  type MacroLocalComponentMetadata
+  type MacroExportedComponentMetadataV1,
+  type MacroFragmentMetadata,
+  type MacroLocalComponentMetadata,
+  type MacroEventMetadata,
+  type MacroModelMetadata,
+  type MacroPropMetadata,
+  type MacroSlotsMetadata,
+  type MacroSourceRange
 } from "./macro-component";

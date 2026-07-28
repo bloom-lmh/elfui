@@ -47,6 +47,9 @@ export interface FormControlContext<T = unknown> {
   getValue: () => T;
   /** 是否当前有效（最近一次 validate 的结果） */
   readonly valid: boolean;
+  readonly disabled: boolean;
+  setDisabled: (disabled: boolean) => void;
+  restore: (state: FormControlValue) => void;
 }
 
 export interface FormControlOptions<T = unknown> {
@@ -94,9 +97,18 @@ export const createFormControlContext = <T = unknown>(
   let currentValue: T = options.defaultValue as T;
   let currentRules: FormControlRule<T>[] = options.rules ?? [];
   let lastValid = true;
+  let disabled = false;
 
   const setValue = (value: T): void => {
     currentValue = value;
+    if (disabled) {
+      try {
+        internals?.setFormValue(null);
+      } catch {
+        // jsdom fallback
+      }
+      return;
+    }
     if (internals) {
       try {
         internals.setFormValue(value as FormControlValue);
@@ -120,6 +132,20 @@ export const createFormControlContext = <T = unknown>(
 
   const rules = (next: FormControlRule<T>[]): void => {
     currentRules = next;
+  };
+
+  const setDisabled = (next: boolean): void => {
+    disabled = next;
+    if (!internals) return;
+    try {
+      internals.setFormValue(next ? null : (currentValue as FormControlValue));
+    } catch {
+      // jsdom fallback
+    }
+  };
+
+  const restore = (state: FormControlValue): void => {
+    setValue(state as T);
   };
 
   const validate = async (): Promise<FormControlValidationResult<T>> => {
@@ -170,15 +196,24 @@ export const createFormControlContext = <T = unknown>(
     }
   };
 
+  if (Object.prototype.hasOwnProperty.call(options, "defaultValue")) {
+    setValue(options.defaultValue as T);
+  }
+
   return {
     rules,
     validate,
     report,
     reset,
     setValue,
+    setDisabled,
+    restore,
     getValue: () => currentValue,
     get valid(): boolean {
       return lastValid;
+    },
+    get disabled(): boolean {
+      return disabled;
     }
   };
 };

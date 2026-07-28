@@ -1,6 +1,6 @@
 {
   "name": "@elfui/compiler",
-  "version": "0.1.0-beta.12",
+  "version": "0.1.0-beta.13",
   "description": "Macro component compiler for ElfUI.",
   "keywords": [
     "elfui",
@@ -22,6 +22,9 @@
     "access": "public"
   },
   "type": "module",
+  "elfui": {
+    "compilerProtocol": 1
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "sideEffects": false,

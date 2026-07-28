@@ -1,12 +1,17 @@
 import * as ts from "typescript";
+import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   compileMacroComponent,
   type ElfSourceMap,
-  type MacroComponentCompileOptions
+  type MacroComponentCompileOptions,
+  type MacroComponentMetadata
 } from "./macro-component";
 import { createElfDiagnostic, formatElfDiagnostic, type ElfDiagnostic } from "./diagnostic";
+import { validateElfUIPackageCompatibility, type ElfUIPackageCompatibilityInfo } from "./protocol";
 
 const DEFAULT_MACRO_IMPORT = "@elfui/core";
 const elfFileRE = /\.elf\.tsx?(?:\?.*)?$/;
@@ -42,6 +47,10 @@ export interface ElfUIMacroPluginOptions extends MacroComponentCompileOptions {
   templateTypeCheck?: boolean;
   /** 稳定 sourceId 的基准目录；默认使用 Vite resolved config root。 */
   projectRoot?: string;
+  /** Build-only metadata hook for Language Tools, DevTools and documentation generators. */
+  onMetadata?: (metadata: MacroComponentMetadata, id: string) => void;
+  /** Build-only diagnostic hook. Diagnostics are also reported through the normal Vite path. */
+  onDiagnostics?: (diagnostics: readonly ElfDiagnostic[], id: string) => void;
 }
 
 export interface MinimalVitePlugin {
@@ -50,6 +59,107 @@ export interface MinimalVitePlugin {
   configResolved?(config: { root: string }): void;
   transform?(code: string, id: string): { code: string; map: ElfSourceMap | null } | null;
 }
+
+interface ElfUIPackageManifest {
+  name?: string;
+  version?: string;
+  elfui?: { compilerProtocol?: number };
+}
+
+const readPackageInfo = (manifestPath: string): ElfUIPackageCompatibilityInfo => {
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as ElfUIPackageManifest;
+  return {
+    name: manifest.name ?? path.basename(path.dirname(manifestPath)),
+    version: manifest.version ?? "0.0.0",
+    resolvedPath: manifestPath,
+    ...(typeof manifest.elfui?.compilerProtocol === "number"
+      ? { compilerProtocol: manifest.elfui.compilerProtocol }
+      : {})
+  };
+};
+
+const findPackageManifest = (entry: string): string | null => {
+  let current = path.dirname(entry);
+  while (true) {
+    const candidate = path.join(current, "package.json");
+    if (fs.existsSync(candidate)) return candidate;
+    const parent = path.dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+};
+
+const packageNameFromSpecifier = (specifier: string): string =>
+  specifier.startsWith("@")
+    ? specifier.split("/").slice(0, 2).join("/")
+    : (specifier.split("/")[0] ?? specifier);
+
+const resolvePackageInfo = (
+  packageName: string,
+  projectRoot: string
+): ElfUIPackageCompatibilityInfo | null => {
+  const directManifest = path.join(
+    projectRoot,
+    "node_modules",
+    ...packageName.split("/"),
+    "package.json"
+  );
+  if (fs.existsSync(directManifest)) return readPackageInfo(directManifest);
+  try {
+    const entry = createRequire(path.join(projectRoot, "package.json")).resolve(packageName);
+    const manifest = findPackageManifest(entry);
+    return manifest ? readPackageInfo(manifest) : null;
+  } catch {
+    const workspaceManifest = path.join(
+      projectRoot,
+      "packages",
+      packageName.split("/").at(-1)!,
+      "package.json"
+    );
+    return fs.existsSync(workspaceManifest) ? readPackageInfo(workspaceManifest) : null;
+  }
+};
+
+const compilerPackageInfo = (): ElfUIPackageCompatibilityInfo => {
+  const manifest = findPackageManifest(fileURLToPath(import.meta.url));
+  if (!manifest) {
+    throw new Error("[ELF_VITE_COMPILER_RESOLVE] Unable to locate @elfui/compiler package.json.");
+  }
+  return readPackageInfo(manifest);
+};
+
+export const assertElfUIBuildCompatibility = (
+  projectRoot: string,
+  macroImport = DEFAULT_MACRO_IMPORT
+): void => {
+  const compiler = compilerPackageInfo();
+  const corePackageName = packageNameFromSpecifier(macroImport);
+  const compilerPackageRoot = compiler.resolvedPath
+    ? path.dirname(path.dirname(compiler.resolvedPath))
+    : null;
+  const siblingCoreManifest = compilerPackageRoot
+    ? path.join(compilerPackageRoot, corePackageName.split("/").at(-1)!, "package.json")
+    : "";
+  const core = fs.existsSync(siblingCoreManifest)
+    ? readPackageInfo(siblingCoreManifest)
+    : resolvePackageInfo(corePackageName, projectRoot);
+  if (!core) {
+    throw new Error(
+      `[ELF_VITE_CORE_RESOLVE] Unable to resolve ${JSON.stringify(corePackageName)} from ` +
+        `${projectRoot}. Install matching ElfUI Core and Vite Plugin versions.`
+    );
+  }
+
+  const packages = [compiler, core];
+  const siblingVitePluginManifest = compilerPackageRoot
+    ? path.join(compilerPackageRoot, "vite-plugin", "package.json")
+    : "";
+  const vitePlugin = fs.existsSync(siblingVitePluginManifest)
+    ? readPackageInfo(siblingVitePluginManifest)
+    : resolvePackageInfo("@elfui/vite-plugin", projectRoot);
+  if (vitePlugin) packages.push(vitePlugin);
+  validateElfUIPackageCompatibility(packages);
+};
 
 export interface ElfUIPragmaAnalysis {
   hasPragma: boolean;
@@ -77,6 +187,9 @@ export const elfuiMacroPlugin = (options: ElfUIMacroPluginOptions = {}): Minimal
     enforce: "pre",
     configResolved(config) {
       if (!options.projectRoot) projectRoot = config.root;
+      if (fs.existsSync(projectRoot)) {
+        assertElfUIBuildCompatibility(projectRoot, macroImport);
+      }
     },
     transform(code, id) {
       if (!include.test(id) || exclude?.test(id)) return null;
@@ -158,6 +271,8 @@ export const elfuiMacroPlugin = (options: ElfUIMacroPluginOptions = {}): Minimal
       compileOptions.macroImport = macroImport;
       compileOptions.templateTypeCheck = options.templateTypeCheck ?? false;
       const result = compileMacroComponent(code, compileOptions);
+      options.onMetadata?.(result.metadata, id);
+      options.onDiagnostics?.(result.diagnostics, id);
       if (result.diagnostics.length > 0) {
         const diagnostics = result.diagnostics.map(formatElfDiagnostic).join("\n");
         const shouldFail =

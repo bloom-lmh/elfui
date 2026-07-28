@@ -231,6 +231,7 @@ export const defineCustomElement = (
     private __stylesInjected = false;
     private __renderedNodes: Node[] = [];
     private __mountVersion = 0;
+    private __formControl: FormControlContext | null = null;
     public __setupDone = false;
     public __pendingChildren: (() => void)[] = [];
 
@@ -348,6 +349,7 @@ export const defineCustomElement = (
               typeof definition.formControl === "object" ? definition.formControl : {};
             ctx.form = createFormControlContext(this, formOptions);
             instance.form = ctx.form;
+            this.__formControl = ctx.form;
           }
 
           // 注入样式
@@ -525,6 +527,21 @@ export const defineCustomElement = (
       });
     }
 
+    public formResetCallback(): void {
+      this.__formControl?.reset();
+    }
+
+    public formDisabledCallback(disabled: boolean): void {
+      this.__formControl?.setDisabled(disabled);
+    }
+
+    public formStateRestoreCallback(
+      state: string | File | FormData | null,
+      _mode: "restore" | "autocomplete"
+    ): void {
+      this.__formControl?.restore(state);
+    }
+
     private __finalizeUnmount(): void {
       if (this.isConnected || !this.__mounted || !this.__instance) return;
       (this as unknown as Record<symbol, unknown>)[ELF_KEEP_ALIVE_RELEASE] = undefined;
@@ -549,6 +566,7 @@ export const defineCustomElement = (
       this.__instance.parent = null;
       detachInstanceFromHost(this, this.__instance);
       this.__instance = null;
+      this.__formControl = null;
       this.__mounted = false;
 
       // 重置 setup 状态

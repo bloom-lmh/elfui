@@ -11,6 +11,7 @@ import {
 } from "@elfui/compiler-template";
 import { codegen, type FragmentCodegenDefinition } from "./codegen";
 import type { ElfDiagnostic, ElfDiagnosticSeverity } from "./diagnostic";
+import { ELFUI_COMPILER_PROTOCOL_VERSION } from "./protocol";
 
 export { formatElfDiagnostic, type ElfDiagnostic, type ElfDiagnosticSeverity } from "./diagnostic";
 
@@ -161,15 +162,52 @@ export interface MacroComponentCompileResult {
   metadata: MacroComponentMetadata;
 }
 
-export interface MacroComponentMetadata {
+/** @deprecated Consume MacroComponentMetadata schema v2. Scheduled for removal after one beta. */
+export interface MacroComponentMetadataV1 {
   filename: string;
   sourceId: string;
-  components: MacroExportedComponentMetadata[];
+  components: MacroExportedComponentMetadataV1[];
   localComponents: MacroLocalComponentMetadata[];
   exposed: string[];
 }
 
-export interface MacroExportedComponentMetadata {
+export interface MacroSourceRange {
+  start: number;
+  end: number;
+  line: number;
+  column: number;
+  endLine: number;
+  endColumn: number;
+}
+
+export interface MacroFragmentMetadata {
+  kind: "named" | "inline" | "inline-list";
+  name: string;
+  renderName: string;
+  propsType: string;
+  scopeNames: string[];
+  dependencies: string[];
+  ownerComponents: string[];
+  identity: "not-applicable" | "index";
+  source: MacroSourceRange;
+}
+
+export interface MacroDiagnosticSummary {
+  errors: number;
+  warnings: number;
+  codes: string[];
+}
+
+export interface MacroComponentMetadata extends MacroComponentMetadataV1 {
+  schemaVersion: 2;
+  compilerProtocol: number;
+  components: MacroExportedComponentMetadata[];
+  fragments: MacroFragmentMetadata[];
+  diagnostics: MacroDiagnosticSummary;
+}
+
+/** @deprecated Consume MacroExportedComponentMetadata from Metadata v2. */
+export interface MacroExportedComponentMetadataV1 {
   exportName: "default" | string;
   localName?: string;
   name: string;
@@ -180,6 +218,38 @@ export interface MacroExportedComponentMetadata {
   /** 编译器生成或保留的 runtime prop option 源码，供 language-tools/诊断展示。 */
   runtimePropOptions: Record<string, string>;
   emitNames: string[];
+}
+
+export interface MacroExportedComponentMetadata extends MacroExportedComponentMetadataV1 {
+  tagName: string;
+  source: MacroSourceRange;
+  props: MacroPropMetadata[];
+  events: MacroEventMetadata[];
+  slots: MacroSlotsMetadata;
+  expose: string[];
+  models: MacroModelMetadata[];
+  options: Record<string, string>;
+}
+
+export interface MacroPropMetadata {
+  name: string;
+  runtimeOption: string;
+  typeText: string;
+}
+
+export interface MacroEventMetadata {
+  name: string;
+  typeText: string;
+}
+
+export interface MacroSlotsMetadata {
+  typeText: string;
+}
+
+export interface MacroModelMetadata {
+  localName: string;
+  propName: string;
+  typeText: string;
 }
 
 export interface MacroLocalComponentMetadata {
@@ -343,7 +413,7 @@ interface TransformState {
   styles: string[];
   directives: Map<string, MacroDirective>;
   fragments: Map<string, MacroFragment>;
-  inlineFragments: Map<string, string>;
+  inlineFragments: Map<string, MacroInlineFragment>;
   inlineFragmentRenders: Map<string, MacroInlineFragment>;
   inlineFragmentLists: Map<string, MacroInlineFragmentList>;
   components: Map<string, string>;
@@ -370,6 +440,11 @@ interface DiagnosticInit {
   start?: number;
   end?: number;
   hint?: string;
+  expression?: string;
+  component?: string;
+  fragment?: string;
+  generatedStart?: number;
+  generatedEnd?: number;
 }
 
 const addDiagnostic = (state: TransformState, init: DiagnosticInit): void => {
@@ -385,15 +460,37 @@ const addDiagnostic = (state: TransformState, init: DiagnosticInit): void => {
     severity: init.severity ?? "error",
     message: init.message,
     file: state.filename,
+    filename: state.filename,
+    sourceId: state.sourceId,
     ...(start !== undefined ? { start } : {}),
     ...(end !== undefined ? { end } : {}),
-    ...(init.hint ? { hint: init.hint } : {})
+    ...(init.hint ? { hint: init.hint } : {}),
+    ...(init.expression ? { expression: init.expression } : {}),
+    ...(init.component ? { component: init.component } : {}),
+    ...(init.fragment ? { fragment: init.fragment } : {}),
+    ...(init.generatedStart !== undefined ? { generatedStart: init.generatedStart } : {}),
+    ...(init.generatedEnd !== undefined ? { generatedEnd: init.generatedEnd } : {})
   };
 
   if (start !== undefined) {
     const position = state.sourceFile.getLineAndCharacterOfPosition(start);
     diagnostic.line = position.line + 1;
     diagnostic.column = position.character + 1;
+  }
+
+  if (
+    diagnostic.start !== undefined &&
+    diagnostic.end !== undefined &&
+    diagnostic.line !== undefined &&
+    diagnostic.column !== undefined
+  ) {
+    diagnostic.filename = state.filename;
+    diagnostic.range = {
+      start: diagnostic.start,
+      end: diagnostic.end,
+      line: diagnostic.line,
+      column: diagnostic.column
+    };
   }
 
   state.diagnostics.push(diagnostic);
@@ -452,6 +549,8 @@ export const compileMacroComponent = (
   for (const statement of state.sourceFile.statements) {
     visitTopLevelStatement(statement, state);
   }
+
+  collectFragmentDiagnostics(state);
 
   if (state.templates.length === 0) {
     addDiagnostic(state, {
@@ -1575,7 +1674,15 @@ const expressionHoleToTemplate = (
       return "";
     }
     const marker = `__elfInlineFragment${state.inlineFragments.size}`;
-    state.inlineFragments.set(marker, inlineFragment);
+    state.inlineFragments.set(marker, {
+      localName: marker,
+      marker,
+      template: inlineFragment.template,
+      sourceStart: inlineFragment.sourceStart,
+      sourceEnd: inlineFragment.sourceEnd,
+      scopeNames: [],
+      renderName: marker
+    });
     return `{{ ${marker} }}`;
   }
   const attr = currentOutput.match(/([:@][\w$.-]+|v-[\w$:-]+(?:\.[\w$-]+)*)\s*=\s*$/);
@@ -1670,7 +1777,7 @@ const getInlineFragmentList = (expression: ts.Expression, state: TransformState)
 const getInlineFragmentTemplate = (
   expression: ts.Expression,
   state: TransformState
-): string | null => {
+): { template: string; sourceStart: number; sourceEnd: number } | null => {
   const value = stripExpression(expression);
   if (!ts.isTaggedTemplateExpression(value)) return null;
   if (!ts.isIdentifier(value.tag) || value.tag.text !== "fragment") return null;
@@ -1683,7 +1790,7 @@ const getInlineFragmentTemplate = (
     });
     return null;
   }
-  return compileHtmlTemplate(template, state).template;
+  return compileHtmlTemplate(template, state);
 };
 
 const attributeExpressionValue = (
@@ -2569,7 +2676,7 @@ const renderPrecompiledTemplate = (
   functionName: string,
   scopeNames: readonly string[],
   fragments: ReadonlyMap<string, MacroFragment> = new Map(),
-  inlineFragments: ReadonlyMap<string, string> = new Map(),
+  inlineFragments: ReadonlyMap<string, MacroInlineFragment> = new Map(),
   inlineFragmentRenders: ReadonlyMap<string, MacroInlineFragment> = new Map(),
   inlineFragmentLists: ReadonlyMap<string, MacroInlineFragmentList> = new Map()
 ): { code: string; helpers: string[] } => {
@@ -2589,7 +2696,9 @@ const renderPrecompiledTemplate = (
     scopeNames,
     includePropsInScope: false,
     fragments: fragmentDefinitions,
-    inlineFragments: Object.fromEntries(inlineFragments),
+    inlineFragments: Object.fromEntries(
+      Array.from(inlineFragments, ([key, fragment]) => [key, fragment.template])
+    ),
     inlineFragmentRenders: Object.fromEntries(
       Array.from(inlineFragmentRenders, ([key, fragment]) => [
         key,
@@ -3033,6 +3142,8 @@ const buildMetadata = (
   const fallbackSlotsType = state.slotsType ?? "__ElfSlots";
 
   return {
+    schemaVersion: 2,
+    compilerProtocol: ELFUI_COMPILER_PROTOCOL_VERSION,
     filename: state.filename,
     sourceId: state.sourceId,
     components: components.map((component) => ({
@@ -3044,7 +3155,23 @@ const buildMetadata = (
       slotsType: component.slotsType ?? fallbackSlotsType,
       propNames: Array.from(state.props.keys()),
       runtimePropOptions: Object.fromEntries(state.props),
-      emitNames: Array.from(state.emits)
+      emitNames: Array.from(state.emits),
+      tagName: component.name,
+      source: sourceRange(state, component.sourceStart, component.sourceEnd),
+      props: Array.from(state.props, ([name, runtimeOption]) => ({
+        name,
+        runtimeOption,
+        typeText: runtimeOption
+      })),
+      events: Array.from(state.emits, (name) => ({ name, typeText: "unknown[]" })),
+      slots: { typeText: component.slotsType ?? fallbackSlotsType },
+      expose: Array.from(state.exposed),
+      models: state.modelMacros.map((model) => ({
+        localName: model.localName,
+        propName: model.propName,
+        typeText: model.typeArgs
+      })),
+      options: Object.fromEntries(state.options)
     })),
     localComponents: Array.from(state.components, ([name, expression]) => {
       const constructorType = typeQueryForComponentExpression(expression);
@@ -3064,8 +3191,195 @@ const buildMetadata = (
           : `NonNullable<(${constructorType})["__elfSlots"]>`
       };
     }),
-    exposed: Array.from(state.exposed)
+    exposed: Array.from(state.exposed),
+    fragments: buildFragmentMetadata(state, components),
+    diagnostics: {
+      errors: state.diagnostics.filter((diagnostic) => diagnostic.severity === "error").length,
+      warnings: state.diagnostics.filter((diagnostic) => diagnostic.severity === "warning").length,
+      codes: Array.from(new Set(state.diagnostics.map((diagnostic) => diagnostic.code)))
+    }
   };
+};
+
+/** @deprecated Consume Metadata v2 directly. This adapter is retained for one beta release. */
+export const toMacroComponentMetadataV1 = (
+  metadata: MacroComponentMetadata
+): MacroComponentMetadataV1 => ({
+  filename: metadata.filename,
+  sourceId: metadata.sourceId,
+  components: metadata.components.map(
+    ({
+      exportName,
+      localName,
+      name,
+      propsType,
+      emitsType,
+      slotsType,
+      propNames,
+      runtimePropOptions,
+      emitNames
+    }) => ({
+      exportName,
+      ...(localName ? { localName } : {}),
+      name,
+      propsType,
+      emitsType,
+      slotsType,
+      propNames,
+      runtimePropOptions,
+      emitNames
+    })
+  ),
+  localComponents: metadata.localComponents,
+  exposed: metadata.exposed
+});
+
+const sourceRange = (state: TransformState, start: number, end: number): MacroSourceRange => {
+  const first = state.sourceFile.getLineAndCharacterOfPosition(start);
+  const last = state.sourceFile.getLineAndCharacterOfPosition(end);
+  return {
+    start,
+    end,
+    line: first.line + 1,
+    column: first.character + 1,
+    endLine: last.line + 1,
+    endColumn: last.character + 1
+  };
+};
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+
+const templateUsesFragment = (template: string, name: string): boolean =>
+  new RegExp(`<${escapeRegExp(name)}(?:\\s|/|>)`, "u").test(template);
+
+const fragmentDependencies = (
+  template: string,
+  fragments: ReadonlyMap<string, MacroFragment>
+): string[] => Array.from(fragments.keys()).filter((name) => templateUsesFragment(template, name));
+
+const fragmentOwners = (
+  components: readonly InternalCompiledComponent[],
+  predicate: (template: string) => boolean
+): string[] =>
+  components.filter((component) => predicate(component.template)).map(({ name }) => name);
+
+const buildFragmentMetadata = (
+  state: TransformState,
+  components: readonly InternalCompiledComponent[]
+): MacroFragmentMetadata[] => {
+  const named = Array.from(
+    state.fragments.values(),
+    (fragment): MacroFragmentMetadata => ({
+      kind: "named",
+      name: fragment.localName,
+      renderName: fragment.renderName,
+      propsType: fragment.propsType ?? "Record<string, unknown>",
+      scopeNames: fragment.scopeNames,
+      dependencies: fragmentDependencies(fragment.template, state.fragments),
+      ownerComponents: fragmentOwners(components, (template) =>
+        templateUsesFragment(template, fragment.localName)
+      ),
+      identity: "not-applicable",
+      source: sourceRange(state, fragment.sourceStart, fragment.sourceEnd)
+    })
+  );
+
+  const inline = Array.from(
+    state.inlineFragments.values(),
+    (fragment): MacroFragmentMetadata => ({
+      kind: "inline",
+      name: fragment.marker,
+      renderName: fragment.renderName,
+      propsType: "Record<string, unknown>",
+      scopeNames: fragment.scopeNames,
+      dependencies: fragmentDependencies(fragment.template, state.fragments),
+      ownerComponents: fragmentOwners(components, (template) => template.includes(fragment.marker)),
+      identity: "not-applicable",
+      source: sourceRange(state, fragment.sourceStart, fragment.sourceEnd)
+    })
+  );
+
+  const lists = Array.from(state.inlineFragmentLists.values(), (list): MacroFragmentMetadata => {
+    const render = state.inlineFragmentRenders.get(list.renderName);
+    return {
+      kind: "inline-list",
+      name: list.marker,
+      renderName: list.renderName,
+      propsType: "Record<string, unknown>",
+      scopeNames: [list.itemName, ...(list.indexName ? [list.indexName] : [])],
+      dependencies: render ? fragmentDependencies(render.template, state.fragments) : [],
+      ownerComponents: fragmentOwners(components, (template) => template.includes(list.marker)),
+      identity: "index",
+      source: sourceRange(
+        state,
+        render?.sourceStart ?? 0,
+        render?.sourceEnd ?? render?.sourceStart ?? 0
+      )
+    };
+  });
+
+  return [...named, ...inline, ...lists];
+};
+
+const collectFragmentDiagnostics = (state: TransformState): void => {
+  const dependencies = new Map(
+    Array.from(state.fragments, ([name, fragment]) => [
+      name,
+      fragmentDependencies(fragment.template, state.fragments)
+    ])
+  );
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const reported = new Set<string>();
+
+  const visit = (name: string, trail: string[]): void => {
+    if (visiting.has(name)) {
+      const cycleStart = trail.indexOf(name);
+      const cycle = [...trail.slice(Math.max(0, cycleStart)), name];
+      const key = [...new Set(cycle)].sort().join("|");
+      if (!reported.has(key)) {
+        reported.add(key);
+        const fragment = state.fragments.get(name);
+        addDiagnostic(state, {
+          code: "ELF_MACRO_FRAGMENT_CYCLE",
+          message: `Fragment cycle detected: ${cycle.join(" -> ")}.`,
+          ...(fragment
+            ? {
+                start: fragment.sourceStart,
+                end: fragment.sourceEnd,
+                fragment: fragment.localName
+              }
+            : {}),
+          hint: "Break the recursive Fragment reference; Fragment templates are compile-time slices."
+        });
+      }
+      return;
+    }
+    if (visited.has(name)) return;
+    visiting.add(name);
+    for (const dependency of dependencies.get(name) ?? []) {
+      visit(dependency, [...trail, name]);
+    }
+    visiting.delete(name);
+    visited.add(name);
+  };
+
+  for (const name of state.fragments.keys()) visit(name, []);
+
+  for (const list of state.inlineFragmentLists.values()) {
+    const render = state.inlineFragmentRenders.get(list.renderName);
+    if (!render || !/(?:^|[\s<])(?::key|key)\s*=/u.test(render.template)) continue;
+    addDiagnostic(state, {
+      code: "ELF_MACRO_FRAGMENT_INDEX_IDENTITY",
+      severity: "warning",
+      message:
+        "fragment array.map() currently preserves list identity by index; a key attribute inside the slice does not change reconciliation identity.",
+      start: render.sourceStart,
+      end: render.sourceEnd,
+      fragment: list.marker,
+      hint: "Use v-for with :key when stable keyed reconciliation is required."
+    });
+  }
 };
 
 const normalizeSourceId = (value: string): string =>

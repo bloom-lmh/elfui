@@ -21,19 +21,19 @@ const targets = [
     id: "app-fixture",
     name: "real app fixture (tree-shaken public API consumer)",
     entry: resolve(root, "integration/size-fixture/app-entry.ts"),
-    target: { gzip: kb(9.8), brotli: kb(8.9) }
+    target: { gzip: kb(10.2), brotli: kb(9.2) }
   },
   {
     id: "light",
     name: "@elfui/core aggregate public facade (all stable exports)",
     entry: resolve(root, "packages/core/src/index.ts"),
-    target: { gzip: kb(16.5), brotli: kb(14.9) }
+    target: { gzip: kb(17.1), brotli: kb(15.4) }
   },
   {
     id: "runtime",
     name: "@elfui/runtime (stable runtime API, no compiler)",
     entry: resolve(root, "packages/runtime/src/index.ts"),
-    target: { gzip: kb(14.3), brotli: kb(13) }
+    target: { gzip: kb(14.7), brotli: kb(13.3) }
   },
   {
     id: "reactivity",

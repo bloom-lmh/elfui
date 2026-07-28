@@ -16,6 +16,7 @@ export {
   type ElfUIApp,
   type ElfUIAppConfig,
   type ElfUIAppPlugin,
+  type ElfUIAppPluginCleanup,
   type ElfUIAppPluginFn,
   type ElfUIAppPluginObject
 } from "./app";
@@ -188,6 +189,7 @@ export {
   useClickOutside,
   useEventListener,
   useHost,
+  useId,
   useHostAttr,
   useHostClass,
   useHostCssVar,

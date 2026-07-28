@@ -118,6 +118,22 @@ describe("macro component DevTools source metadata", () => {
     expect(result?.code).toContain('"file":"src/Card.elf.ts"');
   });
 
+  it("exposes build-only Metadata v2 and diagnostics to tooling hooks", () => {
+    const metadata: unknown[] = [];
+    const diagnostics: unknown[] = [];
+    const plugin = elfuiMacroPlugin({
+      onMetadata: (value) => metadata.push(value),
+      onDiagnostics: (value) => diagnostics.push(value)
+    });
+    plugin.transform?.(
+      `import { defineHtml } from "@elfui/core";\nexport const Card = defineHtml(\`<p>card</p>\`);`,
+      "/workspace/src/Card.elf.ts"
+    );
+
+    expect(metadata).toEqual([expect.objectContaining({ schemaVersion: 2, compilerProtocol: 1 })]);
+    expect(diagnostics).toEqual([[]]);
+  });
+
   it("does not classify the public runtime useModel hook as a macro-only import", () => {
     const plugin = elfuiMacroPlugin();
     const result = plugin.transform?.(
