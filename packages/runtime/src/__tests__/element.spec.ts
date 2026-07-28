@@ -26,6 +26,19 @@ const nextTag = (): string => `elf-test-${++tagCounter}`;
 const flushDisconnect = (): Promise<void> => new Promise((r) => queueMicrotask(r));
 
 describe("defineCustomElement 基础", () => {
+  it("在开发态为 closed Shadow Root 暴露仅供 DevTools 使用的通道", () => {
+    const tag = nextTag();
+    defineCustomElement({ tag, shadow: "closed" });
+    const host = document.createElement(tag);
+    const renderRoot = (host as unknown as Record<symbol, unknown>)[
+      Symbol.for("elfui.devtools.render-root")
+    ];
+
+    expect(host.shadowRoot).toBeNull();
+    expect(renderRoot).toBeInstanceOf(ShadowRoot);
+    expect((renderRoot as ShadowRoot).host).toBe(host);
+  });
+
   it("服务端定义返回可安全导入的占位构造器，并在误注册时给出明确诊断", () => {
     const tag = nextTag();
     const descriptor = Object.getOwnPropertyDescriptor(globalThis, "HTMLElement");

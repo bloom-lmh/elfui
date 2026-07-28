@@ -10,6 +10,47 @@ const COMPONENT_CONTEXT_KEY: unique symbol = Symbol.for(
 ) as never;
 const TEMPLATE_NODE_KEY: unique symbol = Symbol.for("elfui.devtools.template-node") as never;
 
+type WeakRegistry<K extends object, V> = Pick<WeakMap<K, V>, "get" | "set">;
+
+let localTemplateNodeRegistry: WeakMap<Node, ElfUIDevtoolsTemplateNodeInfo> | undefined;
+let localRenderRootRegistry: WeakMap<HTMLElement, ShadowRoot> | undefined;
+
+const isWeakRegistry = <K extends object, V>(value: unknown): value is WeakRegistry<K, V> =>
+  !!value &&
+  typeof value === "object" &&
+  typeof (value as { get?: unknown }).get === "function" &&
+  typeof (value as { set?: unknown }).set === "function";
+
+const templateNodeRegistry = (): WeakRegistry<Node, ElfUIDevtoolsTemplateNodeInfo> => {
+  localTemplateNodeRegistry ??= new WeakMap();
+  try {
+    const key = Symbol.for("elfui.devtools.template-node-registry");
+    const target = globalThis as unknown as Record<symbol, unknown>;
+    const current = target[key];
+    if (isWeakRegistry<Node, ElfUIDevtoolsTemplateNodeInfo>(current)) return current;
+    const registry = new WeakMap<Node, ElfUIDevtoolsTemplateNodeInfo>();
+    Object.defineProperty(target, key, { value: registry, configurable: true });
+    return registry;
+  } catch {
+    return localTemplateNodeRegistry;
+  }
+};
+
+const renderRootRegistry = (): WeakRegistry<HTMLElement, ShadowRoot> => {
+  localRenderRootRegistry ??= new WeakMap();
+  try {
+    const key = Symbol.for("elfui.devtools.render-root-registry");
+    const target = globalThis as unknown as Record<symbol, unknown>;
+    const current = target[key];
+    if (isWeakRegistry<HTMLElement, ShadowRoot>(current)) return current;
+    const registry = new WeakMap<HTMLElement, ShadowRoot>();
+    Object.defineProperty(target, key, { value: registry, configurable: true });
+    return registry;
+  } catch {
+    return localRenderRootRegistry;
+  }
+};
+
 export interface ElfUIDevtoolsDebugState {
   id: string;
   appId: string | null;
@@ -36,6 +77,76 @@ export interface ElfUIDevtoolsTemplateNodeInfo {
   source: ElfUIDevtoolsSourceLocation;
 }
 
+export const attachDevtoolsRenderRoot = (host: HTMLElement, root: ShadowRoot): void => {
+  if (!__DEV__) return;
+  try {
+    renderRootRegistry().set(host, root);
+  } catch {
+    // DevTools metadata is best-effort and must never interrupt component construction.
+  }
+  try {
+    Object.defineProperty(host, Symbol.for("elfui.devtools.render-root"), {
+      value: root,
+      configurable: true
+    });
+  } catch {
+    // Compatibility mirror only. Some DOM implementations reject Symbol descriptors.
+  }
+};
+
+export const getDevtoolsRenderRoot = (host: HTMLElement): ShadowRoot | null => {
+  if (!__DEV__) return null;
+  try {
+    const root = renderRootRegistry().get(host);
+    if (root) return root;
+  } catch {
+    // Fall through to the legacy node mirror.
+  }
+  try {
+    const root = (host as unknown as Record<symbol, unknown>)[
+      Symbol.for("elfui.devtools.render-root")
+    ];
+    return root instanceof ShadowRoot ? root : null;
+  } catch {
+    return null;
+  }
+};
+
+const setDevtoolsTemplateNode = (node: Node, info: ElfUIDevtoolsTemplateNodeInfo): void => {
+  try {
+    templateNodeRegistry().set(node, info);
+  } catch {
+    // DevTools metadata is best-effort and must never interrupt template rendering.
+  }
+  try {
+    Object.defineProperty(node, TEMPLATE_NODE_KEY, {
+      value: info,
+      configurable: true
+    });
+  } catch {
+    // Compatibility mirror only. happy-dom select elements reject this descriptor.
+  }
+};
+
+export const getDevtoolsTemplateNode = (node: Node): ElfUIDevtoolsTemplateNodeInfo | null => {
+  if (!__DEV__) return null;
+  try {
+    const info = templateNodeRegistry().get(node);
+    if (info) return info;
+  } catch {
+    // Fall through to the legacy node mirror.
+  }
+  try {
+    return (
+      ((node as unknown as Record<symbol, unknown>)[TEMPLATE_NODE_KEY] as
+        | ElfUIDevtoolsTemplateNodeInfo
+        | undefined) ?? null
+    );
+  } catch {
+    return null;
+  }
+};
+
 export const attachDevtoolsTemplateNode = (
   node: Node,
   sourceId: string,
@@ -54,23 +165,15 @@ export const attachDevtoolsTemplateNode = (
     ...(fragment ? { fragment } : {}),
     source: { file: sourceId, line, column, endLine, endColumn }
   };
-  Object.defineProperty(node, TEMPLATE_NODE_KEY, {
-    value: info,
-    configurable: true
-  });
+  setDevtoolsTemplateNode(node, info);
 };
 
 export const cloneDevtoolsTemplateTree = <T extends Node>(node: T): T => {
   const clone = node.cloneNode(true) as T;
   if (!__DEV__) return clone;
   const copy = (source: Node, target: Node): void => {
-    const info = (source as unknown as Record<symbol, unknown>)[TEMPLATE_NODE_KEY];
-    if (info) {
-      Object.defineProperty(target, TEMPLATE_NODE_KEY, {
-        value: info,
-        configurable: true
-      });
-    }
+    const info = getDevtoolsTemplateNode(source);
+    if (info) setDevtoolsTemplateNode(target, info);
     const sourceChildren = source.childNodes;
     const targetChildren = target.childNodes;
     for (let index = 0; index < sourceChildren.length; index += 1) {

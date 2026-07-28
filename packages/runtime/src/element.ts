@@ -16,7 +16,7 @@
 import { effectScope, isRef, useReactive, useShallowRef, type useRef } from "@elfui/reactivity";
 
 import { getHostAttrs, disposeHostAttrs } from "./attrs";
-import { DEV as __DEV__ } from "./dev";
+import { DEV as __RUNTIME_DEV__ } from "./dev";
 import { ELF_KEEP_ALIVE_FLAG, ELF_KEEP_ALIVE_RELEASE } from "./builtin";
 import { resolveAppConfig, type ElfUIConfig } from "./config";
 import { handleRuntimeError } from "./error";
@@ -36,6 +36,7 @@ import {
   type ComponentInstance
 } from "./lifecycle";
 import {
+  attachDevtoolsRenderRoot,
   connectDevtoolsComponent,
   disconnectDevtoolsComponent,
   emitDevtoolsRuntimeEvent,
@@ -241,6 +242,8 @@ export const defineCustomElement = (
       // 但要确保 shadow 提前可用（attribute 转 prop 需要）
       if (definition.shadow !== false) {
         this.__shadow = this.attachShadow({ mode: definition.shadow ?? "open" });
+        if (typeof __DEV__ === "undefined" || __DEV__)
+          attachDevtoolsRenderRoot(this, this.__shadow);
       }
       // 初始化 prop states 为默认值
       for (const [key, opt] of propEntries) {
@@ -312,7 +315,7 @@ export const defineCustomElement = (
         };
         // 把 instance 挂到 host 上，以便 inject 能沿父链查找
         attachInstanceToHost(this, instance);
-        if (__DEV__) connectDevtoolsComponent(instance);
+        if (__RUNTIME_DEV__) connectDevtoolsComponent(instance);
 
         scope.run(() => {
           // 同步 attribute 到 prop
@@ -333,7 +336,7 @@ export const defineCustomElement = (
 
           // 构造 props（解包后的对象）
           const props = createPropsProxy(this.__propStates);
-          if (__DEV__) instance.devtools.props = props;
+          if (__RUNTIME_DEV__) instance.devtools.props = props;
           const emit = createEmit(this, definition.emitOptions);
           const ctx: SetupContext = {
             emit,
@@ -382,7 +385,7 @@ export const defineCustomElement = (
                 $asyncError: null as unknown,
                 $asyncResolved: false
               });
-              if (__DEV__) {
+              if (__RUNTIME_DEV__) {
                 instance.devtools.setup = asyncState as unknown as Record<string, unknown>;
               }
 
@@ -415,7 +418,7 @@ export const defineCustomElement = (
                   pendingRenderScope = null;
                   asyncState.$asyncPending = false;
                   asyncState.$asyncResolved = true;
-                  if (__DEV__) {
+                  if (__RUNTIME_DEV__) {
                     instance.devtools.setup = {
                       ...(asyncState as unknown as Record<string, unknown>),
                       ...(resolvedState ?? {})
@@ -469,7 +472,7 @@ export const defineCustomElement = (
             } else {
               // 同步 setup
               const setupResult = setupReturned as Record<string, unknown> | void;
-              if (__DEV__) instance.devtools.setup = setupResult ?? {};
+              if (__RUNTIME_DEV__) instance.devtools.setup = setupResult ?? {};
               if (definition.render) {
                 const renderCtx: RenderContext = buildRenderCtx(
                   this,
@@ -557,7 +560,7 @@ export const defineCustomElement = (
       clearTemplateRefs(this.__instance);
       this.__clearRenderedNodes();
       callHooks(this.__instance.unmountedHooks, this.__instance, "component unmounted hook");
-      if (__DEV__) {
+      if (__RUNTIME_DEV__) {
         emitDevtoolsRuntimeEvent({ type: "component:unmount", host: this });
         disconnectDevtoolsComponent(this.__instance);
       }
@@ -599,7 +602,7 @@ export const defineCustomElement = (
       }
       instance.isMounted = true;
       callHooks(instance.mountedHooks, instance, "component mounted hook", true);
-      if (__DEV__) {
+      if (__RUNTIME_DEV__) {
         const hostRef = new WeakRef(this);
         const instanceRef = new WeakRef(instance);
         const source = (
@@ -662,7 +665,7 @@ export const defineCustomElement = (
       );
       const render = (): Node => definition.render!(renderCtx);
       const rootNode =
-        __DEV__ && this.__instance
+        __RUNTIME_DEV__ && this.__instance
           ? withDevtoolsComponentContext(this.__instance.devtools.id, render)
           : render();
       this.__appendRenderedNode(target, rootNode);

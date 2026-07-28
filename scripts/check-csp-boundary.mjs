@@ -160,7 +160,9 @@ const main = async () => {
     assertNoDynamicCode(macroGenerated);
     for (const marker of [
       "elfui.devtools.template-node",
+      "elfui.devtools.render-root",
       "attachDevtoolsTemplateNode",
+      "attachDevtoolsRenderRoot",
       "templateNodeId"
     ]) {
       if (macroGenerated.output.includes(marker)) {

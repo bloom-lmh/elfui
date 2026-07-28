@@ -13,11 +13,13 @@
   "changesets": [
     "bright-props-inference",
     "calm-array-effects",
+    "closed-shadow-devtools-channel",
     "direct-macro-literals",
     "fix-local-directive-context",
     "flexible-observer-targets",
     "fresh-prop-containers",
     "gentle-events-contract",
+    "happy-dom-devtools-metadata",
     "instance-directive-captures",
     "kind-template-values",
     "lean-expression-ir",

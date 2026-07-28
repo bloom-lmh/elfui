@@ -91,6 +91,7 @@
     "esbuild": "^0.28.0",
     "eslint": "latest",
     "eslint-config-prettier": "latest",
+    "happy-dom": "20.10.6",
     "husky": "latest",
     "jsdom": "latest",
     "lint-staged": "latest",
