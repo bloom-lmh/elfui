@@ -228,7 +228,7 @@ export const defineExpose = <T extends object>(
   const host = useHost();
   if (!host) return;
   const exposedRecord = exposed as Record<string, unknown>;
-  if (__DEV__ && instance) instance.devtools.exposed = exposedRecord;
+  if (__DEV__ && instance?.devtools) instance.devtools.exposed = exposedRecord;
   for (const k of Object.keys(exposed)) {
     const overrideAllowed =
       options.overrideNative === true ||

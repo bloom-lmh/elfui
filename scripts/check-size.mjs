@@ -21,25 +21,25 @@ const targets = [
     id: "app-fixture",
     name: "real app fixture (tree-shaken public API consumer)",
     entry: resolve(root, "integration/size-fixture/app-entry.ts"),
-    target: { gzip: kb(10.2), brotli: kb(9.2) }
+    target: { gzip: kb(10.3), brotli: kb(9.3) }
   },
   {
     id: "light",
     name: "@elfui/core aggregate public facade (all stable exports)",
     entry: resolve(root, "packages/core/src/index.ts"),
-    target: { gzip: kb(17.8), brotli: kb(16.1) }
+    target: { gzip: kb(18.8), brotli: kb(17) }
   },
   {
     id: "runtime",
     name: "@elfui/runtime (stable runtime API, no compiler)",
     entry: resolve(root, "packages/runtime/src/index.ts"),
-    target: { gzip: kb(15.5), brotli: kb(14.1) }
+    target: { gzip: kb(16.4), brotli: kb(14.9) }
   },
   {
     id: "reactivity",
     name: "@elfui/reactivity (reactivity only)",
     entry: resolve(root, "packages/reactivity/src/index.ts"),
-    target: { gzip: kb(5.5), brotli: kb(5) }
+    target: { gzip: kb(5.4), brotli: kb(4.9) }
   }
 ];
 

@@ -3,6 +3,7 @@ import { build } from "esbuild";
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { Buffer } from "node:buffer";
 import { TextDecoder } from "node:util";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -59,6 +60,45 @@ for (const marker of ["[elfui:devtools]", "[readonly]", "app:mount", "app:unmoun
   }
 }
 
+const allocationProbe = await build({
+  stdin: {
+    contents: `
+      import { createInstance } from "./packages/runtime/src/lifecycle.ts";
+      import { createDevtoolsComponentId } from "./packages/runtime/src/devtools.ts";
+      import { createReactivityEffectId } from "./packages/reactivity/src/devtools.ts";
+      const instance = createInstance({}, null);
+      export const result = {
+        hasComponentState: Object.prototype.hasOwnProperty.call(instance, "devtools"),
+        componentId: createDevtoolsComponentId(),
+        effectId: createReactivityEffectId()
+      };
+    `,
+    resolveDir: root,
+    loader: "js"
+  },
+  bundle: true,
+  format: "esm",
+  platform: "node",
+  minify: true,
+  treeShaking: true,
+  write: false,
+  legalComments: "none",
+  define: { __DEV__: "false" }
+});
+const probeSource = new TextDecoder().decode(allocationProbe.outputFiles[0].contents);
+const probeModule = await import(
+  `data:text/javascript;base64,${Buffer.from(probeSource).toString("base64")}`
+);
+if (
+  probeModule.result.hasComponentState ||
+  probeModule.result.componentId !== "" ||
+  probeModule.result.effectId !== ""
+) {
+  throw new Error(
+    `Production DevTools allocation probe failed: ${JSON.stringify(probeModule.result)}`
+  );
+}
+
 console.log(
-  `DEV boundary check passed for ${distFiles.length} ESM files; production branches were removed.`
+  `DEV boundary check passed for ${distFiles.length} ESM files; production branches and instance state were removed.`
 );

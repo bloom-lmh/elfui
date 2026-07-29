@@ -9,6 +9,7 @@ import { transition } from "../transition";
 
 const frame = (): Promise<void> =>
   new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+const nextTask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5));
 
 afterEach(() => {
   document.body.innerHTML = "";
@@ -204,5 +205,53 @@ describe("D2 Transition", () => {
     expect(host.querySelector("p")).toBeNull();
     label.value = "c";
     expect(reads).toBe(readsAfterLeave);
+  });
+
+  it("没有 CSS 动画事件时自动完成 leave", async () => {
+    const host = document.createElement("section");
+    document.body.appendChild(host);
+    const anchor = mark();
+    host.appendChild(anchor);
+    const show = useRef(true);
+
+    transition(
+      anchor,
+      () => {
+        if (!show.value) return null;
+        return document.createElement("p");
+      },
+      { name: "fade" }
+    );
+
+    show.value = false;
+    expect(host.querySelector("p")).not.toBeNull();
+    await frame();
+    await nextTask();
+    expect(host.querySelector("p")).toBeNull();
+  });
+
+  it("支持 animationend 完成 CSS leave", async () => {
+    const host = document.createElement("section");
+    document.body.appendChild(host);
+    const anchor = mark();
+    host.appendChild(anchor);
+    const show = useRef(true);
+
+    transition(
+      anchor,
+      () => {
+        if (!show.value) return null;
+        const node = document.createElement("p");
+        node.style.animationDuration = "10s";
+        return node;
+      },
+      { name: "fade" }
+    );
+
+    const node = host.querySelector("p") as HTMLElement;
+    show.value = false;
+    await frame();
+    node.dispatchEvent(new Event("animationend"));
+    expect(host.querySelector("p")).toBeNull();
   });
 });

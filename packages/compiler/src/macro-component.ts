@@ -11,6 +11,7 @@ import {
 } from "@elfui/compiler-template";
 import { codegen, type CodegenTemplateDebugSource } from "./codegen";
 import type { ElfDiagnostic, ElfDiagnosticSeverity } from "./diagnostic";
+import { PARSED_MACRO_SOURCE, type MacroInternalCompileOptions } from "./macro-internal";
 import { ELFUI_COMPILER_PROTOCOL_VERSION } from "./protocol";
 
 export { formatElfDiagnostic, type ElfDiagnostic, type ElfDiagnosticSeverity } from "./diagnostic";
@@ -157,15 +158,6 @@ export interface MacroComponentCompileResult {
   metadata: MacroComponentMetadata;
 }
 
-/** @deprecated Consume MacroComponentMetadata schema v2. Scheduled for removal after one beta. */
-export interface MacroComponentMetadataV1 {
-  filename: string;
-  sourceId: string;
-  components: MacroExportedComponentMetadataV1[];
-  localComponents: MacroLocalComponentMetadata[];
-  exposed: string[];
-}
-
 export interface MacroSourceRange {
   start: number;
   end: number;
@@ -181,15 +173,18 @@ export interface MacroDiagnosticSummary {
   codes: string[];
 }
 
-export interface MacroComponentMetadata extends MacroComponentMetadataV1 {
+export interface MacroComponentMetadata {
+  filename: string;
+  sourceId: string;
   schemaVersion: 2;
   compilerProtocol: number;
   components: MacroExportedComponentMetadata[];
+  localComponents: MacroLocalComponentMetadata[];
+  exposed: string[];
   diagnostics: MacroDiagnosticSummary;
 }
 
-/** @deprecated Consume MacroExportedComponentMetadata from Metadata v2. */
-export interface MacroExportedComponentMetadataV1 {
+export interface MacroExportedComponentMetadata {
   exportName: "default" | string;
   localName?: string;
   name: string;
@@ -200,9 +195,6 @@ export interface MacroExportedComponentMetadataV1 {
   /** 编译器生成或保留的 runtime prop option 源码，供 language-tools/诊断展示。 */
   runtimePropOptions: Record<string, string>;
   emitNames: string[];
-}
-
-export interface MacroExportedComponentMetadata extends MacroExportedComponentMetadataV1 {
   tagName: string;
   source: MacroSourceRange;
   props: MacroPropMetadata[];
@@ -456,15 +448,17 @@ export const compileMacroComponent = (
 ): MacroComponentCompileResult => {
   const filename = options.filename ?? "component.elf.ts";
   const sourceId = normalizeSourceId(options.sourceId ?? filename);
+  const parsedSourceFile = (options as MacroComponentCompileOptions & MacroInternalCompileOptions)[
+    PARSED_MACRO_SOURCE
+  ];
+  if (parsedSourceFile && parsedSourceFile.text !== source) {
+    throw new Error("Parsed macro source does not match the supplied source text.");
+  }
   const state: TransformState = {
     source,
-    sourceFile: ts.createSourceFile(
-      filename,
-      source,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TS
-    ),
+    sourceFile:
+      parsedSourceFile ??
+      ts.createSourceFile(filename, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS),
     filename,
     sourceId,
     runtimeImport: options.runtimeImport ?? DEFAULT_RUNTIME_IMPORT,
@@ -2892,39 +2886,6 @@ const buildMetadata = (
     }
   };
 };
-
-/** @deprecated Consume Metadata v2 directly. This adapter is retained for one beta release. */
-export const toMacroComponentMetadataV1 = (
-  metadata: MacroComponentMetadata
-): MacroComponentMetadataV1 => ({
-  filename: metadata.filename,
-  sourceId: metadata.sourceId,
-  components: metadata.components.map(
-    ({
-      exportName,
-      localName,
-      name,
-      propsType,
-      emitsType,
-      slotsType,
-      propNames,
-      runtimePropOptions,
-      emitNames
-    }) => ({
-      exportName,
-      ...(localName ? { localName } : {}),
-      name,
-      propsType,
-      emitsType,
-      slotsType,
-      propNames,
-      runtimePropOptions,
-      emitNames
-    })
-  ),
-  localComponents: metadata.localComponents,
-  exposed: metadata.exposed
-});
 
 const sourceRange = (state: TransformState, start: number, end: number): MacroSourceRange => {
   const first = state.sourceFile.getLineAndCharacterOfPosition(start);

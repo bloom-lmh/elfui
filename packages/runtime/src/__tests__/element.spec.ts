@@ -385,6 +385,28 @@ describe("Props", () => {
     document.body.removeChild(el);
   });
 
+  it("同一组件的 prop accessor 由原型共享并保留连接前赋值", () => {
+    const tag = nextTag();
+    defineCustomElement({
+      tag,
+      props: { count: { type: Number, default: 0 } },
+      render: () => document.createElement("div")
+    });
+    const first = document.createElement(tag) as HTMLElement & { count: number };
+    const second = document.createElement(tag) as HTMLElement & { count: number };
+
+    expect(Object.prototype.hasOwnProperty.call(first, "count")).toBe(false);
+    expect(Object.getPrototypeOf(first)).toBe(Object.getPrototypeOf(second));
+    expect(Object.getOwnPropertyDescriptor(Object.getPrototypeOf(first), "count")).toMatchObject({
+      enumerable: true,
+      configurable: true
+    });
+
+    first.count = 7;
+    document.body.appendChild(first);
+    expect(first.count).toBe(7);
+  });
+
   it("object/array props 保留宿主 property 的引用身份并在替换时更新", () => {
     const tag = nextTag();
     const initialObject = { mode: "initial" };

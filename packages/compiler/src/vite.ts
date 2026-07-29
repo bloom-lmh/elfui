@@ -11,6 +11,7 @@ import {
   type MacroComponentMetadata
 } from "./macro-component";
 import { createElfDiagnostic, formatElfDiagnostic, type ElfDiagnostic } from "./diagnostic";
+import { PARSED_MACRO_SOURCE, type MacroInternalCompileOptions } from "./macro-internal";
 import { validateElfUIPackageCompatibility, type ElfUIPackageCompatibilityInfo } from "./protocol";
 
 const DEFAULT_MACRO_IMPORT = "@elfui/core";
@@ -197,7 +198,14 @@ export const elfuiMacroPlugin = (options: ElfUIMacroPluginOptions = {}): Minimal
         return null;
       }
       const pragma = analyzeElfComponentPragma(code);
-      const usage = analyzeElfMacroUsage(code, macroImport, id);
+      const sourceFile = ts.createSourceFile(
+        id,
+        code,
+        ts.ScriptTarget.Latest,
+        true,
+        scriptKindFromId(id)
+      );
+      const usage = analyzeElfMacroUsage(code, macroImport, id, sourceFile);
 
       if (!isElfFile) {
         if (!isScriptFile || !pragmaEnabled) return null;
@@ -263,9 +271,10 @@ export const elfuiMacroPlugin = (options: ElfUIMacroPluginOptions = {}): Minimal
         }
       }
 
-      const compileOptions: MacroComponentCompileOptions = {
+      const compileOptions: MacroComponentCompileOptions & MacroInternalCompileOptions = {
         filename: id,
-        sourceId: createStableSourceId(id, projectRoot)
+        sourceId: createStableSourceId(id, projectRoot),
+        [PARSED_MACRO_SOURCE]: sourceFile
       };
       if (options.runtimeImport) compileOptions.runtimeImport = options.runtimeImport;
       if (options.tagPrefix) compileOptions.tagPrefix = options.tagPrefix;
@@ -364,15 +373,12 @@ const findFirstPragmaCommentIndex = (code: string): number => {
 export const analyzeElfMacroUsage = (
   code: string,
   macroImport = DEFAULT_MACRO_IMPORT,
-  filename = "anonymous.ts"
+  filename = "anonymous.ts",
+  parsedSourceFile?: ts.SourceFile
 ): ElfUIMacroUsageAnalysis => {
-  const sourceFile = ts.createSourceFile(
-    filename,
-    code,
-    ts.ScriptTarget.Latest,
-    false,
-    scriptKindFromId(filename)
-  );
+  const sourceFile =
+    parsedSourceFile ??
+    ts.createSourceFile(filename, code, ts.ScriptTarget.Latest, false, scriptKindFromId(filename));
 
   const defineHtmlLocals = new Set<string>();
   let hasMacroImport = false;

@@ -16,6 +16,7 @@
     "closed-shadow-devtools-channel",
     "direct-macro-literals",
     "expanded-fragment-parameters",
+    "fast-stable-runtime",
     "fix-computed-scroll-lock",
     "fix-local-directive-context",
     "flexible-observer-targets",

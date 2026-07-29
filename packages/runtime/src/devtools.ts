@@ -222,8 +222,9 @@ interface ElfUIDevtoolsRuntimeHook {
   emitRuntimeEvent?(event: ElfUIDevtoolsRuntimeEvent): void;
 }
 
-let nextAppId = 1;
-let nextComponentId = 1;
+let nextIds: { app: number; component: number } | undefined;
+
+const ids = (): { app: number; component: number } => (nextIds ??= { app: 1, component: 1 });
 
 const getHook = (): ElfUIDevtoolsRuntimeHook | null => {
   if (!__DEV__) return null;
@@ -238,9 +239,15 @@ const parentNode = (node: Node): Node | null => {
   return node instanceof ShadowRoot ? node.host : null;
 };
 
-export const createDevtoolsAppId = (): string => `elfui-app:${nextAppId++}`;
+export const createDevtoolsAppId = (): string => {
+  if (!__DEV__) return "";
+  return `elfui-app:${ids().app++}`;
+};
 
-export const createDevtoolsComponentId = (): string => `elfui-component:${nextComponentId++}`;
+export const createDevtoolsComponentId = (): string => {
+  if (!__DEV__) return "";
+  return `elfui-component:${ids().component++}`;
+};
 
 export const attachDevtoolsAppId = (host: HTMLElement, appId: string): void => {
   if (!__DEV__) return;
@@ -283,7 +290,7 @@ export const attachDevtoolsLogicalParent = (node: Node, parentHost: HTMLElement 
 
 interface DevtoolsComponentOwner {
   host: HTMLElement;
-  devtools: ElfUIDevtoolsDebugState;
+  devtools?: ElfUIDevtoolsDebugState;
 }
 
 const readDevtoolsOwner = (host: HTMLElement | null): DevtoolsComponentOwner | null => {
@@ -296,19 +303,19 @@ const readDevtoolsOwner = (host: HTMLElement | null): DevtoolsComponentOwner | n
 };
 
 export const connectDevtoolsComponent = (owner: DevtoolsComponentOwner): void => {
-  if (!__DEV__) return;
+  if (!__DEV__ || !owner.devtools) return;
   const parentHost = findDevtoolsParentHost(owner.host);
   const parent = readDevtoolsOwner(parentHost);
-  owner.devtools.parentId = parent?.devtools.id ?? null;
+  owner.devtools.parentId = parent?.devtools?.id ?? null;
   owner.devtools.parentHost = parentHost ? new WeakRef(parentHost) : null;
-  owner.devtools.appId = parent?.devtools.appId ?? getDevtoolsAppId(owner.host);
-  parent?.devtools.children.add(owner.devtools.id);
+  owner.devtools.appId = parent?.devtools?.appId ?? getDevtoolsAppId(owner.host);
+  parent?.devtools?.children.add(owner.devtools.id);
 };
 
 export const disconnectDevtoolsComponent = (owner: DevtoolsComponentOwner): void => {
-  if (!__DEV__) return;
+  if (!__DEV__ || !owner.devtools) return;
   const parentHost = owner.devtools.parentHost?.deref() ?? null;
-  readDevtoolsOwner(parentHost)?.devtools.children.delete(owner.devtools.id);
+  readDevtoolsOwner(parentHost)?.devtools?.children.delete(owner.devtools.id);
   owner.devtools.parentHost = null;
 };
 

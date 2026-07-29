@@ -186,6 +186,8 @@ export interface DefineCustomElementOptions {
   register?: boolean;
 }
 
+const EMPTY_PROPS: Record<string, unknown> = Object.freeze({});
+
 type SSRPlaceholderConstructor = ElfElementConstructor & {
   readonly __elfSSRPlaceholder: true;
 };
@@ -225,16 +227,44 @@ export const defineCustomElement = (
 
     private __scope: ReturnType<typeof effectScope> | null = null;
     private __instance: ComponentInstance | null = null;
-    private __propStates: Map<string, ReturnType<typeof useRef>> = new Map();
-    private __preMountPropValues = new Map<string, unknown>();
+    private __propStates: Map<string, ReturnType<typeof useRef>> | null =
+      propEntries.length > 0 ? new Map() : null;
+    private __preMountPropValues: Map<string, unknown> | null = null;
     private __shadow: ShadowRoot | null = null;
     private __mounted = false;
     private __stylesInjected = false;
-    private __renderedNodes: Node[] = [];
+    private __renderedNodes: Node[] | null = null;
     private __mountVersion = 0;
     private __formControl: FormControlContext | null = null;
     public __setupDone = false;
-    public __pendingChildren: (() => void)[] = [];
+    public __pendingChildren: (() => void)[] | null = null;
+
+    static {
+      for (const [key] of propEntries) {
+        Object.defineProperty(this.prototype, key, {
+          get(this: ElfElement) {
+            const state = this.__propStates?.get(key);
+            if (!state) return undefined;
+            return isRef(state) ? (state as { peek: () => unknown }).peek() : state;
+          },
+          set(this: ElfElement, value: unknown) {
+            if (!this.__mounted) {
+              (this.__preMountPropValues ??= new Map()).set(key, value);
+            }
+            if (isRef(value)) {
+              this.__propStates?.set(key, value as unknown as ReturnType<typeof useRef>);
+              return;
+            }
+            const state = this.__propStates?.get(key);
+            if (state && isRef(state)) {
+              (state as { set: (nextValue: unknown) => unknown }).set(value);
+            }
+          },
+          enumerable: true,
+          configurable: true
+        });
+      }
+    }
 
     public constructor() {
       super();
@@ -250,7 +280,7 @@ export const defineCustomElement = (
         const def = resolveDefault(opt);
         // Props are shallow by contract: replacing a property is reactive, while objects and
         // arrays retain the identity owned by a native/framework host.
-        this.__propStates.set(key, useShallowRef(def));
+        this.__propStates?.set(key, useShallowRef(def));
       }
       // Host frameworks such as React decide whether to assign a Custom Element value as a
       // property by checking the freshly constructed element. Expose accessors now rather than
@@ -264,30 +294,6 @@ export const defineCustomElement = (
           hasUpgradedValue = true;
           delete (this as unknown as Record<string, unknown>)[key];
         }
-        Object.defineProperty(this, key, {
-          get: () => {
-            const state = this.__propStates.get(key);
-            if (!state) return undefined;
-            if (isRef(state)) return (state as { peek: () => unknown }).peek();
-            return state;
-          },
-          set: (value: unknown) => {
-            if (!this.__mounted) this.__preMountPropValues.set(key, value);
-            // Only an actual Ref may replace the prop's reactive container. Reactive
-            // objects and arrays are prop values, so write them through the stable
-            // shallow Ref that existing child effects already subscribe to.
-            if (isRef(value)) {
-              this.__propStates.set(key, value as unknown as ReturnType<typeof useRef>);
-              return;
-            }
-            const state = this.__propStates.get(key);
-            if (state && isRef(state)) {
-              (state as { set: (nextValue: unknown) => unknown }).set(value);
-            }
-          },
-          enumerable: true,
-          configurable: true
-        });
         if (hasUpgradedValue) {
           (this as unknown as Record<string, unknown>)[key] = upgradedValue;
         }
@@ -322,21 +328,24 @@ export const defineCustomElement = (
           for (const [attrName, { key, option }] of propsByAttribute) {
             if (this.hasAttribute(attrName)) {
               const raw = this.getAttribute(attrName);
-              const state = this.__propStates.get(key);
+              const state = this.__propStates?.get(key);
               state?.set(coerceAttr(raw, option, attrName));
             }
           }
 
           // Initial attributes are parsed first; host property writes made before connection then
           // win consistently, including values assigned by React during its commit.
-          for (const [key, value] of this.__preMountPropValues) {
-            (this as unknown as Record<string, unknown>)[key] = value;
+          const preMountPropValues = this.__preMountPropValues;
+          if (preMountPropValues) {
+            for (const [key, value] of preMountPropValues) {
+              (this as unknown as Record<string, unknown>)[key] = value;
+            }
+            this.__preMountPropValues = null;
           }
-          this.__preMountPropValues.clear();
 
           // 构造 props（解包后的对象）
-          const props = createPropsProxy(this.__propStates);
-          if (__RUNTIME_DEV__) instance.devtools.props = props;
+          const props = this.__propStates ? createPropsProxy(this.__propStates) : EMPTY_PROPS;
+          if (__RUNTIME_DEV__ && instance.devtools) instance.devtools.props = props;
           const emit = createEmit(this, definition.emitOptions);
           const ctx: SetupContext = {
             emit,
@@ -385,7 +394,7 @@ export const defineCustomElement = (
                 $asyncError: null as unknown,
                 $asyncResolved: false
               });
-              if (__RUNTIME_DEV__) {
+              if (__RUNTIME_DEV__ && instance.devtools) {
                 instance.devtools.setup = asyncState as unknown as Record<string, unknown>;
               }
 
@@ -418,7 +427,7 @@ export const defineCustomElement = (
                   pendingRenderScope = null;
                   asyncState.$asyncPending = false;
                   asyncState.$asyncResolved = true;
-                  if (__RUNTIME_DEV__) {
+                  if (__RUNTIME_DEV__ && instance.devtools) {
                     instance.devtools.setup = {
                       ...(asyncState as unknown as Record<string, unknown>),
                       ...(resolvedState ?? {})
@@ -472,7 +481,7 @@ export const defineCustomElement = (
             } else {
               // 同步 setup
               const setupResult = setupReturned as Record<string, unknown> | void;
-              if (__RUNTIME_DEV__) instance.devtools.setup = setupResult ?? {};
+              if (__RUNTIME_DEV__ && instance.devtools) instance.devtools.setup = setupResult ?? {};
               if (definition.render) {
                 const renderCtx: RenderContext = buildRenderCtx(
                   this,
@@ -507,7 +516,7 @@ export const defineCustomElement = (
 
       const parent = findUnsetupParent(this);
       if (parent) {
-        parent.__pendingChildren.push(start);
+        (parent.__pendingChildren ??= []).push(start);
       } else {
         start();
       }
@@ -565,7 +574,7 @@ export const defineCustomElement = (
       clearTemplateRefs(this.__instance);
       this.__clearRenderedNodes();
       callHooks(this.__instance.unmountedHooks, this.__instance, "component unmounted hook");
-      if (__RUNTIME_DEV__) {
+      if (__RUNTIME_DEV__ && this.__instance.devtools) {
         emitDevtoolsRuntimeEvent({ type: "component:unmount", host: this });
         disconnectDevtoolsComponent(this.__instance);
       }
@@ -578,7 +587,7 @@ export const defineCustomElement = (
 
       // 重置 setup 状态
       this.__setupDone = false;
-      this.__pendingChildren = [];
+      this.__pendingChildren = null;
     }
 
     /** 异步 setup resolve/reject 后，重新渲染 shadow root */
@@ -590,10 +599,11 @@ export const defineCustomElement = (
     }
 
     private __clearRenderedNodes(): void {
+      if (!this.__renderedNodes) return;
       for (const node of this.__renderedNodes) {
         node.parentNode?.removeChild(node);
       }
-      this.__renderedNodes = [];
+      this.__renderedNodes = null;
     }
 
     private __finishMount(instance: ComponentInstance): void {
@@ -607,7 +617,8 @@ export const defineCustomElement = (
       }
       instance.isMounted = true;
       callHooks(instance.mountedHooks, instance, "component mounted hook", true);
-      if (__RUNTIME_DEV__) {
+      const devtools = instance.devtools;
+      if (__RUNTIME_DEV__ && devtools) {
         const hostRef = new WeakRef(this);
         const instanceRef = new WeakRef(instance);
         const source = (
@@ -624,16 +635,16 @@ export const defineCustomElement = (
         emitDevtoolsRuntimeEvent({
           type: "component:mount",
           component: {
-            id: instance.devtools.id,
+            id: devtools.id,
             host: this,
-            appId: instance.devtools.appId,
-            parentId: instance.devtools.parentId,
-            parentHost: instance.devtools.parentHost?.deref() ?? null,
+            appId: devtools.appId,
+            parentId: devtools.parentId,
+            parentHost: devtools.parentHost?.deref() ?? null,
             tag: definition.tag,
             displayName: definition.tag,
             shadowMode: definition.shadow === false ? "none" : (definition.shadow ?? "open"),
             ...(source ? { source } : {}),
-            props: () => instanceRef.deref()?.devtools.props ?? {},
+            props: () => instanceRef.deref()?.devtools?.props ?? {},
             attrs: () =>
               Object.fromEntries(
                 Array.from(hostRef.deref()?.attributes ?? [], (attribute) => [
@@ -641,8 +652,8 @@ export const defineCustomElement = (
                   attribute.value
                 ])
               ),
-            setup: () => instanceRef.deref()?.devtools.setup ?? {},
-            exposed: () => instanceRef.deref()?.devtools.exposed ?? {}
+            setup: () => instanceRef.deref()?.devtools?.setup ?? {},
+            exposed: () => instanceRef.deref()?.devtools?.exposed ?? {}
           }
         });
       }
@@ -670,7 +681,7 @@ export const defineCustomElement = (
       );
       const render = (): Node => definition.render!(renderCtx);
       const rootNode =
-        __RUNTIME_DEV__ && this.__instance
+        __RUNTIME_DEV__ && this.__instance?.devtools
           ? withDevtoolsComponentContext(this.__instance.devtools.id, render)
           : render();
       this.__appendRenderedNode(target, rootNode);
@@ -679,8 +690,8 @@ export const defineCustomElement = (
     private __flushPendingChildren(): void {
       this.__setupDone = true;
       const pending = this.__pendingChildren;
-      this.__pendingChildren = [];
-      for (const childStart of pending) childStart();
+      this.__pendingChildren = null;
+      for (const childStart of pending ?? []) childStart();
     }
 
     public attributeChangedCallback(
@@ -690,7 +701,7 @@ export const defineCustomElement = (
     ): void {
       const prop = propsByAttribute.get(name);
       if (prop) {
-        const state = this.__propStates.get(prop.key);
+        const state = this.__propStates?.get(prop.key);
         state?.set(coerceAttr(newVal, prop.option, name));
       }
       if (this.__instance) {

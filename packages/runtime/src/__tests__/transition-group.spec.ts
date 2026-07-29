@@ -1,10 +1,14 @@
 ﻿// D3 TransitionGroup 验收测试
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { effectScope, useEffect, useRef } from "@elfui/reactivity";
 
 import { transitionGroup } from "../transition-group";
+
+const frame = (): Promise<void> =>
+  new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+const nextTask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5));
 
 afterEach(() => {
   document.body.innerHTML = "";
@@ -187,6 +191,38 @@ describe("D3 TransitionGroup", () => {
     expect(runs - initialRuns).toBe(2);
   });
 
+  it("稳定 key 顺序不执行 DOM 移动，交换时只移动必要节点", () => {
+    const host = document.createElement("ul");
+    document.body.appendChild(host);
+    const items = useRef([
+      { id: "a", label: "A" },
+      { id: "b", label: "B" },
+      { id: "c", label: "C" }
+    ]);
+    transitionGroup(
+      host,
+      () => items.value,
+      (item) => item.id,
+      (item) => {
+        const node = document.createElement("li");
+        useEffect(() => {
+          node.textContent = item.value.label;
+        });
+        return node;
+      },
+      { css: false }
+    );
+    const insertBefore = vi.spyOn(host, "insertBefore");
+
+    items.value = items.value.map((item) => ({ ...item, label: `${item.label}2` }));
+    expect(insertBefore).not.toHaveBeenCalled();
+    expect(host.textContent).toBe("A2B2C2");
+
+    items.value = [items.value[2]!, items.value[1]!, items.value[0]!];
+    expect(insertBefore).toHaveBeenCalledTimes(2);
+    expect(host.textContent).toBe("C2B2A2");
+  });
+
   it("owner scope 停止时清理节点和 item effect", () => {
     const host = document.createElement("ul");
     document.body.appendChild(host);
@@ -216,5 +252,54 @@ describe("D3 TransitionGroup", () => {
     expect(host.children).toHaveLength(0);
     items.value = [{ id: "a", label: "B" }];
     expect(runs).toBe(stoppedRuns);
+  });
+
+  it("没有 CSS 动画事件时自动删除 leave 节点", async () => {
+    const host = document.createElement("ul");
+    document.body.appendChild(host);
+    const items = useRef([1, 2]);
+    transitionGroup(
+      host,
+      () => items.value,
+      (item) => item,
+      (item) => {
+        const node = document.createElement("li");
+        node.textContent = String(item.value);
+        return node;
+      },
+      { name: "fade" }
+    );
+
+    items.value = [1];
+    expect(host.children).toHaveLength(2);
+    await frame();
+    await nextTask();
+    expect(host.children).toHaveLength(1);
+    expect(host.textContent).toBe("1");
+  });
+
+  it("支持 animationend 完成 leave", async () => {
+    const host = document.createElement("ul");
+    document.body.appendChild(host);
+    const items = useRef([1, 2]);
+    transitionGroup(
+      host,
+      () => items.value,
+      (item) => item,
+      (item) => {
+        const node = document.createElement("li");
+        node.textContent = String(item.value);
+        node.style.animationDuration = "10s";
+        return node;
+      },
+      { name: "fade" }
+    );
+
+    const leaving = host.children[1] as HTMLElement;
+    items.value = [1];
+    await frame();
+    leaving.dispatchEvent(new Event("animationend"));
+    expect(host.children).toHaveLength(1);
+    expect(host.textContent).toBe("1");
   });
 });

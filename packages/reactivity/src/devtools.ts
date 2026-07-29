@@ -42,12 +42,26 @@ interface ReactivityDevtoolsHook {
   isTimelineRecording?(): boolean;
 }
 
-const targetIds = new WeakMap<object, string>();
-const targetNames = new WeakMap<object, string>();
-let nextTargetId = 1;
-let nextEffectId = 1;
-let nextTriggerId = 1;
-let activeTriggerId: string | null = null;
+interface ReactivityDevtoolsState {
+  targetIds: WeakMap<object, string>;
+  targetNames: WeakMap<object, string>;
+  nextTargetId: number;
+  nextEffectId: number;
+  nextTriggerId: number;
+  activeTriggerId: string | null;
+}
+
+let devtoolsState: ReactivityDevtoolsState | undefined;
+
+const state = (): ReactivityDevtoolsState =>
+  (devtoolsState ??= {
+    targetIds: new WeakMap(),
+    targetNames: new WeakMap(),
+    nextTargetId: 1,
+    nextEffectId: 1,
+    nextTriggerId: 1,
+    activeTriggerId: null
+  });
 
 const getHook = (): ReactivityDevtoolsHook | null => {
   if (!__DEV__) return null;
@@ -75,7 +89,11 @@ const emit = (event: ReactivityDevtoolsEvent): void => {
   }
 };
 
-export const createReactivityEffectId = (): string => `elfui-effect:${nextEffectId++}`;
+export const createReactivityEffectId = (): string => {
+  if (!__DEV__) return "";
+  const current = state();
+  return `elfui-effect:${current.nextEffectId++}`;
+};
 
 export const getReactivityComponentContext = (): string | null => {
   if (!__DEV__) return null;
@@ -85,7 +103,7 @@ export const getReactivityComponentContext = (): string | null => {
 
 export const setReactivityDebugName = (target: object, name?: string): void => {
   if (!__DEV__ || !name) return;
-  targetNames.set(target, name);
+  state().targetNames.set(target, name);
 };
 
 export const emitReactivityTrigger = (
@@ -100,17 +118,18 @@ export const emitReactivityTrigger = (
     hook.isTimelineRecording?.() === false
   )
     return null;
-  let targetId = targetIds.get(target);
+  const current = state();
+  let targetId = current.targetIds.get(target);
   if (!targetId) {
-    targetId = `elfui-target:${nextTargetId++}`;
-    targetIds.set(target, targetId);
+    targetId = `elfui-target:${current.nextTargetId++}`;
+    current.targetIds.set(target, targetId);
   }
-  const id = `elfui-trigger:${nextTriggerId++}`;
-  const targetName = targetNames.get(target);
+  const id = `elfui-trigger:${current.nextTriggerId++}`;
+  const targetName = current.targetNames.get(target);
   emit({
     type: "reactivity:trigger",
     id,
-    parentTriggerId: activeTriggerId,
+    parentTriggerId: current.activeTriggerId,
     targetId,
     ...(targetName ? { targetName } : {}),
     key: keyText(key),
@@ -125,12 +144,13 @@ export const emitReactivityTrigger = (
 
 export const withReactivityTrigger = <T>(triggerId: string | null, run: () => T): T => {
   if (!__DEV__ || !triggerId) return run();
-  const previous = activeTriggerId;
-  activeTriggerId = triggerId;
+  const current = state();
+  const previous = current.activeTriggerId;
+  current.activeTriggerId = triggerId;
   try {
     return run();
   } finally {
-    activeTriggerId = previous;
+    current.activeTriggerId = previous;
   }
 };
 

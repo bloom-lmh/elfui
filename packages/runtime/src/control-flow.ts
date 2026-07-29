@@ -25,6 +25,7 @@ import {
 
 import type { BindingDebugInfo } from "./bindings";
 import { DEV as __DEV__ } from "./dev";
+import { longestIncreasingSubsequence } from "./keyed-reconcile";
 
 const controlFlowEffect = (
   fn: () => void,
@@ -168,49 +169,6 @@ const insertListItem = <T>(parent: Node, item: ListItem<T>, reference: Node): vo
   for (const node of item.nodes) {
     parent.insertBefore(node, reference);
   }
-};
-
-const longestIncreasingSubsequence = (values: readonly number[]): number[] => {
-  const predecessors = values.slice();
-  const result: number[] = [];
-
-  for (let i = 0; i < values.length; i++) {
-    const value = values[i] as number;
-    if (value === 0) continue;
-
-    const lastResultIndex = result[result.length - 1];
-    if (lastResultIndex === undefined || (values[lastResultIndex] as number) < value) {
-      predecessors[i] = lastResultIndex ?? -1;
-      result.push(i);
-      continue;
-    }
-
-    let start = 0;
-    let end = result.length - 1;
-    while (start < end) {
-      const middle = (start + end) >> 1;
-      if ((values[result[middle] as number] as number) < value) {
-        start = middle + 1;
-      } else {
-        end = middle;
-      }
-    }
-
-    if (value < (values[result[start] as number] as number)) {
-      predecessors[i] = start > 0 ? (result[start - 1] as number) : -1;
-      result[start] = i;
-    }
-  }
-
-  let cursor = result.length;
-  let index = result[cursor - 1] as number | undefined;
-  const sequence = new Array<number>(cursor);
-  while (cursor-- > 0 && index !== undefined) {
-    sequence[cursor] = index;
-    index = predecessors[index] === -1 ? undefined : predecessors[index];
-  }
-
-  return sequence;
 };
 
 /**

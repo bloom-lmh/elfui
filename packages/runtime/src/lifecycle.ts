@@ -50,8 +50,8 @@ export interface ComponentInstance {
   /** KeepAlive 激活/未激活：仅在 KeepAlive 包裹时有意义 */
   activatedHooks: LifecycleHook[];
   deactivatedHooks: LifecycleHook[];
-  /** 仅开发态 DevTools 读取；生产构建中的访问会被 __DEV__ 分支移除。 */
-  devtools: ElfUIDevtoolsDebugState;
+  /** Development-only DevTools state. Production instances do not allocate this record. */
+  devtools?: ElfUIDevtoolsDebugState;
 }
 
 let currentInstance: ComponentInstance | null = null;
@@ -73,7 +73,7 @@ const appendMountedCleanup = (instance: ComponentInstance, cleanup: LifecycleCle
 export const setCurrentInstance = (i: ComponentInstance | null): ComponentInstance | null => {
   const prev = currentInstance;
   currentInstance = i;
-  if (__DEV__) setDevtoolsComponentContext(i?.devtools.id ?? null);
+  if (__DEV__) setDevtoolsComponentContext(i?.devtools?.id ?? null);
   return prev;
 };
 
@@ -133,16 +133,20 @@ export const createInstance = (
   errorCapturedHooks: emptyHooks(),
   activatedHooks: emptyHooks(),
   deactivatedHooks: emptyHooks(),
-  devtools: {
-    id: createDevtoolsComponentId(),
-    appId: null,
-    parentId: null,
-    parentHost: null,
-    children: new Set(),
-    props: {},
-    setup: {},
-    exposed: {}
-  }
+  ...(__DEV__
+    ? {
+        devtools: {
+          id: createDevtoolsComponentId(),
+          appId: null,
+          parentId: null,
+          parentHost: null,
+          children: new Set<string>(),
+          props: {},
+          setup: {},
+          exposed: {}
+        }
+      }
+    : {})
 });
 
 /** 调用一组钩子，错误隔离 */
@@ -227,7 +231,7 @@ export const runWithUpdateHooks = (
     return;
   }
 
-  const collectDevtoolsUpdate = hasDevtoolsRuntimeHook();
+  const collectDevtoolsUpdate = __DEV__ && hasDevtoolsRuntimeHook();
   if (
     !collectDevtoolsUpdate &&
     instance.beforeUpdateHooks.length === 0 &&

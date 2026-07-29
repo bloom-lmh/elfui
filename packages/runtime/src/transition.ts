@@ -1,5 +1,7 @@
 import { effectScope, getCurrentScope, onScopeDispose, useEffect } from "@elfui/reactivity";
 
+import { waitForCssEnd } from "./css-end";
+
 export interface TransitionHooks {
   onBeforeEnter?: (el: Element) => void;
   onEnter?: (el: Element, done: () => void) => void;
@@ -120,25 +122,6 @@ export const transition = (
     };
   };
 
-  const waitForEnd = (
-    el: Element,
-    duration: number | undefined,
-    finish: () => void,
-    addCleanup: (cleanup: () => void) => void
-  ): void => {
-    const onEnd = (): void => finish();
-    el.addEventListener("transitionend", onEnd);
-    el.addEventListener("animationend", onEnd);
-    addCleanup(() => {
-      el.removeEventListener("transitionend", onEnd);
-      el.removeEventListener("animationend", onEnd);
-    });
-    if (duration !== undefined) {
-      const timer = setTimeout(finish, duration);
-      addCleanup(() => clearTimeout(timer));
-    }
-  };
-
   const performEnter = (child: TransitionChild): void => {
     const { el } = child;
     options.onBeforeEnter?.(el);
@@ -169,7 +152,7 @@ export const transition = (
       if (options.onEnter) {
         options.onEnter(el, finish);
       } else if (useCss) {
-        waitForEnd(el, enterDuration, finish, controller.addCleanup);
+        waitForCssEnd(el, enterDuration, finish, controller.addCleanup);
       } else {
         finish();
       }
@@ -207,7 +190,7 @@ export const transition = (
       if (options.onLeave) {
         options.onLeave(el, finish);
       } else if (useCss) {
-        waitForEnd(el, leaveDuration, finish, controller.addCleanup);
+        waitForCssEnd(el, leaveDuration, finish, controller.addCleanup);
       } else {
         finish();
       }

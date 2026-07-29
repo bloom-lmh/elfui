@@ -54,7 +54,7 @@ const staticRenderCode = staticRenderModule.replace(
 
 const entry = `
 import { effectScope, useRef } from "@elfui/reactivity";
-import { defineCustomElement } from "@elfui/runtime";
+import { defineCustomElement, transitionGroup } from "@elfui/runtime";
 import { applyCustomDirective, list, mark, on, text } from "@elfui/runtime/internal";
 
 const makeItems = (count, salt = 0) =>
@@ -76,6 +76,29 @@ defineCustomElement({
   render() {
     const span = document.createElement("span");
     span.textContent = "shadow";
+    return span;
+  }
+});
+
+defineCustomElement({
+  tag: "elf-browser-bench-props",
+  props: {
+    alpha: { type: Number, default: 0 },
+    beta: { type: Number, default: 0 },
+    gamma: { type: Number, default: 0 },
+    delta: { type: Number, default: 0 },
+    epsilon: { type: Number, default: 0 },
+    zeta: { type: Number, default: 0 },
+    eta: { type: Number, default: 0 },
+    theta: { type: Number, default: 0 },
+    iota: { type: Number, default: 0 },
+    kappa: { type: Number, default: 0 },
+    lambda: { type: Number, default: 0 },
+    mu: { type: Number, default: 0 }
+  },
+  render(ctx) {
+    const span = document.createElement("span");
+    span.textContent = String(ctx.props.alpha + ctx.props.mu);
     return span;
   }
 });
@@ -242,6 +265,72 @@ globalThis.__elfBrowserBench = {
     scope.stop();
     root.remove();
   },
+  listRemoveHalf(count) {
+    const scope = effectScope(true);
+    const root = document.createElement("main");
+    const anchor = mark("browser-list-remove-half");
+    const items = useRef(makeItems(count));
+    root.appendChild(anchor);
+    document.body.appendChild(root);
+    scope.run(() => {
+      list(
+        anchor,
+        () => items.value,
+        (item) => item.id,
+        (item) => {
+          const row = document.createElement("div");
+          row.textContent = item.peek().label;
+          return row;
+        }
+      );
+    });
+    items.set(items.peek().slice(0, count / 2));
+    if (root.querySelectorAll("div").length !== count / 2) {
+      throw new Error("list remove-half failed");
+    }
+    scope.stop();
+    root.remove();
+  },
+  transitionGroupUpdate(count, reverse) {
+    const scope = effectScope(true);
+    const host = document.createElement("main");
+    const items = useRef(makeItems(count));
+    const nativeInsertBefore = host.insertBefore;
+    let insertions = 0;
+    host.insertBefore = function(node, reference) {
+      insertions++;
+      return nativeInsertBefore.call(this, node, reference);
+    };
+    document.body.appendChild(host);
+    scope.run(() => {
+      transitionGroup(
+        host,
+        () => items.value,
+        (item) => item.id,
+        (item) => {
+          const row = document.createElement("div");
+          row.dataset.id = String(item.peek().id);
+          return row;
+        },
+        { css: false }
+      );
+    });
+    insertions = 0;
+    items.set(reverse ? items.peek().slice().reverse() : makeItems(count, 10000));
+    const expectedInsertions = reverse ? count - 1 : 0;
+    if (insertions !== expectedInsertions) {
+      throw new Error(
+        "transition-group performed " + insertions + " insertions; expected " + expectedInsertions
+      );
+    }
+    const expectedFirst = reverse ? count - 1 : 0;
+    if (host.firstElementChild?.dataset.id !== String(expectedFirst)) {
+      throw new Error("transition-group order failed");
+    }
+    host.insertBefore = nativeInsertBefore;
+    scope.stop();
+    host.remove();
+  },
   tableUpdate(rows, columns) {
     const scope = effectScope(true);
     const values = Array.from({ length: rows }, (_, row) => useRef(row));
@@ -305,6 +394,33 @@ globalThis.__elfBrowserBench = {
     await Promise.resolve();
     const first = root.firstElementChild;
     if (!first?.shadowRoot?.querySelector("span")) throw new Error("shadow mount failed");
+    root.remove();
+    await Promise.resolve();
+  },
+  async propHeavyMount(count) {
+    const root = document.createElement("main");
+    const fragment = document.createDocumentFragment();
+    for (let i = 0; i < count; i++) {
+      const el = document.createElement("elf-browser-bench-props");
+      el.alpha = i;
+      el.beta = i;
+      el.gamma = i;
+      el.delta = i;
+      el.epsilon = i;
+      el.zeta = i;
+      el.eta = i;
+      el.theta = i;
+      el.iota = i;
+      el.kappa = i;
+      el.lambda = i;
+      el.mu = i;
+      fragment.appendChild(el);
+    }
+    root.appendChild(fragment);
+    document.body.appendChild(root);
+    await Promise.resolve();
+    const first = root.firstElementChild;
+    if (first?.shadowRoot?.textContent !== "0") throw new Error("prop-heavy mount failed");
     root.remove();
     await Promise.resolve();
   },
@@ -425,9 +541,13 @@ const runCase = async (label, fn, params, options = {}) => {
     results.push(await runCase("list swap 1k", "listSwap", [1000]));
     results.push(await runCase("list update 1k", "listUpdate", [1000]));
     results.push(await runCase("list same-key 1k", "listSameKey", [1000]));
+    results.push(await runCase("list remove 5k from 10k", "listRemoveHalf", [10000], { iterations: 3 }));
+    results.push(await runCase("transition group same-key 1k", "transitionGroupUpdate", [1000, false]));
+    results.push(await runCase("transition group reverse 1k", "transitionGroupUpdate", [1000, true]));
     results.push(await runCase("table partial update 1k cells", "tableUpdate", [100, 10]));
     results.push(await runCase("directive mount/update 500", "directiveUpdate", [500]));
     results.push(await runCase("shadow components 1k", "shadowMount", [1000], { iterations: 3 }));
+    results.push(await runCase("prop-heavy components 1k", "propHeavyMount", [1000], { iterations: 3 }));
     results.push(await runCase("static shadow direct 1k", "staticShadowDirect", [1000]));
     results.push(await runCase("static shadow hoisted 1k", "staticShadowHoisted", [1000]));
     results.push(await runCase("event dispatch 1k", "eventDispatch", [1000]));
@@ -538,7 +658,13 @@ if (hasArg("check")) {
   const staticDirect = byLabel.get("static shadow direct 1k")?.median;
   const staticHoisted = byLabel.get("static shadow hoisted 1k")?.median;
   const listCreate = byLabel.get("list create 1k")?.median;
+  const listCreate10k = byLabel.get("list create 10k")?.median;
   const listSameKey = byLabel.get("list same-key 1k")?.median;
+  const listRemoveHalf = byLabel.get("list remove 5k from 10k")?.median;
+  const transitionGroupSameKey = byLabel.get("transition group same-key 1k")?.median;
+  const transitionGroupReverse = byLabel.get("transition group reverse 1k")?.median;
+  const shadowMount = byLabel.get("shadow components 1k")?.median;
+  const propHeavyMount = byLabel.get("prop-heavy components 1k")?.median;
   const failures = [];
 
   if (
@@ -553,6 +679,33 @@ if (hasArg("check")) {
   if (listCreate === undefined || listSameKey === undefined || listSameKey > listCreate * 3) {
     failures.push(
       `same-key list regression: update ${formatMs(listSameKey ?? 0)} / create ${formatMs(listCreate ?? 0)}`
+    );
+  }
+  if (
+    listCreate10k === undefined ||
+    listRemoveHalf === undefined ||
+    listRemoveHalf > listCreate10k * 3
+  ) {
+    failures.push(
+      `large-list removal regression: remove ${formatMs(listRemoveHalf ?? 0)} / create ${formatMs(listCreate10k ?? 0)}`
+    );
+  }
+  if (
+    transitionGroupSameKey === undefined ||
+    transitionGroupReverse === undefined ||
+    transitionGroupSameKey > transitionGroupReverse * 1.25
+  ) {
+    failures.push(
+      `transition-group same-key regression: same-key ${formatMs(transitionGroupSameKey ?? 0)} / reverse ${formatMs(transitionGroupReverse ?? 0)}`
+    );
+  }
+  if (
+    shadowMount === undefined ||
+    propHeavyMount === undefined ||
+    propHeavyMount > shadowMount * 5
+  ) {
+    failures.push(
+      `prop-heavy mount regression: props ${formatMs(propHeavyMount ?? 0)} / no props ${formatMs(shadowMount ?? 0)}`
     );
   }
   if ((memory.retained ?? 0) > 1024 * 1024) {

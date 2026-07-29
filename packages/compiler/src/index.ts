@@ -40,16 +40,13 @@ export {
 
 export {
   compileMacroComponent,
-  toMacroComponentMetadataV1,
   type ElfSourceMap,
   type MacroCompiledComponent,
   type MacroComponentCompileOptions,
   type MacroComponentCompileResult,
   type MacroComponentMetadata,
-  type MacroComponentMetadataV1,
   type MacroDiagnosticSummary,
   type MacroExportedComponentMetadata,
-  type MacroExportedComponentMetadataV1,
   type MacroLocalComponentMetadata,
   type MacroEventMetadata,
   type MacroModelMetadata,

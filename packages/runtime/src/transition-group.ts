@@ -8,9 +8,12 @@ import {
   type Ref
 } from "@elfui/reactivity";
 
+import { waitForCssEnd } from "./css-end";
+import { DEV as __DEV__ } from "./dev";
+import { longestIncreasingSubsequence } from "./keyed-reconcile";
+
 export interface TransitionGroupOptions {
   name?: string;
-  tag?: string;
   moveClass?: string;
   css?: boolean;
 }
@@ -75,11 +78,9 @@ export const transitionGroup = <T>(
       el.classList.remove(cls(options.name, "enter-from"));
       el.classList.add(cls(options.name, "enter-to"));
       const finish = (): void => {
-        cleanup();
         el.classList.remove(cls(options.name, "enter-to"), cls(options.name, "enter-active"));
       };
-      el.addEventListener("transitionend", finish);
-      const cleanup = registerCleanup(() => el.removeEventListener("transitionend", finish));
+      waitForCssEnd(el, undefined, finish, registerCleanup);
     });
   };
 
@@ -96,13 +97,11 @@ export const transitionGroup = <T>(
       el.classList.remove(cls(options.name, "leave-from"));
       el.classList.add(cls(options.name, "leave-to"));
       const finish = (): void => {
-        cleanup();
         el.classList.remove(cls(options.name, "leave-to"), cls(options.name, "leave-active"));
         el.parentNode?.removeChild(el);
         states.delete(state);
       };
-      el.addEventListener("transitionend", finish);
-      const cleanup = registerCleanup(() => el.removeEventListener("transitionend", finish));
+      waitForCssEnd(el, undefined, finish, registerCleanup);
     });
   };
 
@@ -112,6 +111,7 @@ export const transitionGroup = <T>(
       const rect = state.el.getBoundingClientRect();
       return { left: rect.left, top: rect.top };
     });
+    const moved: ItemState<T>[] = [];
     for (let i = 0; i < items.length; i++) {
       const state = items[i]!;
       const next = newPositions[i]!;
@@ -122,28 +122,25 @@ export const transitionGroup = <T>(
       if (dx !== 0 || dy !== 0) {
         state.el.style.transform = `translate(${dx}px, ${dy}px)`;
         state.el.style.transitionDuration = "0s";
+        moved.push(state);
       }
     }
-    void host.offsetHeight;
-    scheduleFrames(() => {
-      for (const state of items) {
-        state.el.classList.add(moveClass);
-        state.el.style.transform = "";
-        state.el.style.transitionDuration = "";
-        const onEnd = (event: TransitionEvent): void => {
-          if (event.target !== state.el) return;
-          cleanup();
-          state.el.classList.remove(moveClass);
-        };
-        state.el.addEventListener("transitionend", onEnd as EventListener);
-        const cleanup = registerCleanup(() =>
-          state.el.removeEventListener("transitionend", onEnd as EventListener)
-        );
-      }
-    });
     for (let i = 0; i < items.length; i++) {
       items[i]!.pos = newPositions[i]!;
     }
+    if (moved.length === 0) return;
+    void host.offsetHeight;
+    scheduleFrames(() => {
+      for (const state of moved) {
+        state.el.classList.add(moveClass);
+        state.el.style.transform = "";
+        state.el.style.transitionDuration = "";
+        const onEnd = (): void => {
+          state.el.classList.remove(moveClass);
+        };
+        waitForCssEnd(state.el, undefined, onEnd, registerCleanup);
+      }
+    });
   };
 
   const createState = (key: string | number, item: T, index: number): ItemState<T> => {
@@ -172,8 +169,54 @@ export const transitionGroup = <T>(
   useEffect(() => {
     if (disposed) return;
     const items = getItems();
-    const oldByKey = new Map<string | number, ItemState<T>>();
-    for (const state of prev) oldByKey.set(state.key, state);
+    const keys = new Array<string | number>(items.length);
+    for (let index = 0; index < items.length; index++) {
+      keys[index] = getKey(items[index] as T, index);
+    }
+    if (__DEV__) {
+      const seen = new Set<string | number>();
+      for (const key of keys) {
+        if (seen.has(key)) console.warn(`[transitionGroup] duplicate key "${String(key)}".`, key);
+        else seen.add(key);
+      }
+    }
+
+    if (prev.length === items.length) {
+      let sameKeyOrder = true;
+      for (let index = 0; index < prev.length; index++) {
+        if (prev[index]!.key !== keys[index]) {
+          sameKeyOrder = false;
+          break;
+        }
+      }
+      if (sameKeyOrder) {
+        if (!firstRun && useCss) {
+          for (const state of prev) {
+            const rect = state.el.getBoundingClientRect();
+            state.pos = { left: rect.left, top: rect.top };
+          }
+        }
+        batch(() => {
+          for (let index = 0; index < prev.length; index++) {
+            prev[index]!.item.set(items[index] as T);
+            prev[index]!.index.set(index);
+          }
+        });
+        if (!firstRun && useCss && prev.length > 0) flipMove(prev);
+        firstRun = false;
+        return;
+      }
+    }
+
+    const oldByKey = new Map<string | number, ItemState<T>[]>();
+    const oldIndexByState = new Map<ItemState<T>, number>();
+    for (let index = 0; index < prev.length; index++) {
+      const state = prev[index]!;
+      const bucket = oldByKey.get(state.key);
+      if (bucket) bucket.push(state);
+      else oldByKey.set(state.key, [state]);
+      oldIndexByState.set(state, index);
+    }
 
     if (!firstRun && useCss) {
       for (const state of prev) {
@@ -183,19 +226,21 @@ export const transitionGroup = <T>(
     }
 
     const next: ItemState<T>[] = [];
-    const used = new Set<string | number>();
+    const used = new Set<ItemState<T>>();
     const created: ItemState<T>[] = [];
+    const oldIndices = new Array<number>(items.length).fill(0);
 
     batch(() => {
       for (let index = 0; index < items.length; index++) {
         const item = items[index] as T;
-        const key = getKey(item, index);
-        const existing = oldByKey.get(key);
-        if (existing && !used.has(key)) {
-          used.add(key);
+        const key = keys[index]!;
+        const existing = oldByKey.get(key)?.shift();
+        if (existing) {
+          used.add(existing);
           existing.item.set(item);
           existing.index.set(index);
           next.push(existing);
+          oldIndices[index] = (oldIndexByState.get(existing) ?? -1) + 1;
         } else {
           const state = createState(key, item, index);
           next.push(state);
@@ -205,17 +250,26 @@ export const transitionGroup = <T>(
     });
 
     for (const old of prev) {
-      if (!used.has(old.key)) leaveClasses(old);
+      if (!used.has(old)) leaveClasses(old);
     }
 
-    for (const state of next) {
-      if (state.el.parentNode === host) host.removeChild(state.el);
+    const stable = longestIncreasingSubsequence(oldIndices);
+    let stableCursor = stable.length - 1;
+    let reference: Node | null = null;
+    for (let index = next.length - 1; index >= 0; index--) {
+      const state = next[index]!;
+      if (oldIndices[index] === 0 || stableCursor < 0 || index !== stable[stableCursor]) {
+        host.insertBefore(state.el, reference);
+      } else {
+        stableCursor--;
+      }
+      reference = state.el;
     }
-    for (const state of next) host.appendChild(state.el);
     for (const state of created) enterClasses(state.el);
 
     if (!firstRun) {
-      const moving = next.filter((state) => !created.includes(state));
+      const createdSet = new Set(created);
+      const moving = next.filter((state) => !createdSet.has(state));
       if (moving.length > 0) flipMove(moving);
     }
 
