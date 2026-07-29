@@ -55,11 +55,6 @@ export interface CodegenOptions extends ParserOptions {
   scopeNames?: readonly string[];
   /** scope 模式下是否把 ctx.props 也合并进模板直写标识符作用域 */
   includePropsInScope?: boolean;
-  fragments?: Readonly<Record<string, FragmentCodegenDefinition>>;
-  inlineFragments?: Readonly<Record<string, string>>;
-  inlineFragmentDebugSources?: Readonly<Record<string, CodegenTemplateDebugSource>>;
-  inlineFragmentRenders?: Readonly<Record<string, FragmentCodegenDefinition>>;
-  inlineFragmentLists?: Readonly<Record<string, InlineFragmentListCodegenDefinition>>;
   /** Development-only DOM node to original template source association. */
   debugSource?: CodegenTemplateDebugSource;
 }
@@ -68,24 +63,6 @@ export interface CodegenTemplateDebugSource {
   sourceId: string;
   line: number;
   column: number;
-  fragment?: string;
-}
-
-export interface FragmentCodegenDefinition {
-  name: string;
-  template: string;
-  scopeNames: readonly string[];
-  defaultValues?: ReadonlyArray<{ name: string; expression: string }>;
-  renderName: string;
-  debugSource?: CodegenTemplateDebugSource;
-}
-
-export interface InlineFragmentListCodegenDefinition {
-  marker: string;
-  source: string;
-  itemName: string;
-  indexName?: string;
-  renderName: string;
 }
 
 export interface CodegenResult {
@@ -121,7 +98,6 @@ type Helper =
   | "onObject"
   | "unwrapStateAccess"
   | TemplateValueHelper
-  | "createFragmentProps"
   | "extendRenderState"
   | "handleRuntimeError"
   | "attachDevtoolsTemplateNode"
@@ -139,11 +115,6 @@ interface CodegenContext {
   expressionMode: "with" | "scope";
   scopeNames: Set<string>;
   includePropsInScope: boolean;
-  fragments: Readonly<Record<string, FragmentCodegenDefinition>>;
-  inlineFragments: Readonly<Record<string, string>>;
-  inlineFragmentDebugSources: Readonly<Record<string, CodegenTemplateDebugSource>>;
-  inlineFragmentRenders: Readonly<Record<string, FragmentCodegenDefinition>>;
-  inlineFragmentLists: Readonly<Record<string, InlineFragmentListCodegenDefinition>>;
   ctxName: string;
   hoistPrefix: string;
   debugSource?: CodegenTemplateDebugSource;
@@ -345,7 +316,7 @@ const templateNodeDebug = (
   use(ctx, "attachDevtoolsTemplateNode");
   const start = absoluteTemplatePosition(node.loc.start, debug);
   const end = absoluteTemplatePosition(node.loc.end, debug);
-  return `if (typeof __DEV__ === "undefined" || __DEV__) attachDevtoolsTemplateNode(${element}, ${escapeStr(debug.sourceId)}, ${escapeStr(debug.fragment ?? "")}, ${start.line}, ${start.column}, ${end.line}, ${end.column})`;
+  return `if (typeof __DEV__ === "undefined" || __DEV__) attachDevtoolsTemplateNode(${element}, ${escapeStr(debug.sourceId)}, ${start.line}, ${start.column}, ${end.line}, ${end.column})`;
 };
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -425,11 +396,6 @@ export const codegen = (template: string, options: CodegenOptions = {}): Codegen
     expressionMode: options.expressionMode ?? "with",
     scopeNames: new Set(options.scopeNames ?? []),
     includePropsInScope: options.includePropsInScope ?? false,
-    fragments: options.fragments ?? {},
-    inlineFragments: options.inlineFragments ?? {},
-    inlineFragmentDebugSources: options.inlineFragmentDebugSources ?? {},
-    inlineFragmentRenders: options.inlineFragmentRenders ?? {},
-    inlineFragmentLists: options.inlineFragmentLists ?? {},
     ctxName: "ctx",
     hoistPrefix: fnName.replace(/[^A-Za-z0-9_$]/gu, "_"),
     ...(options.debugSource ? { debugSource: options.debugSource } : {})
@@ -439,62 +405,12 @@ export const codegen = (template: string, options: CodegenOptions = {}): Codegen
   const childExpr = genChildren(ast.children, ctx);
 
   const hoists = ctx.buf.length === 0 ? "" : `${ctx.buf.join("\n")}\n\n`;
-  const fragmentCodes: string[] = [];
-  const inlineFragmentCodes: string[] = [];
-  const {
-    fragments: _fragmentOptions,
-    inlineFragmentRenders: _inlineFragmentOptions,
-    inlineFragmentLists: _inlineFragmentListOptions,
-    ...fragmentCodegenOptions
-  } = options;
-  for (const fragment of Object.values(ctx.fragments)) {
-    const fragmentGenerated = codegen(fragment.template, {
-      ...fragmentCodegenOptions,
-      functionName: fragment.renderName,
-      scopeNames: [...(options.scopeNames ?? []), ...fragment.scopeNames],
-      ...(fragment.debugSource ? { debugSource: fragment.debugSource } : {})
-    });
-    for (const helper of fragmentGenerated.helpers) use(ctx, helper as Helper);
-    fragmentCodes.push(
-      fragmentGenerated.code
-        .replace(/^import\s+\{[^}]*\}\s+from\s+["'][^"']+["'];?\s*/u, "")
-        .replace(
-          `export default function ${fragment.renderName}`,
-          `function ${fragment.renderName}`
-        )
-        .trim()
-    );
-  }
-  for (const fragment of Object.values(ctx.inlineFragmentRenders)) {
-    const bodyName = `${fragment.renderName}Body`;
-    const fragmentGenerated = codegen(fragment.template, {
-      ...fragmentCodegenOptions,
-      functionName: bodyName,
-      scopeNames: [...(options.scopeNames ?? []), ...fragment.scopeNames],
-      ...(fragment.debugSource ? { debugSource: fragment.debugSource } : {})
-    });
-    for (const helper of fragmentGenerated.helpers) use(ctx, helper as Helper);
-    use(ctx, "extendRenderState");
-    const body = fragmentGenerated.code
-      .replace(/^import\s+\{[^}]*\}\s+from\s+["'][^"']+["'];?\s*/u, "")
-      .replace(`export default function ${bodyName}`, `function ${bodyName}`)
-      .trim();
-    inlineFragmentCodes.push(
-      `${body}\n\nfunction ${fragment.renderName}(ctx: any, props: Record<string, unknown>) { return ${bodyName}({ ...ctx, state: extendRenderState(ctx.state, props) }); }`
-    );
-  }
-
   const helpers = Array.from(ctx.used).sort();
   const importLine =
     helpers.length === 0
       ? ""
       : `import { ${helpers.join(", ")} } from ${escapeStr(runtimeImport)};\n\n`;
-  const code =
-    `${importLine}${hoists}${fragmentCodes.join("\n\n")}` +
-    `${fragmentCodes.length > 0 && inlineFragmentCodes.length > 0 ? "\n\n" : ""}` +
-    `${inlineFragmentCodes.join("\n\n")}` +
-    `${fragmentCodes.length > 0 || inlineFragmentCodes.length > 0 ? "\n\n" : ""}` +
-    `export default function ${fnName}(${renderCtxParam(ctx)}) {\n  return ${childExpr};\n}\n`;
+  const code = `${importLine}${hoists}export default function ${fnName}(${renderCtxParam(ctx)}) {\n  return ${childExpr};\n}\n`;
 
   return { code, helpers, ast };
 };
@@ -536,18 +452,6 @@ const genNode = (node: TemplateChildNode, ctx: CodegenContext): string => {
     case NodeTypes.INTERPOLATION: {
       const t = fresh(ctx, "t");
       const interpolation = node as InterpolationNode;
-      const inlineList = ctx.inlineFragmentLists[interpolation.content.trim()];
-      if (inlineList) {
-        return genInlineFragmentList(inlineList, ctx);
-      }
-      const inlineTemplate = ctx.inlineFragments[interpolation.content.trim()];
-      if (inlineTemplate !== undefined) {
-        return genInlineFragment(
-          inlineTemplate,
-          ctx.inlineFragmentDebugSources[interpolation.content.trim()],
-          ctx
-        );
-      }
       use(ctx, "text");
       return `(() => { const ${t} = document.createTextNode(""); text(${t}, () => (${wrapGetter(interpolation.content, ctx)})(${currentCtx(ctx)}), ${bindingDebug(interpolation.contentLoc)}); return ${t}; })()`;
     }
@@ -562,38 +466,6 @@ const genNode = (node: TemplateChildNode, ctx: CodegenContext): string => {
     default:
       return `document.createTextNode("")`;
   }
-};
-
-const genInlineFragment = (
-  template: string,
-  debugSource: CodegenTemplateDebugSource | undefined,
-  ctx: CodegenContext
-): string => {
-  const ast = parse(template);
-  const previous = ctx.debugSource;
-  if (debugSource) ctx.debugSource = debugSource;
-  const result = genFragment(ast.children, ctx);
-  if (previous) ctx.debugSource = previous;
-  else delete ctx.debugSource;
-  return result;
-};
-
-const genInlineFragmentList = (
-  definition: InlineFragmentListCodegenDefinition,
-  ctx: CodegenContext
-): string => {
-  use(ctx, "list");
-  use(ctx, "mark");
-  use(ctx, "extendRenderState");
-  const anchor = fresh(ctx, "fragmentListAnchor");
-  const parentCtx = currentCtx(ctx);
-  const childCtx = fresh(ctx, "fragmentListCtx");
-  const stateSpread = definition.indexName
-    ? `{ ${definition.itemName}: __item, ${definition.indexName}: __index }`
-    : `{ ${definition.itemName}: __item }`;
-  const sourceGetter = `() => { const __v = (${wrapGetter(definition.source, ctx)})(${parentCtx}); if (Array.isArray(__v)) return __v; if (__v && typeof __v === "object") return Object.values(__v); return []; }`;
-  const render = `(${renderListParams(ctx)}) => { const ${childCtx} = { ...${parentCtx}, state: extendRenderState(${parentCtx}.state, ${stateSpread}) }; return ${definition.renderName}(${childCtx}, { ${definition.itemName}: __item${definition.indexName ? `, ${definition.indexName}: __index` : ""} }); }`;
-  return `(() => { const ${anchor} = mark("fragment"); const __frag = document.createDocumentFragment(); __frag.appendChild(${anchor}); list(${anchor}, ${sourceGetter}, (_item, __index) => __index, ${render}); return __frag; })()`;
 };
 
 const STATIC_TREE_MIN_NODES = 6;
@@ -732,9 +604,6 @@ const stripDirective = (node: ElementNode, name: string): ElementNode => ({
 
 const genPlain = (node: ElementNode, ctx: CodegenContext): string => {
   if (node.tag === "template") return genTemplateFragment(node, ctx);
-  const fragment = resolveFragment(node.tag, ctx.fragments);
-  if (fragment) return genFragmentCall(node, fragment, ctx);
-
   const elVar = fresh(ctx, "el");
   const stmts: string[] = [];
   if (isSvgElementTag(node.tag)) {
@@ -774,71 +643,6 @@ const genPlain = (node: ElementNode, ctx: CodegenContext): string => {
 
   stmts.push(`return ${elVar}`);
   return `(() => { ${stmts.join("; ")} })()`;
-};
-
-const resolveFragment = (
-  tag: string,
-  fragments: Readonly<Record<string, FragmentCodegenDefinition>>
-): FragmentCodegenDefinition | undefined => {
-  const direct = fragments[tag];
-  if (direct) return direct;
-  const normalized = templateAttrToProp(tag);
-  if (fragments[normalized]) return fragments[normalized];
-  const pascal = normalized ? normalized[0]!.toUpperCase() + normalized.slice(1) : normalized;
-  return fragments[pascal];
-};
-
-const fragmentPropKey = (name: string): string => (name === "key" ? "" : templateAttrToProp(name));
-
-const fragmentEventPropKey = (name: string): string =>
-  `on${name ? name[0]!.toUpperCase() + name.slice(1) : ""}`;
-
-const genFragmentCall = (
-  node: ElementNode,
-  fragment: FragmentCodegenDefinition,
-  ctx: CodegenContext
-): string => {
-  use(ctx, "createFragmentProps");
-  use(ctx, "extendRenderState");
-  const propsVar = fresh(ctx, "fragmentProps");
-  const childCtx = fresh(ctx, "fragmentCtx");
-  const sources: string[] = [];
-  const defaultSources = (fragment.defaultValues ?? []).map(
-    ({ name, expression }) =>
-      `() => ({ ${escapeStr(name)}: (${wrapGetter(expression, ctx)})(${currentCtx(ctx)}) })`
-  );
-
-  for (const prop of node.props) {
-    if (prop.type === AttrTypes.ATTRIBUTE) {
-      const key = fragmentPropKey(prop.name);
-      if (!key) continue;
-      const value = prop.value === true ? "true" : escapeStr(prop.value);
-      sources.push(`() => ({ ${escapeStr(key)}: ${value} })`);
-      continue;
-    }
-
-    if (prop.name === "bind") {
-      if (!prop.arg) {
-        sources.push(`() => (${wrapGetter(prop.exp, ctx)})(${currentCtx(ctx)})`);
-        continue;
-      }
-      const key = fragmentPropKey(prop.arg);
-      if (!key) continue;
-      sources.push(
-        `() => ({ ${escapeStr(key)}: (${wrapGetter(prop.exp, ctx)})(${currentCtx(ctx)}) })`
-      );
-      continue;
-    }
-
-    if (prop.name === "on" && prop.arg) {
-      const event = wrapEvent(prop.exp, ctx);
-      sources.push(
-        `() => ({ ${escapeStr(fragmentEventPropKey(prop.arg))}: (${renderEventParam(ctx, "__event")}) => (${event})(${currentCtx(ctx)}, __event) })`
-      );
-    }
-  }
-
-  return `(() => { const ${propsVar} = createFragmentProps([${sources.join(", ")}]${defaultSources.length > 0 ? `, [${defaultSources.join(", ")}]` : ""}); const ${childCtx} = { ...${currentCtx(ctx)}, props: ${propsVar}, state: extendRenderState(extendRenderState(${currentCtx(ctx)}.state, ${propsVar}), { props: ${propsVar} }) }; return ${fragment.renderName}(${childCtx}); })()`;
 };
 
 const genTemplateFragment = (node: ElementNode, ctx: CodegenContext): string => {

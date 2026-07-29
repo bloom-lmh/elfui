@@ -144,19 +144,17 @@ paths and a repair command.
 
 A Macro component combines ordinary top-level TypeScript with an exported `defineHtml(\`...\`)` template:
 
-| API                | Purpose                                                            |
-| ------------------ | ------------------------------------------------------------------ |
-| `defineProps()`    | Declare external properties and their types                        |
-| `defineEmits()`    | Declare component events                                           |
-| `defineModel()`    | Declare a `v-model` contract                                       |
-| `defineSlots()`    | Declare the slot contract                                          |
-| `defineOptions()`  | Configure Shadow DOM, form control behavior, and component options |
-| `defineStyle()`    | Declare component styles                                           |
-| `defineExpose()`   | Expose instance methods to a parent                                |
-| `useComponents()`  | Register local components used by the template                     |
-| `fragment`         | Inline an anonymous compile-time template fragment                 |
-| `defineFragment()` | Define a local typed fragment used with component-like attributes  |
-| `defineHtml()`     | Define and export the component template                           |
+| API               | Purpose                                                            |
+| ----------------- | ------------------------------------------------------------------ |
+| `defineProps()`   | Declare external properties and their types                        |
+| `defineEmits()`   | Declare component events                                           |
+| `defineModel()`   | Declare a `v-model` contract                                       |
+| `defineSlots()`   | Declare the slot contract                                          |
+| `defineOptions()` | Configure Shadow DOM, form control behavior, and component options |
+| `defineStyle()`   | Declare component styles                                           |
+| `defineExpose()`  | Expose instance methods to a parent                                |
+| `useComponents()` | Register local components used by the template                     |
+| `defineHtml()`    | Define and export the component template                           |
 
 `defineExpose()` warns in development when an exposed name collides with a native host member.
 When a component intentionally enhances native semantics such as `focus()` or `blur()`, declare

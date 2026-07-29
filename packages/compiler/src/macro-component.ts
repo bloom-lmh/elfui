@@ -9,11 +9,7 @@ import {
   type SourceLoc,
   type TemplateChildNode
 } from "@elfui/compiler-template";
-import {
-  codegen,
-  type CodegenTemplateDebugSource,
-  type FragmentCodegenDefinition
-} from "./codegen";
+import { codegen, type CodegenTemplateDebugSource } from "./codegen";
 import type { ElfDiagnostic, ElfDiagnosticSeverity } from "./diagnostic";
 import { ELFUI_COMPILER_PROTOCOL_VERSION } from "./protocol";
 
@@ -35,7 +31,6 @@ declare module "@elfui/core" {
     readonly __elfEmits?: Emits;
     readonly __elfSlots?: Slots;
   }
-  export type MacroFragment<Props extends object = Record<string, unknown>> = { readonly __elfFragmentProps?: Readonly<Props> };
   type MacroPropConstructorValue<T> = T extends StringConstructor
     ? string
     : T extends NumberConstructor
@@ -65,8 +60,6 @@ declare module "@elfui/core" {
           : MacroDefaultValue<T>;
   export type MacroInferProps<T extends Record<string, unknown>> = Readonly<{ [K in keyof T]: MacroPropValue<T[K]> }>;
   export function defineHtml<Props extends object = Record<string, unknown>, Emits extends MacroEmitShape<Emits> = Record<string, unknown[]>, Slots extends object = object>(template: string): ElfElementConstructor<Props, MacroEmitTuples<Emits>, Slots>;
-  export function defineFragment<Args extends readonly unknown[]>(render: (...args: Args) => string): MacroFragment<Record<string, unknown>>;
-  export function fragment(strings: TemplateStringsArray, ...values: unknown[]): string;
   export const defineName: any;
   export const defineOptions: any;
   export function defineProps<const T extends Record<string, unknown>>(props: T): MacroInferProps<T>;
@@ -116,8 +109,6 @@ declare module "@elfui/core" {
 
 const macroNames = new Set([
   "defineHtml",
-  "defineFragment",
-  "fragment",
   "defineName",
   "defineOptions",
   "defineProps",
@@ -184,18 +175,6 @@ export interface MacroSourceRange {
   endColumn: number;
 }
 
-export interface MacroFragmentMetadata {
-  kind: "named" | "inline" | "inline-list";
-  name: string;
-  renderName: string;
-  propsType: string;
-  scopeNames: string[];
-  dependencies: string[];
-  ownerComponents: string[];
-  identity: "not-applicable" | "index";
-  source: MacroSourceRange;
-}
-
 export interface MacroDiagnosticSummary {
   errors: number;
   warnings: number;
@@ -206,7 +185,6 @@ export interface MacroComponentMetadata extends MacroComponentMetadataV1 {
   schemaVersion: 2;
   compilerProtocol: number;
   components: MacroExportedComponentMetadata[];
-  fragments: MacroFragmentMetadata[];
   diagnostics: MacroDiagnosticSummary;
 }
 
@@ -290,29 +268,6 @@ interface MacroDirective {
   expression: ts.Expression;
   references: Set<string>;
   staticName: string;
-}
-
-interface MacroFragment {
-  localName: string;
-  template: string;
-  sourceStart: number;
-  sourceEnd: number;
-  propsType?: string;
-  scopeNames: string[];
-  defaultValues?: Array<{ name: string; expression: string }>;
-  renderName: string;
-}
-
-interface MacroInlineFragment extends MacroFragment {
-  marker: string;
-}
-
-interface MacroInlineFragmentList {
-  marker: string;
-  source: string;
-  itemName: string;
-  indexName?: string;
-  renderName: string;
 }
 
 const DIRECTIVE_SETUP_MARKER = "\0elfui:directive:";
@@ -417,10 +372,6 @@ interface TransformState {
   emits: Set<string>;
   styles: string[];
   directives: Map<string, MacroDirective>;
-  fragments: Map<string, MacroFragment>;
-  inlineFragments: Map<string, MacroInlineFragment>;
-  inlineFragmentRenders: Map<string, MacroInlineFragment>;
-  inlineFragmentLists: Map<string, MacroInlineFragmentList>;
   components: Map<string, string>;
   options: Map<string, string>;
   templateVars: Map<string, TemplateInfo & { lazyRegister: boolean }>;
@@ -447,7 +398,6 @@ interface DiagnosticInit {
   hint?: string;
   expression?: string;
   component?: string;
-  fragment?: string;
   generatedStart?: number;
   generatedEnd?: number;
 }
@@ -472,7 +422,6 @@ const addDiagnostic = (state: TransformState, init: DiagnosticInit): void => {
     ...(init.hint ? { hint: init.hint } : {}),
     ...(init.expression ? { expression: init.expression } : {}),
     ...(init.component ? { component: init.component } : {}),
-    ...(init.fragment ? { fragment: init.fragment } : {}),
     ...(init.generatedStart !== undefined ? { generatedStart: init.generatedStart } : {}),
     ...(init.generatedEnd !== undefined ? { generatedEnd: init.generatedEnd } : {})
   };
@@ -531,10 +480,6 @@ export const compileMacroComponent = (
     emits: new Set(),
     styles: [],
     directives: new Map(),
-    fragments: new Map(),
-    inlineFragments: new Map(),
-    inlineFragmentRenders: new Map(),
-    inlineFragmentLists: new Map(),
     components: new Map(),
     options: new Map(),
     templateVars: new Map(),
@@ -555,8 +500,6 @@ export const compileMacroComponent = (
     visitTopLevelStatement(statement, state);
   }
 
-  collectFragmentDiagnostics(state);
-
   if (state.templates.length === 0) {
     addDiagnostic(state, {
       code: "ELF_MACRO_NO_TEMPLATE",
@@ -574,11 +517,7 @@ export const compileMacroComponent = (
       renderName,
       scopeNames,
       state,
-      template.sourceStart,
-      state.fragments,
-      state.inlineFragments,
-      state.inlineFragmentRenders,
-      state.inlineFragmentLists
+      template.sourceStart
     );
     return {
       exportName: template.exportName,
@@ -809,30 +748,6 @@ const collectVariableStatement = (statement: ts.VariableStatement, state: Transf
     const defineHtmlTemplate = initializerValue
       ? getDefineHtmlTemplate(initializerValue, state)
       : null;
-    const defineFragmentTemplate =
-      initializerValue && localName && isConstDeclaration(statement)
-        ? getDefineFragmentTemplate(initializerValue, localName, state)
-        : null;
-    if (localName && defineFragmentTemplate) {
-      if (exported) {
-        addDiagnostic(state, {
-          code: "ELF_MACRO_FRAGMENT_EXPORT",
-          message: "defineFragment 只能声明为当前文件内的本地 const，不能导出。",
-          node: declaration,
-          hint: "移除 export，并在同一个 defineHtml 模板中使用 <FragmentName />。"
-        });
-      }
-      if (state.fragments.has(localName)) {
-        addDiagnostic(state, {
-          code: "ELF_MACRO_FRAGMENT_CONFLICT",
-          message: `defineFragment "${localName}" 重复声明。`,
-          node: declaration.name
-        });
-      } else {
-        state.fragments.set(localName, defineFragmentTemplate);
-      }
-      continue;
-    }
     if (localName && defineHtmlTemplate) {
       state.templateVars.set(localName, {
         template: defineHtmlTemplate.template,
@@ -892,137 +807,6 @@ const collectVariableStatement = (statement: ts.VariableStatement, state: Transf
   }
 };
 
-const isConstDeclaration = (statement: ts.VariableStatement): boolean =>
-  (statement.declarationList.flags & ts.NodeFlags.Const) !== 0;
-
-const getDefineFragmentTemplate = (
-  expression: ts.Expression,
-  localName: string,
-  state: TransformState
-): MacroFragment | null => {
-  const value = stripExpression(expression);
-  if (!ts.isCallExpression(value) || callName(value) !== "defineFragment") return null;
-  if (value.arguments.length !== 1) {
-    addDiagnostic(state, {
-      code: "ELF_MACRO_DEFINE_FRAGMENT_USAGE",
-      message: "defineFragment 只接受一个返回模板字符串的函数参数。",
-      node: value,
-      hint: "示例：const Card = defineFragment((item: Item, compact = false) => `<div>${item.label}</div>`);"
-    });
-    return null;
-  }
-
-  const render = stripExpression(value.arguments[0]!);
-  if (!ts.isArrowFunction(render) && !ts.isFunctionExpression(render)) {
-    addDiagnostic(state, {
-      code: "ELF_MACRO_DEFINE_FRAGMENT_USAGE",
-      message: "defineFragment 的参数必须是函数。",
-      node: render
-    });
-    return null;
-  }
-
-  if (value.typeArguments?.length) {
-    addDiagnostic(state, {
-      code: "ELF_MACRO_DEFINE_FRAGMENT_TYPE_ARGUMENT",
-      message: "defineFragment 不再接受 Props 泛型，请直接为展开参数标注类型。",
-      node: value.typeArguments[0]!,
-      hint: "改为 defineFragment((item: Item, compact = false) => `...`)。"
-    });
-    return null;
-  }
-
-  const scopeNames: string[] = [];
-  const defaultValues: Array<{ name: string; expression: string }> = [];
-  const propMembers: string[] = [];
-  const seenNames = new Set<string>();
-  for (const parameter of render.parameters) {
-    if (parameter.dotDotDotToken || !ts.isIdentifier(parameter.name)) {
-      addDiagnostic(state, {
-        code: "ELF_MACRO_DEFINE_FRAGMENT_PARAMETER",
-        message: "defineFragment 只支持展开的具名参数和默认参数。",
-        node: parameter,
-        hint: "使用 (item: Item, compact = false)，不要使用对象/数组解构或 rest 参数。"
-      });
-      return null;
-    }
-    const name = parameter.name.text;
-    if (seenNames.has(name)) {
-      addDiagnostic(state, {
-        code: "ELF_MACRO_DEFINE_FRAGMENT_PARAMETER",
-        message: `defineFragment 参数 "${name}" 重复声明。`,
-        node: parameter
-      });
-      return null;
-    }
-    seenNames.add(name);
-    scopeNames.push(name);
-    if (parameter.initializer) {
-      defaultValues.push({ name, expression: textOf(parameter.initializer, state) });
-    }
-    const optional = !!parameter.questionToken || !!parameter.initializer;
-    propMembers.push(`${name}${optional ? "?" : ""}: ${fragmentParameterType(parameter, state)}`);
-  }
-
-  const returned = ts.isBlock(render.body)
-    ? render.body.statements.length === 1 && ts.isReturnStatement(render.body.statements[0]!)
-      ? render.body.statements[0]!.expression
-      : undefined
-    : render.body;
-  const templateArg = returned ? stripExpression(returned) : null;
-  const template = templateArg ? getStaticHtmlTemplate(templateArg) : null;
-  if (!template) {
-    addDiagnostic(state, {
-      code: "ELF_MACRO_DEFINE_FRAGMENT_TEMPLATE",
-      message: "defineFragment 函数必须直接返回静态模板字符串。",
-      node: render,
-      hint: "不要返回变量或运行时动态模板。"
-    });
-    return null;
-  }
-
-  const compiled = compileHtmlTemplate(template, state);
-  return {
-    localName,
-    template: compiled.template,
-    sourceStart: compiled.sourceStart,
-    sourceEnd: compiled.sourceEnd,
-    scopeNames,
-    ...(defaultValues.length > 0 ? { defaultValues } : {}),
-    renderName: `__elfRenderFragment_${localName.replace(/[^A-Za-z0-9_$]/gu, "_")}`,
-    propsType: `{ ${propMembers.join("; ")} }`
-  };
-};
-
-const fragmentParameterType = (
-  parameter: ts.ParameterDeclaration,
-  state: TransformState
-): string => {
-  if (parameter.type) return textOf(parameter.type, state);
-  const value = parameter.initializer ? stripExpression(parameter.initializer) : null;
-  if (!value) return "unknown";
-  if (ts.isStringLiteralLike(value)) return "string";
-  if (ts.isNumericLiteral(value)) return "number";
-  if (value.kind === ts.SyntaxKind.TrueKeyword || value.kind === ts.SyntaxKind.FalseKeyword) {
-    return "boolean";
-  }
-  if (value.kind === ts.SyntaxKind.NullKeyword) return "null";
-  if (ts.isArrayLiteralExpression(value)) return "unknown[]";
-  if (ts.isObjectLiteralExpression(value)) return "Record<string, unknown>";
-  return "unknown";
-};
-
-const collectBindingNamesForFragment = (name: ts.BindingName): string[] => {
-  if (ts.isIdentifier(name)) return [name.text];
-  const names: string[] = [];
-  for (const element of name.elements) {
-    if (ts.isBindingElement(element)) {
-      names.push(...collectBindingNamesForFragment(element.name));
-    }
-  }
-  return names;
-};
-
 const addTemplateExport = (template: TemplateExport, state: TransformState): void => {
   const key = `${template.exportName}:${template.localName ?? ""}`;
   if (state.templateExportKeys.has(key)) return;
@@ -1045,15 +829,6 @@ const collectMacroCall = (
         message:
           "defineHtml 需要赋值给本地变量或直接导出，例如 const Button = defineHtml(`...`); export { Button }。",
         node: call
-      });
-      return true;
-    case "defineFragment":
-      addDiagnostic(state, {
-        code: "ELF_MACRO_DEFINE_FRAGMENT_USAGE",
-        message:
-          "defineFragment 必须赋值给当前文件内的 const 变量，例如 const Card = defineFragment((item: Item) => `...`);",
-        node: call,
-        hint: "不要导出、重新赋值或把 defineFragment 传入 useComponents()。"
       });
       return true;
     case "defineName":
@@ -1728,134 +1503,13 @@ const expressionHoleToTemplate = (
   currentOutput: string,
   state: TransformState
 ): string => {
-  const inlineFragment = getInlineFragmentTemplate(expression, state);
-  if (inlineFragment) {
-    if (currentOutput.match(/([:@][\w$.-]+|v-[\w$:-]+(?:\.[\w$-]+)*)\s*=\s*$/)) {
-      addDiagnostic(state, {
-        code: "ELF_MACRO_FRAGMENT_DYNAMIC",
-        message: "fragment 只能作为模板内容使用，不能作为属性值。",
-        node: expression
-      });
-      return "";
-    }
-    const marker = `__elfInlineFragment${state.inlineFragments.size}`;
-    state.inlineFragments.set(marker, {
-      localName: marker,
-      marker,
-      template: inlineFragment.template,
-      sourceStart: inlineFragment.sourceStart,
-      sourceEnd: inlineFragment.sourceEnd,
-      scopeNames: [],
-      renderName: marker
-    });
-    return `{{ ${marker} }}`;
-  }
   const attr = currentOutput.match(/([:@][\w$.-]+|v-[\w$:-]+(?:\.[\w$-]+)*)\s*=\s*$/);
   if (attr) {
     return attributeExpressionValue(attr[1] ?? "", expression, state);
   }
 
-  const nestedFragmentExpression = rewriteNestedFragmentExpression(expression, state);
-  const expr = nestedFragmentExpression ?? interpolationExpression(expression, state);
+  const expr = interpolationExpression(expression, state);
   return `{{ ${expr} }}`;
-};
-
-const rewriteNestedFragmentExpression = (
-  expression: ts.Expression,
-  state: TransformState
-): string | null => {
-  const list = getInlineFragmentList(expression, state);
-  if (list) return list;
-
-  const tags: ts.TaggedTemplateExpression[] = [];
-  const visit = (node: ts.Node): void => {
-    if (ts.isTaggedTemplateExpression(node)) {
-      if (ts.isIdentifier(node.tag) && node.tag.text === "fragment") tags.push(node);
-      return;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(expression);
-  if (tags.length === 0) return null;
-  addDiagnostic(state, {
-    code: "ELF_MACRO_FRAGMENT_DYNAMIC",
-    message:
-      "Nested fragment expressions are only supported as direct interpolation or array.map() results.",
-    node: expression,
-    hint: "Use a static template branch or defineFragment for other cases."
-  });
-  return textOf(expression, state);
-};
-
-const getInlineFragmentList = (expression: ts.Expression, state: TransformState): string | null => {
-  const value = stripExpression(expression);
-  if (!ts.isCallExpression(value) || !ts.isPropertyAccessExpression(value.expression)) return null;
-  if (value.expression.name.text !== "map" || value.arguments.length !== 1) return null;
-
-  const callback = stripExpression(value.arguments[0]!);
-  if (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback)) return null;
-  const returned = ts.isBlock(callback.body)
-    ? callback.body.statements.length === 1 && ts.isReturnStatement(callback.body.statements[0]!)
-      ? callback.body.statements[0]!.expression
-      : undefined
-    : callback.body;
-  const tag = returned ? stripExpression(returned) : null;
-  if (!tag || !ts.isTaggedTemplateExpression(tag)) return null;
-  if (!ts.isIdentifier(tag.tag) || tag.tag.text !== "fragment") return null;
-
-  const template = getStaticHtmlTemplate(tag.template);
-  if (!template) {
-    addDiagnostic(state, {
-      code: "ELF_MACRO_DEFINE_FRAGMENT_TEMPLATE",
-      message: "fragment must use a static template literal.",
-      node: tag
-    });
-    return null;
-  }
-
-  const compiled = compileHtmlTemplate(template, state);
-  const localNames = callback.parameters.flatMap((parameter) =>
-    collectBindingNamesForFragment(parameter.name)
-  );
-  const renderName = `__elfRenderInlineFragment${state.inlineFragmentRenders.size}`;
-  state.inlineFragmentRenders.set(renderName, {
-    localName: renderName,
-    marker: renderName,
-    template: compiled.template,
-    sourceStart: compiled.sourceStart,
-    sourceEnd: compiled.sourceEnd,
-    scopeNames: localNames,
-    renderName
-  });
-
-  const marker = `__elfInlineFragmentList${state.inlineFragmentLists.size}`;
-  state.inlineFragmentLists.set(marker, {
-    marker,
-    source: textOf(value.expression.expression, state),
-    itemName: localNames[0] ?? "item",
-    ...(localNames[1] ? { indexName: localNames[1] } : {}),
-    renderName
-  });
-  return marker;
-};
-
-const getInlineFragmentTemplate = (
-  expression: ts.Expression,
-  state: TransformState
-): { template: string; sourceStart: number; sourceEnd: number } | null => {
-  const value = stripExpression(expression);
-  if (!ts.isTaggedTemplateExpression(value)) return null;
-  if (!ts.isIdentifier(value.tag) || value.tag.text !== "fragment") return null;
-  const template = getStaticHtmlTemplate(value.template);
-  if (!template) {
-    addDiagnostic(state, {
-      code: "ELF_MACRO_DEFINE_FRAGMENT_TEMPLATE",
-      message: "fragment must use a static template literal.",
-      node: value
-    });
-    return null;
-  }
-  return compileHtmlTemplate(template, state);
 };
 
 const attributeExpressionValue = (
@@ -2079,9 +1733,9 @@ const renderTemplateTypeCheckPrelude = (state: TransformState): string[] => {
       "  value as unknown as T extends { readonly value: infer V; peek(): unknown } ? V : T;"
     );
   }
-  if (state.components.size > 0 || state.fragments.size > 0) {
+  if (state.components.size > 0) {
     lines.push(
-      "type __ElfComponentProps<C> = C extends { readonly __elfProps?: infer Props } ? NonNullable<Props> : C extends { readonly __elfFragmentProps?: infer Props } ? NonNullable<Props> : Record<string, unknown>;",
+      "type __ElfComponentProps<C> = C extends { readonly __elfProps?: infer Props } ? NonNullable<Props> : Record<string, unknown>;",
       "type __ElfComponentEmits<C> = C extends { readonly __elfEmits?: infer Emits } ? NonNullable<Emits> : Record<string, unknown[]>;",
       "type __ElfComponentEventArgs<C, K extends keyof __ElfComponentEmits<C> & string> = __ElfComponentEmits<C>[K] extends readonly unknown[] ? __ElfComponentEmits<C>[K] : unknown[];",
       "type __ElfComponentEventDetail<Args extends readonly unknown[]> = Args extends readonly [] ? undefined : Args extends readonly [infer Only] ? Only : Args;",
@@ -2097,11 +1751,6 @@ const renderTemplateTypeCheckPrelude = (state: TransformState): string[] => {
       "const __elfComponentSlotScope = <C, K extends keyof __ElfComponentSlots<C> & string>(_component: C, _name: K): __ElfComponentSlotScope<C, K> => null as unknown as __ElfComponentSlotScope<C, K>;",
       "const __elfCheckRequiredSlots = <C, Provided extends string>(_component: C, _provided: Record<Provided, true> & Record<Exclude<__ElfRequiredSlotNames<C>, Provided>, true>): void => {};"
     );
-    for (const fragment of state.fragments.values()) {
-      lines.push(
-        `declare const __elfFragmentType_${fragment.localName.replace(/[^A-Za-z0-9_$]/gu, "_")}: { readonly __elfFragmentProps?: Readonly<${fragment.propsType ?? "Record<string, unknown>"}> };`
-      );
-    }
   }
   return lines;
 };
@@ -2509,13 +2158,6 @@ const componentExpressionForNode = (node: ElementNode, state: TransformState): s
     kebab(node.tag),
     tagFromName(node.tag, state.tagPrefix)
   ]);
-  for (const name of state.fragments.keys()) {
-    for (const alias of componentAliases(name, state.tagPrefix)) {
-      if (candidates.has(alias)) {
-        return `__elfFragmentType_${name.replace(/[^A-Za-z0-9_$]/gu, "_")}`;
-      }
-    }
-  }
   for (const [name, expression] of state.components) {
     for (const alias of componentAliases(name, state.tagPrefix)) {
       if (candidates.has(alias)) return expression;
@@ -2738,15 +2380,13 @@ const oneLineExpression = (expression: string): string => expression.trim().repl
 
 const templateDebugSource = (
   state: TransformState,
-  sourceStart: number,
-  fragment?: string
+  sourceStart: number
 ): CodegenTemplateDebugSource => {
   const position = state.sourceFile.getLineAndCharacterOfPosition(sourceStart);
   return {
     sourceId: state.sourceId,
     line: position.line + 1,
-    column: position.character + 1,
-    ...(fragment ? { fragment } : {})
+    column: position.character + 1
   };
 };
 
@@ -2755,52 +2395,14 @@ const renderPrecompiledTemplate = (
   functionName: string,
   scopeNames: readonly string[],
   state: TransformState,
-  sourceStart: number,
-  fragments: ReadonlyMap<string, MacroFragment> = new Map(),
-  inlineFragments: ReadonlyMap<string, MacroInlineFragment> = new Map(),
-  inlineFragmentRenders: ReadonlyMap<string, MacroInlineFragment> = new Map(),
-  inlineFragmentLists: ReadonlyMap<string, MacroInlineFragmentList> = new Map()
+  sourceStart: number
 ): { code: string; helpers: string[] } => {
-  const fragmentDefinitions: Record<string, FragmentCodegenDefinition> = {};
-  for (const fragment of fragments.values()) {
-    fragmentDefinitions[fragment.localName] = {
-      name: fragment.localName,
-      template: fragment.template,
-      scopeNames: fragment.scopeNames,
-      ...(fragment.defaultValues ? { defaultValues: fragment.defaultValues } : {}),
-      renderName: fragment.renderName,
-      debugSource: templateDebugSource(state, fragment.sourceStart, fragment.localName)
-    };
-  }
   const generated = codegen(template, {
     functionName,
     runtimeImport: DEFAULT_RENDER_RUNTIME_IMPORT,
     expressionMode: "scope",
     scopeNames,
     includePropsInScope: false,
-    fragments: fragmentDefinitions,
-    inlineFragments: Object.fromEntries(
-      Array.from(inlineFragments, ([key, fragment]) => [key, fragment.template])
-    ),
-    inlineFragmentDebugSources: Object.fromEntries(
-      Array.from(inlineFragments, ([key, fragment]) => [
-        key,
-        templateDebugSource(state, fragment.sourceStart, fragment.localName)
-      ])
-    ),
-    inlineFragmentRenders: Object.fromEntries(
-      Array.from(inlineFragmentRenders, ([key, fragment]) => [
-        key,
-        {
-          name: fragment.localName,
-          template: fragment.template,
-          scopeNames: fragment.scopeNames,
-          renderName: fragment.renderName,
-          debugSource: templateDebugSource(state, fragment.sourceStart, fragment.localName)
-        }
-      ])
-    ),
-    inlineFragmentLists: Object.fromEntries(inlineFragmentLists),
     debugSource: templateDebugSource(state, sourceStart)
   });
   const code = generated.code
@@ -3283,7 +2885,6 @@ const buildMetadata = (
       };
     }),
     exposed: Array.from(state.exposed),
-    fragments: buildFragmentMetadata(state, components),
     diagnostics: {
       errors: state.diagnostics.filter((diagnostic) => diagnostic.severity === "error").length,
       warnings: state.diagnostics.filter((diagnostic) => diagnostic.severity === "warning").length,
@@ -3336,141 +2937,6 @@ const sourceRange = (state: TransformState, start: number, end: number): MacroSo
     endLine: last.line + 1,
     endColumn: last.character + 1
   };
-};
-
-const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-
-const templateUsesFragment = (template: string, name: string): boolean =>
-  new RegExp(`<${escapeRegExp(name)}(?:\\s|/|>)`, "u").test(template);
-
-const fragmentDependencies = (
-  template: string,
-  fragments: ReadonlyMap<string, MacroFragment>
-): string[] => Array.from(fragments.keys()).filter((name) => templateUsesFragment(template, name));
-
-const fragmentOwners = (
-  components: readonly InternalCompiledComponent[],
-  predicate: (template: string) => boolean
-): string[] =>
-  components.filter((component) => predicate(component.template)).map(({ name }) => name);
-
-const buildFragmentMetadata = (
-  state: TransformState,
-  components: readonly InternalCompiledComponent[]
-): MacroFragmentMetadata[] => {
-  const named = Array.from(
-    state.fragments.values(),
-    (fragment): MacroFragmentMetadata => ({
-      kind: "named",
-      name: fragment.localName,
-      renderName: fragment.renderName,
-      propsType: fragment.propsType ?? "Record<string, unknown>",
-      scopeNames: fragment.scopeNames,
-      dependencies: fragmentDependencies(fragment.template, state.fragments),
-      ownerComponents: fragmentOwners(components, (template) =>
-        templateUsesFragment(template, fragment.localName)
-      ),
-      identity: "not-applicable",
-      source: sourceRange(state, fragment.sourceStart, fragment.sourceEnd)
-    })
-  );
-
-  const inline = Array.from(
-    state.inlineFragments.values(),
-    (fragment): MacroFragmentMetadata => ({
-      kind: "inline",
-      name: fragment.marker,
-      renderName: fragment.renderName,
-      propsType: "Record<string, unknown>",
-      scopeNames: fragment.scopeNames,
-      dependencies: fragmentDependencies(fragment.template, state.fragments),
-      ownerComponents: fragmentOwners(components, (template) => template.includes(fragment.marker)),
-      identity: "not-applicable",
-      source: sourceRange(state, fragment.sourceStart, fragment.sourceEnd)
-    })
-  );
-
-  const lists = Array.from(state.inlineFragmentLists.values(), (list): MacroFragmentMetadata => {
-    const render = state.inlineFragmentRenders.get(list.renderName);
-    return {
-      kind: "inline-list",
-      name: list.marker,
-      renderName: list.renderName,
-      propsType: "Record<string, unknown>",
-      scopeNames: [list.itemName, ...(list.indexName ? [list.indexName] : [])],
-      dependencies: render ? fragmentDependencies(render.template, state.fragments) : [],
-      ownerComponents: fragmentOwners(components, (template) => template.includes(list.marker)),
-      identity: "index",
-      source: sourceRange(
-        state,
-        render?.sourceStart ?? 0,
-        render?.sourceEnd ?? render?.sourceStart ?? 0
-      )
-    };
-  });
-
-  return [...named, ...inline, ...lists];
-};
-
-const collectFragmentDiagnostics = (state: TransformState): void => {
-  const dependencies = new Map(
-    Array.from(state.fragments, ([name, fragment]) => [
-      name,
-      fragmentDependencies(fragment.template, state.fragments)
-    ])
-  );
-  const visiting = new Set<string>();
-  const visited = new Set<string>();
-  const reported = new Set<string>();
-
-  const visit = (name: string, trail: string[]): void => {
-    if (visiting.has(name)) {
-      const cycleStart = trail.indexOf(name);
-      const cycle = [...trail.slice(Math.max(0, cycleStart)), name];
-      const key = [...new Set(cycle)].sort().join("|");
-      if (!reported.has(key)) {
-        reported.add(key);
-        const fragment = state.fragments.get(name);
-        addDiagnostic(state, {
-          code: "ELF_MACRO_FRAGMENT_CYCLE",
-          message: `Fragment cycle detected: ${cycle.join(" -> ")}.`,
-          ...(fragment
-            ? {
-                start: fragment.sourceStart,
-                end: fragment.sourceEnd,
-                fragment: fragment.localName
-              }
-            : {}),
-          hint: "Break the recursive Fragment reference; Fragment templates are compile-time slices."
-        });
-      }
-      return;
-    }
-    if (visited.has(name)) return;
-    visiting.add(name);
-    for (const dependency of dependencies.get(name) ?? []) {
-      visit(dependency, [...trail, name]);
-    }
-    visiting.delete(name);
-    visited.add(name);
-  };
-
-  for (const name of state.fragments.keys()) visit(name, []);
-
-  for (const list of state.inlineFragmentLists.values()) {
-    const render = state.inlineFragmentRenders.get(list.renderName);
-    if (!render || !/(?:^|[\s<])(?::key|key)\s*=/u.test(render.template)) continue;
-    addDiagnostic(state, {
-      code: "ELF_MACRO_FRAGMENT_INDEX_IDENTITY",
-      severity: "warning",
-      message:
-        "fragment array.map() currently preserves list identity by index; a key attribute inside the slice does not change reconciliation identity.",
-      start: render.sourceStart,
-      end: render.sourceEnd,
-      fragment: list.marker,
-      hint: "Use v-for with :key when stable keyed reconciliation is required."
-    });
-  }
 };
 
 const normalizeSourceId = (value: string): string =>

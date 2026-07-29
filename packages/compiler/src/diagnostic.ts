@@ -20,7 +20,6 @@ export interface ElfDiagnostic {
   sourceId?: string;
   expression?: string;
   component?: string;
-  fragment?: string;
   generatedStart?: number;
   generatedEnd?: number;
   filename?: string;
@@ -41,7 +40,6 @@ export interface ElfDiagnosticInit {
   sourceId?: string;
   expression?: string;
   component?: string;
-  fragment?: string;
   generatedStart?: number;
   generatedEnd?: number;
   filename?: string;
@@ -61,7 +59,6 @@ export const createElfDiagnostic = (init: ElfDiagnosticInit): ElfDiagnostic => {
   if (init.sourceId !== undefined) diagnostic.sourceId = init.sourceId;
   if (init.expression !== undefined) diagnostic.expression = init.expression;
   if (init.component !== undefined) diagnostic.component = init.component;
-  if (init.fragment !== undefined) diagnostic.fragment = init.fragment;
   if (init.generatedStart !== undefined) diagnostic.generatedStart = init.generatedStart;
   if (init.generatedEnd !== undefined) diagnostic.generatedEnd = init.generatedEnd;
   diagnostic.filename = init.filename ?? init.file;

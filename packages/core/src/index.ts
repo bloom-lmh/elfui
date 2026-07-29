@@ -23,7 +23,6 @@ export {
 
 export {
   defineDirective,
-  defineFragment,
   defineEmits,
   defineHtml,
   defineModel,
@@ -32,12 +31,10 @@ export {
   defineProps,
   defineSlots,
   defineStyle,
-  fragment,
   useComponents,
   useExtend,
   useVariant,
   type MacroComponentOptions,
-  type MacroFragment,
   type MacroEmitArgs,
   type MacroEmitMap,
   type MacroEmitShape,

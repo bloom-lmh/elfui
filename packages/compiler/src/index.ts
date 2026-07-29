@@ -50,7 +50,6 @@ export {
   type MacroDiagnosticSummary,
   type MacroExportedComponentMetadata,
   type MacroExportedComponentMetadataV1,
-  type MacroFragmentMetadata,
   type MacroLocalComponentMetadata,
   type MacroEventMetadata,
   type MacroModelMetadata,

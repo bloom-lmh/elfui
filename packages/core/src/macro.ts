@@ -97,20 +97,6 @@ export const defineHtml = <
   _template: string
 ): ElfElementConstructor<Props, MacroEmitTuples<Emits>, Slots> => macroOnly("defineHtml");
 
-export type MacroFragment<Props extends object = Record<string, unknown>> = {
-  readonly __elfFragmentProps?: Readonly<Props>;
-};
-
-export function defineFragment<Args extends readonly unknown[]>(
-  _render: (...args: Args) => string
-): MacroFragment<Record<string, unknown>> {
-  return macroOnly("defineFragment");
-}
-
-export function fragment(_strings: TemplateStringsArray, ..._values: unknown[]): string {
-  return macroOnly("fragment");
-}
-
 export const defineName = (_name: string): void => {
   macroOnly("defineName");
 };

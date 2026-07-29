@@ -100,8 +100,8 @@ describe("development DevTools hook", () => {
     const root = document.createElement("section");
     const child = document.createElement("span");
     root.appendChild(child);
-    attachDevtoolsTemplateNode(root, "src/Card.ts", "", 3, 1, 5, 1);
-    attachDevtoolsTemplateNode(child, "src/Card.ts", "CardBody", 4, 3, 4, 16);
+    attachDevtoolsTemplateNode(root, "src/Card.ts", 3, 1, 5, 1);
+    attachDevtoolsTemplateNode(child, "src/Card.ts", 4, 3, 4, 16);
 
     const clone = cloneDevtoolsTemplateTree(root);
 
@@ -109,8 +109,7 @@ describe("development DevTools hook", () => {
       templateNodeId: "src/Card.ts:component:section:3:1"
     });
     expect((clone.firstElementChild as unknown as Record<symbol, unknown>)[key]).toMatchObject({
-      templateNodeId: "src/Card.ts:CardBody:span:4:3",
-      fragment: "CardBody"
+      templateNodeId: "src/Card.ts:component:span:4:3"
     });
   });
 });

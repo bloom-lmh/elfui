@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { useRef } from "@elfui/reactivity";
 
 import {
-  createFragmentProps,
   createRenderState,
   extendRenderState,
   readTemplateValue,
@@ -60,41 +59,5 @@ describe("render state facade", () => {
 
     writeTemplateValue(child, "item", item.value, "updated");
     expect(item.value.value).toBe("updated");
-  });
-
-  it("keeps Fragment prop sources lazy and applies later-source precedence", () => {
-    const label = useRef("first");
-    const spread = useRef<Record<string, unknown>>({ label: "spread", count: 1 });
-    const props = createFragmentProps([
-      () => ({ label: label.value }),
-      () => spread.value,
-      () => ({ count: 2 })
-    ]);
-
-    expect(props.label).toBe("spread");
-    expect(props.count).toBe(2);
-    expect(Object.keys(props)).toEqual(["label", "count"]);
-
-    label.set("ignored");
-    spread.set({ other: true });
-
-    expect(props.label).toBe("ignored");
-    expect(props.count).toBe(2);
-    expect(props.other).toBe(true);
-  });
-
-  it("uses Fragment defaults for missing and explicitly undefined props", () => {
-    const compact = useRef<unknown>(undefined);
-    const props = createFragmentProps(
-      [() => ({ compact: compact.value })],
-      [() => ({ compact: false, tone: "neutral" })]
-    );
-
-    expect(props.compact).toBe(false);
-    expect(props.tone).toBe("neutral");
-    expect(Object.keys(props)).toEqual(["compact", "tone"]);
-
-    compact.set(true);
-    expect(props.compact).toBe(true);
   });
 });

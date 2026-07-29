@@ -97,18 +97,14 @@ describe("macro component DevTools source metadata", () => {
     });
   });
 
-  it("emits development-only source markers for component and Fragment DOM nodes", () => {
+  it("emits development-only source markers for component DOM nodes", () => {
     const result = compileMacroComponent(
-      `import { defineFragment, defineHtml } from "@elfui/core";
-
-const Badge = defineFragment(() => \`
-  <span class="badge">badge</span>
-\`);
+      `import { defineHtml } from "@elfui/core";
 
 export const Card = defineHtml(\`
   <article>
     <header><h2>Title</h2></header>
-    <main><Badge /></main>
+    <main><span class="badge">badge</span></main>
     <footer><button>Save</button></footer>
     <aside><b>1</b><b>2</b><b>3</b><b>4</b><b>5</b></aside>
   </article>
@@ -123,8 +119,7 @@ export const Card = defineHtml(\`
     expect(result.diagnostics).toEqual([]);
     expect(result.code).toContain("attachDevtoolsTemplateNode");
     expect(result.code).toContain("cloneDevtoolsTemplateTree");
-    expect(result.code).toContain('attachDevtoolsTemplateNode(_el0, "src/Card.ts", "", 8, 3');
-    expect(result.code).toContain('"src/Card.ts", "Badge", 4, 3');
+    expect(result.code).toContain('"src/Card.ts", 4, 3');
     expect(result.code).toContain('if (typeof __DEV__ === "undefined" || __DEV__)');
   });
 

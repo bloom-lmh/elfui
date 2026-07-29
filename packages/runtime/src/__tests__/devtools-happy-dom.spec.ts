@@ -19,8 +19,8 @@ describe("DevTools metadata in happy-dom", () => {
         const option = document.createElement("option");
         option.textContent = "Ready";
         select.append(option);
-        attachDevtoolsTemplateNode(select, "src/HappySelect.ts", "", 2, 3, 4, 12);
-        attachDevtoolsTemplateNode(option, "src/HappySelect.ts", "", 3, 5, 3, 28);
+        attachDevtoolsTemplateNode(select, "src/HappySelect.ts", 2, 3, 4, 12);
+        attachDevtoolsTemplateNode(option, "src/HappySelect.ts", 3, 5, 3, 28);
         return select;
       }
     });
@@ -37,7 +37,7 @@ describe("DevTools metadata in happy-dom", () => {
       const element = document.createElement(tag);
 
       expect(() =>
-        attachDevtoolsTemplateNode(element, "src/NativeControls.ts", "", 3, 5, 3, 20)
+        attachDevtoolsTemplateNode(element, "src/NativeControls.ts", 3, 5, 3, 20)
       ).not.toThrow();
       expect(getDevtoolsTemplateNode(element)).toMatchObject({
         sourceId: "src/NativeControls.ts",
@@ -56,8 +56,8 @@ describe("DevTools metadata in happy-dom", () => {
     const select = document.createElement("select");
     const option = document.createElement("option");
     select.append(option);
-    attachDevtoolsTemplateNode(select, "src/Select.ts", "", 2, 1, 5, 10);
-    attachDevtoolsTemplateNode(option, "src/Select.ts", "Options", 3, 3, 3, 18);
+    attachDevtoolsTemplateNode(select, "src/Select.ts", 2, 1, 5, 10);
+    attachDevtoolsTemplateNode(option, "src/Select.ts", 3, 3, 3, 18);
 
     const clone = cloneDevtoolsTemplateTree(select);
 
@@ -65,7 +65,7 @@ describe("DevTools metadata in happy-dom", () => {
       "src/Select.ts:component:select:2:1"
     );
     expect(getDevtoolsTemplateNode(clone.firstElementChild!)?.templateNodeId).toBe(
-      "src/Select.ts:Options:option:3:3"
+      "src/Select.ts:component:option:3:3"
     );
   });
 });

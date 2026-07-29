@@ -73,7 +73,6 @@ export interface ElfUIDevtoolsSourceLocation {
 export interface ElfUIDevtoolsTemplateNodeInfo {
   sourceId: string;
   templateNodeId: string;
-  fragment?: string;
   source: ElfUIDevtoolsSourceLocation;
 }
 
@@ -150,19 +149,16 @@ export const getDevtoolsTemplateNode = (node: Node): ElfUIDevtoolsTemplateNodeIn
 export const attachDevtoolsTemplateNode = (
   node: Node,
   sourceId: string,
-  fragment: string,
   line: number,
   column: number,
   endLine: number,
   endColumn: number
 ): void => {
   if (!__DEV__) return;
-  const owner = fragment || "component";
   const tag = node instanceof Element ? node.localName : node.nodeName.toLowerCase();
   const info: ElfUIDevtoolsTemplateNodeInfo = {
     sourceId,
-    templateNodeId: `${sourceId}:${owner}:${tag}:${line}:${column}`,
-    ...(fragment ? { fragment } : {}),
+    templateNodeId: `${sourceId}:component:${tag}:${line}:${column}`,
     source: { file: sourceId, line, column, endLine, endColumn }
   };
   setDevtoolsTemplateNode(node, info);

@@ -19,8 +19,6 @@ const scriptFileRE = /\.[cm]?[jt]sx?(?:\?.*)?$/;
 const pragmaCommentRE = /^\/\/\/[ \t]*<!--[ \t]*@elf[ \t]+component[ \t]*-->[ \t]*$/;
 const macroImportNames = new Set([
   "defineHtml",
-  "defineFragment",
-  "fragment",
   "defineName",
   "defineOptions",
   "defineProps",
