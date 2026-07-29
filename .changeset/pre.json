@@ -29,6 +29,7 @@
     "portable-template-refs",
     "quiet-dev-boundary",
     "reliable-resource-teardown",
+    "remove-template-fragments",
     "robust-interpolation-parser",
     "safe-ssr-registration",
     "sharp-template-inspector",
