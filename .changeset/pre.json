@@ -29,6 +29,7 @@
     "local-template-fragments",
     "package-metadata",
     "portable-template-refs",
+    "quick-template-diagnostics",
     "quiet-dev-boundary",
     "reliable-resource-teardown",
     "remove-template-fragments",

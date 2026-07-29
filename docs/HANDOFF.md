@@ -121,8 +121,9 @@ pnpm verify:release
 
 ## Current Maintenance Cycle
 
-Beta.21 incremental macro template diagnostics are implemented, fully verified, and synchronized
-to Gitee and GitHub. The completed implementation plan is
+Beta.21 incremental macro template diagnostics are implemented and versioned for release. The
+implementation commits are synchronized to Gitee and GitHub; the `v0.1.0-beta.21` release workflow
+is pending. The completed implementation plan is
 `docs/plan/2026-07-29-v0.1.0-beta.21-incremental-template-diagnostics-plan.md`.
 
 - The compiler now reuses a four-entry LRU of compatible TypeScript programs and requests
@@ -139,3 +140,5 @@ to Gitee and GitHub. The completed implementation plan is
 - `.changeset/quick-template-diagnostics.md` is ready. Beta.21 npm publication is pending a
   separate release action; no package was published during this maintenance cycle.
 - Implementation commit: `27d5b41`; pushed to Gitee and GitHub `main`.
+- Release version: all seven packages are `0.1.0-beta.21`; the synchronized changeset was consumed
+  by prerelease versioning.
