@@ -121,9 +121,9 @@ pnpm verify:release
 
 ## Current Maintenance Cycle
 
-Beta.21 incremental macro template diagnostics are implemented and versioned for release. The
-implementation commits are synchronized to Gitee and GitHub; the `v0.1.0-beta.21` release workflow
-is pending. The completed implementation plan is
+Beta.21 incremental macro template diagnostics are implemented and released. The implementation
+and release commits, plus the `v0.1.0-beta.21` tag, are synchronized to Gitee and GitHub. The
+completed implementation plan is
 `docs/plan/2026-07-29-v0.1.0-beta.21-incremental-template-diagnostics-plan.md`.
 
 - The compiler now reuses a four-entry LRU of compatible TypeScript programs and requests
@@ -137,8 +137,9 @@ is pending. The completed implementation plan is
   aggregate.
 - `pnpm verify` passed with 52 files and 618 tests. Size, Chromium performance, integration,
   package-surface, and seven-package publish dry-run gates also passed.
-- `.changeset/quick-template-diagnostics.md` is ready. Beta.21 npm publication is pending a
-  separate release action; no package was published during this maintenance cycle.
+- Release workflow `30462473620` passed the complete Linux `verify:release` gate and published all
+  seven `0.1.0-beta.21` packages through npm Trusted Publishing.
 - Implementation commit: `27d5b41`; pushed to Gitee and GitHub `main`.
-- Release version: all seven packages are `0.1.0-beta.21`; the synchronized changeset was consumed
-  by prerelease versioning.
+- Release commit: `5c918a7`; tag `v0.1.0-beta.21`; pushed to Gitee and GitHub.
+- GitHub prerelease: `https://github.com/bloom-lmh/elfui/releases/tag/v0.1.0-beta.21`.
+- Language Tools `0.4.2` now pins the published `@elfui/compiler@0.1.0-beta.21`.
