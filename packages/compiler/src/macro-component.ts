@@ -123,6 +123,8 @@ const macroNames = new Set([
 
 const moduleSideEffectCalls = new Set(["globalStyle", "theme", "usePlugin"]);
 const moduleLevelDeclarationCalls = new Set(["useExtend", "useVariant"]);
+const templateTypeCheckProgramCache = new Map<string, ts.Program>();
+const templateTypeCheckProgramCacheLimit = 4;
 
 export interface MacroComponentCompileOptions {
   filename?: string;
@@ -2302,8 +2304,39 @@ const typeCheckVirtualTemplate = (
       return ts.resolveModuleName(moduleName, containingFile, compilerOptions, host).resolvedModule;
     });
 
-  const program = ts.createProgram([globalsFileName, fileName], compilerOptions, host);
-  return ts.getPreEmitDiagnostics(program);
+  const cacheKey = `${workspaceRoot}\0${state.macroImport}`;
+  const previousProgram = templateTypeCheckProgramCache.get(cacheKey);
+  const program = ts.createProgram({
+    rootNames: [globalsFileName, fileName],
+    options: compilerOptions,
+    host,
+    ...(previousProgram ? { oldProgram: previousProgram } : {})
+  });
+
+  touchTemplateTypeCheckProgram(cacheKey, program);
+  const sourceFile = program.getSourceFile(fileName);
+
+  if (!sourceFile) {
+    return ts.getPreEmitDiagnostics(program);
+  }
+
+  return [
+    ...program.getSyntacticDiagnostics(sourceFile),
+    ...program.getSemanticDiagnostics(sourceFile)
+  ];
+};
+
+const touchTemplateTypeCheckProgram = (cacheKey: string, program: ts.Program): void => {
+  templateTypeCheckProgramCache.delete(cacheKey);
+  templateTypeCheckProgramCache.set(cacheKey, program);
+
+  if (templateTypeCheckProgramCache.size > templateTypeCheckProgramCacheLimit) {
+    const oldestKey = templateTypeCheckProgramCache.keys().next().value;
+
+    if (oldestKey !== undefined) {
+      templateTypeCheckProgramCache.delete(oldestKey);
+    }
+  }
 };
 
 const readTypeScriptLibFile = (fileName: string): string | undefined => {

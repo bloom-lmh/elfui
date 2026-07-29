@@ -34,6 +34,7 @@
     "benchmark:browser": "npm run build && node scripts/benchmark-browser.mjs --report=output/BROWSER-BENCHMARK.md",
     "benchmark:generated": "npm run build && node scripts/benchmark-generated-code.mjs --report=output/GENERATED-CODE-BENCHMARK.md",
     "benchmark:macro": "pnpm build && node scripts/benchmark-macro-transform.mjs --report=output/MACRO-TRANSFORM-BENCHMARK.md",
+    "benchmark:macro-diagnostics": "pnpm --filter @elfui/compiler build && node scripts/benchmark-macro-diagnostics.mjs",
     "benchmark:list": "npm run build && node scripts/benchmark-list.mjs",
     "verify:dist-boundary": "node scripts/check-dist-boundary.mjs",
     "verify:generated-code": "node scripts/benchmark-generated-code.mjs --check",

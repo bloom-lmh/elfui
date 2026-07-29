@@ -118,3 +118,23 @@ pnpm verify:package-surface
 pnpm verify:publish:artifacts
 pnpm verify:release
 ```
+
+## Current Maintenance Cycle
+
+Beta.21 incremental macro template diagnostics are implemented and fully verified; commit and
+remote synchronization are pending. The completed implementation plan is
+`docs/plan/2026-07-29-v0.1.0-beta.21-incremental-template-diagnostics-plan.md`.
+
+- The compiler now reuses a four-entry LRU of compatible TypeScript programs and requests
+  diagnostics only for the generated template source file.
+- Imported-file errors can no longer be projected onto unrelated template expressions that happen
+  to share a generated line number.
+- Direct Kit compiler diagnostics improved from 73.32/78.40 seconds cold/second pass to
+  55.97/58.73 seconds, a 23.7%/25.1% reduction.
+- Corrected Language Tools cold diagnostics improved from 59.06 seconds with npm beta.20 to
+  51.92 seconds with the local compiler, a 12.1% reduction; unchanged repeats remain 3.9 ms
+  aggregate.
+- `pnpm verify` passed with 52 files and 618 tests. Size, Chromium performance, integration,
+  package-surface, and seven-package publish dry-run gates also passed.
+- `.changeset/quick-template-diagnostics.md` is ready. Beta.21 npm publication is pending a
+  separate release action; no package was published during this maintenance cycle.
