@@ -76,7 +76,7 @@
       {
         "name": "MacroCompiledComponent",
         "kind": ["type"],
-        "signature": "type { exportName: string; lazyRegister: boolean; name: string; template: string }"
+        "signature": "type { exportName: \"default\" | string; lazyRegister: boolean; name: string; template: string }"
       },
       {
         "name": "MacroComponentCompileOptions",
@@ -106,7 +106,7 @@
       {
         "name": "MacroExportedComponentMetadata",
         "kind": ["type"],
-        "signature": "type { emitNames: string[]; emitsType: string; events: MacroEventMetadata[]; exportName: string; expose: string[]; localName?: string; models: MacroModelMetadata[]; name: string; options: Record<string, string>; propNames: string[]; props: MacroPropMetadata[]; propsType: string; runtimePropOptions: Record<string, string>; slots: MacroSlotsMetadata; slotsType: string; source: MacroSourceRange; tagName: string }"
+        "signature": "type { emitNames: string[]; emitsType: string; events: MacroEventMetadata[]; exportName: \"default\" | string; expose: string[]; localName?: string; models: MacroModelMetadata[]; name: string; options: Record<string, string>; propNames: string[]; props: MacroPropMetadata[]; propsType: string; runtimePropOptions: Record<string, string>; slots: MacroSlotsMetadata; slotsType: string; source: MacroSourceRange; tagName: string }"
       },
       {
         "name": "MacroLocalComponentMetadata",
@@ -158,7 +158,7 @@
       {
         "name": "AttributeNode",
         "kind": ["type"],
-        "signature": "type { loc: SourceLoc; name: string; nameLoc: SourceLoc; quote?: \"\\\"\" | \"'\" | undefined; type: \"ATTRIBUTE\"; value: string | true; valueLoc?: SourceLoc | undefined }"
+        "signature": "type { loc: SourceLoc; name: string; nameLoc: SourceLoc; quote?: '\"' | \"'\" | undefined; type: typeof AttrTypes.ATTRIBUTE; value: string | true; valueLoc?: SourceLoc | undefined }"
       },
       {
         "name": "AttrType",
@@ -173,22 +173,22 @@
       {
         "name": "CommentNode",
         "kind": ["type"],
-        "signature": "type { content: string; loc: SourceLoc; type: \"COMMENT\" }"
+        "signature": "type { content: string; loc: SourceLoc; type: typeof NodeTypes.COMMENT }"
       },
       {
         "name": "DirectiveNode",
         "kind": ["type"],
-        "signature": "type { arg?: string | undefined; argDynamic?: string | undefined; argLoc?: SourceLoc | undefined; exp: string; expLoc?: SourceLoc | undefined; loc: SourceLoc; modifiers: string[]; name: string; rawName: string; type: \"DIRECTIVE\" }"
+        "signature": "type { arg?: string | undefined; argDynamic?: string | undefined; argLoc?: SourceLoc | undefined; exp: string; expLoc?: SourceLoc | undefined; loc: SourceLoc; modifiers: string[]; name: string; rawName: string; type: typeof AttrTypes.DIRECTIVE }"
       },
       {
         "name": "ElementNode",
         "kind": ["type"],
-        "signature": "type { children: TemplateChildNode[]; isSelfClosing: boolean; loc: SourceLoc; props: PropNode[]; tag: string; type: \"ELEMENT\" }"
+        "signature": "type { children: TemplateChildNode[]; isSelfClosing: boolean; loc: SourceLoc; props: PropNode[]; tag: string; type: typeof NodeTypes.ELEMENT }"
       },
       {
         "name": "InterpolationNode",
         "kind": ["type"],
-        "signature": "type { content: string; contentLoc: SourceLoc; loc: SourceLoc; type: \"INTERPOLATION\" }"
+        "signature": "type { content: string; contentLoc: SourceLoc; loc: SourceLoc; type: typeof NodeTypes.INTERPOLATION }"
       },
       {
         "name": "NodeType",
@@ -223,7 +223,7 @@
       {
         "name": "RootNode",
         "kind": ["type"],
-        "signature": "type { children: TemplateChildNode[]; loc: SourceLoc; source: string; type: \"ROOT\" }"
+        "signature": "type { children: TemplateChildNode[]; loc: SourceLoc; source: string; type: typeof NodeTypes.ROOT }"
       },
       {
         "name": "SourceLoc",
@@ -243,7 +243,7 @@
       {
         "name": "TextNode",
         "kind": ["type"],
-        "signature": "type { content: string; loc: SourceLoc; type: \"TEXT\" }"
+        "signature": "type { content: string; loc: SourceLoc; type: typeof NodeTypes.TEXT }"
       }
     ],
     "@elfui/compiler/compile": [
@@ -297,7 +297,7 @@
       {
         "name": "MacroCompiledComponent",
         "kind": ["type"],
-        "signature": "type { exportName: string; lazyRegister: boolean; name: string; template: string }"
+        "signature": "type { exportName: \"default\" | string; lazyRegister: boolean; name: string; template: string }"
       },
       {
         "name": "MacroComponentCompileOptions",
@@ -327,7 +327,7 @@
       {
         "name": "MacroExportedComponentMetadata",
         "kind": ["type"],
-        "signature": "type { emitNames: string[]; emitsType: string; events: MacroEventMetadata[]; exportName: string; expose: string[]; localName?: string; models: MacroModelMetadata[]; name: string; options: Record<string, string>; propNames: string[]; props: MacroPropMetadata[]; propsType: string; runtimePropOptions: Record<string, string>; slots: MacroSlotsMetadata; slotsType: string; source: MacroSourceRange; tagName: string }"
+        "signature": "type { emitNames: string[]; emitsType: string; events: MacroEventMetadata[]; exportName: \"default\" | string; expose: string[]; localName?: string; models: MacroModelMetadata[]; name: string; options: Record<string, string>; propNames: string[]; props: MacroPropMetadata[]; propsType: string; runtimePropOptions: Record<string, string>; slots: MacroSlotsMetadata; slotsType: string; source: MacroSourceRange; tagName: string }"
       },
       {
         "name": "MacroLocalComponentMetadata",
@@ -461,7 +461,7 @@
       {
         "name": "ComponentDefinition",
         "kind": ["type"],
-        "signature": "type { components?: Record<string, string | CustomElementConstructor>; directives?: Record<string, unknown>; emitOptions?: EmitOptions; emits?: string[]; formControl?: boolean | FormControlOptions<any>; props?: PropsOptions; render?: RenderFn; setup?: SetupFn; shadow?: false | \"open\" | \"closed\"; styles?: string[]; tag: string }"
+        "signature": "type { components?: Record<string, string | CustomElementConstructor>; directives?: Record<string, unknown>; emitOptions?: EmitOptions; emits?: string[]; formControl?: boolean | FormControlOptions<any>; props?: PropsOptions; render?: RenderFn; setup?: SetupFn; shadow?: \"open\" | \"closed\" | false; styles?: string[]; tag: string }"
       },
       {
         "name": "ComponentEmitMap",
@@ -481,7 +481,7 @@
       {
         "name": "Computed",
         "kind": ["type"],
-        "signature": "type<T> { peek: () => T; readonly __@READONLY_FLAG@1566: false; readonly __@REF_FLAG@1024: true; readonly __@STATE_FLAG@1026: true; readonly dirty: boolean; set: (value: T) => void; value: T }"
+        "signature": "type<T> { peek: () => T; readonly [READONLY_FLAG]: false; readonly [REF_FLAG]: true; readonly [STATE_FLAG]: true; readonly dirty: boolean; set: (value: T) => void; value: T }"
       },
       {
         "name": "ComputedSource",
@@ -516,7 +516,7 @@
       {
         "name": "DefineComponentOptions",
         "kind": ["type"],
-        "signature": "type<Props extends object = Record<string, unknown>, Emits extends EmitMap = EmitMap, Slots extends SlotsMap = SlotsMap> { components?: Record<string, string | CustomElementConstructor> | undefined; directives?: Record<string, unknown> | undefined; emitOptions?: EmitOptions; emits?: readonly (keyof Emits & string)[]; formControl?: boolean | import(\"E:/dev_projects/elfui-official/elfui/packages/runtime/src/form-control\").FormControlOptions<any> | undefined; name?: string; props?: PropsOptions; register?: boolean; render?: RenderFn; setup?: TypedSetup<Props, Emits, Slots>; shadow?: false | \"open\" | \"closed\"; styles?: string[]; tag?: string; template?: string }"
+        "signature": "type<Props extends object = Record<string, unknown>, Emits extends EmitMap = EmitMap, Slots extends SlotsMap = SlotsMap> { components?: ComponentDefinition[\"components\"]; directives?: ComponentDefinition[\"directives\"]; emitOptions?: EmitOptions; emits?: ReadonlyArray<keyof Emits & string>; formControl?: ComponentDefinition[\"formControl\"]; name?: string; props?: PropsOptions; register?: boolean; render?: RenderFn; setup?: TypedSetup<Props, Emits, Slots>; shadow?: \"open\" | \"closed\" | false; styles?: string[]; tag?: string; template?: string }"
       },
       {
         "name": "defineCustomElement",
@@ -626,7 +626,7 @@
       {
         "name": "EffectScope",
         "kind": ["type", "value"],
-        "signature": "value new (detached?: boolean) => EffectScope ; type { active: boolean; cleanups: EffectScopeCleanup[]; effects: ReactiveEffect<unknown>[]; parent: EffectScope | undefined; run: <T>(fn: () => T) => T | undefined; scopes: EffectScope[]; setIndex: (index: number) => void; stop: (fromParent?: boolean) => void }"
+        "signature": "value new (detached?: boolean) => EffectScope ; type { active: boolean; cleanups: EffectScopeCleanup[]; effects: ReactiveEffect[]; parent: EffectScope | undefined; run: <T>(fn: () => T) => T | undefined; scopes: EffectScope[]; setIndex: (index: number) => void; stop: (fromParent?: boolean) => void }"
       },
       {
         "name": "EffectScopeCleanup",
@@ -636,7 +636,7 @@
       {
         "name": "EffectStopHandle",
         "kind": ["type"],
-        "signature": "type { effect: ReactiveEffect<unknown>; call () => void }"
+        "signature": "type { effect: ReactiveEffect; call () => void }"
       },
       {
         "name": "ElementRefLike",
@@ -651,7 +651,7 @@
       {
         "name": "ElfUIApp",
         "kind": ["type"],
-        "signature": "type<RootComponent extends ElfElementConstructor = ElfElementConstructor> { component: (component: ElfElementConstructor) => ElfUIApp<RootComponent>; directive: (name: string, definition: DirectiveDefinition) => ElfUIApp<RootComponent>; mount: (target: AppMountTarget) => InstanceType<RootComponent>; provide: <T>(key: AppProvideKey<T>, value: T) => ElfUIApp<RootComponent>; readonly config: ElfUIConfig; unmount: () => void; use: <T>(plugin: ElfUIAppPlugin<T>, options?: T | undefined) => ElfUIApp<RootComponent> }"
+        "signature": "type<RootComponent extends ElfElementConstructor = ElfElementConstructor> { component: (component: ElfElementConstructor) => ElfUIApp<RootComponent>; directive: (name: string, definition: DirectiveDefinition) => ElfUIApp<RootComponent>; mount: (target: AppMountTarget) => InstanceType<RootComponent>; provide: <T>(key: AppProvideKey<T>, value: T) => ElfUIApp<RootComponent>; readonly config: ElfUIAppConfig; unmount: () => void; use: <T>(plugin: ElfUIAppPlugin<T>, options?: T | undefined) => ElfUIApp<RootComponent> }"
       },
       {
         "name": "ElfUIAppConfig",
@@ -856,7 +856,7 @@
       {
         "name": "MacroComponentOptions",
         "kind": ["type"],
-        "signature": "type { components?: Record<string, string | CustomElementConstructor> | undefined; emitOptions?: EmitOptions; formControl?: boolean | import(\"E:/dev_projects/elfui-official/elfui/packages/runtime/src/form-control\").FormControlOptions<any> | undefined; register?: boolean; shadow?: false | \"open\" | \"closed\" | undefined }"
+        "signature": "type { components?: ComponentDefinition[\"components\"]; emitOptions?: EmitOptions; formControl?: ComponentDefinition[\"formControl\"]; register?: boolean; shadow?: ComponentDefinition[\"shadow\"] }"
       },
       {
         "name": "MacroEmitArgs",
@@ -1047,17 +1047,17 @@
       {
         "name": "ReadonlyComputed",
         "kind": ["type"],
-        "signature": "type<T> { peek: () => T; readonly __@READONLY_FLAG@1566: true; readonly __@REF_FLAG@1024: true; readonly __@STATE_FLAG@1026: true; readonly dirty: boolean; readonly value: T }"
+        "signature": "type<T> { peek: () => T; readonly [READONLY_FLAG]: true; readonly [REF_FLAG]: true; readonly [STATE_FLAG]: true; readonly dirty: boolean; readonly value: T }"
       },
       {
         "name": "ReadonlyRef",
         "kind": ["type"],
-        "signature": "type<T> { peek: () => T; readonly __@REF_FLAG@1024: true; readonly __@STATE_FLAG@1026: true; readonly value: T }"
+        "signature": "type<T> { peek: () => T; readonly [REF_FLAG]: true; readonly [STATE_FLAG]: true; readonly value: T }"
       },
       {
         "name": "Ref",
         "kind": ["type"],
-        "signature": "type<T> { peek: () => T; readonly __@REF_FLAG@1024: true; readonly __@STATE_FLAG@1026: true; set: (value: T) => void; value: T }"
+        "signature": "type<T> { peek: () => T; readonly [REF_FLAG]: true; readonly [STATE_FLAG]: true; set: (value: T) => void; value: T }"
       },
       {
         "name": "registerComponents",
@@ -1067,7 +1067,7 @@
       {
         "name": "RenderContext",
         "kind": ["type"],
-        "signature": "type { components?: Record<string, string | CustomElementConstructor> | undefined; directives?: Record<string, unknown>; emit: (event: string, ...args: unknown[]) => boolean; host: HTMLElement; props: Record<string, unknown>; shadow: ShadowRoot | null; state: Record<string, unknown> }"
+        "signature": "type { components?: ComponentDefinition[\"components\"]; directives?: Record<string, unknown>; emit: (event: string, ...args: unknown[]) => boolean; host: HTMLElement; props: Record<string, unknown>; shadow: ShadowRoot | null; state: Record<string, unknown> }"
       },
       {
         "name": "RenderFn",
@@ -1097,7 +1097,7 @@
       {
         "name": "SetupContext",
         "kind": ["type"],
-        "signature": "type { attrs: Readonly<Record<string, string>>; config: Readonly<ElfUIConfig>; emit: (event: string, ...args: unknown[]) => boolean; form?: FormControlContext<unknown>; host: HTMLElement; shadow: ShadowRoot | null }"
+        "signature": "type { attrs: Readonly<Record<string, string>>; config: Readonly<ElfUIConfig>; emit: (event: string, ...args: unknown[]) => boolean; form?: FormControlContext; host: HTMLElement; shadow: ShadowRoot | null }"
       },
       {
         "name": "SetupFn",
@@ -1182,7 +1182,7 @@
       {
         "name": "TransitionOptions",
         "kind": ["type"],
-        "signature": "type { appear?: boolean; css?: boolean; duration?: number | { enter: number; leave: number; }; name?: string; onAfterEnter?: (el: Element) => void; onAfterLeave?: (el: Element) => void; onBeforeEnter?: (el: Element) => void; onBeforeLeave?: (el: Element) => void; onEnter?: (el: Element, done: () => void) => void; onLeave?: (el: Element, done: () => void) => void }"
+        "signature": "type { appear?: boolean; css?: boolean; duration?: number | { enter: number; leave: number }; name?: string; onAfterEnter?: (el: Element) => void; onAfterLeave?: (el: Element) => void; onBeforeEnter?: (el: Element) => void; onBeforeLeave?: (el: Element) => void; onEnter?: (el: Element, done: () => void) => void; onLeave?: (el: Element, done: () => void) => void }"
       },
       {
         "name": "unref",
@@ -1222,7 +1222,7 @@
       {
         "name": "UseEffectOptions",
         "kind": ["type"],
-        "signature": "type { debug?: ReactivityEffectDebugInfo; flush?: \"pre\" | \"post\" | \"sync\"; onStop?: () => void }"
+        "signature": "type { debug?: ReactivityEffectDebugInfo; flush?: \"sync\" | \"pre\" | \"post\"; onStop?: () => void }"
       },
       {
         "name": "useEscapeKey",
@@ -1382,7 +1382,7 @@
       {
         "name": "WatchOptions",
         "kind": ["type"],
-        "signature": "type { deep?: boolean; flush?: \"pre\" | \"post\" | \"sync\"; immediate?: boolean; onStop?: () => void }"
+        "signature": "type { deep?: boolean; flush?: \"sync\" | \"pre\" | \"post\"; immediate?: boolean; onStop?: () => void }"
       },
       {
         "name": "WatchSource",
@@ -1474,7 +1474,7 @@
       {
         "name": "ComponentDefinition",
         "kind": ["type"],
-        "signature": "type { components?: Record<string, string | CustomElementConstructor>; directives?: Record<string, unknown>; emitOptions?: EmitOptions; emits?: string[]; formControl?: boolean | FormControlOptions<any>; props?: PropsOptions; render?: RenderFn; setup?: SetupFn; shadow?: false | \"open\" | \"closed\"; styles?: string[]; tag: string }"
+        "signature": "type { components?: Record<string, string | CustomElementConstructor>; directives?: Record<string, unknown>; emitOptions?: EmitOptions; emits?: string[]; formControl?: boolean | FormControlOptions<any>; props?: PropsOptions; render?: RenderFn; setup?: SetupFn; shadow?: \"open\" | \"closed\" | false; styles?: string[]; tag: string }"
       },
       {
         "name": "ComponentInstance",
@@ -1654,7 +1654,7 @@
       {
         "name": "RenderContext",
         "kind": ["type"],
-        "signature": "type { components?: Record<string, string | CustomElementConstructor> | undefined; directives?: Record<string, unknown>; emit: (event: string, ...args: unknown[]) => boolean; host: HTMLElement; props: Record<string, unknown>; shadow: ShadowRoot | null; state: Record<string, unknown> }"
+        "signature": "type { components?: ComponentDefinition[\"components\"]; directives?: Record<string, unknown>; emit: (event: string, ...args: unknown[]) => boolean; host: HTMLElement; props: Record<string, unknown>; shadow: ShadowRoot | null; state: Record<string, unknown> }"
       },
       {
         "name": "RenderFn",
@@ -1774,7 +1774,7 @@
       {
         "name": "TransitionOptions",
         "kind": ["type"],
-        "signature": "type { appear?: boolean; css?: boolean; duration?: number | { enter: number; leave: number; }; name?: string; onAfterEnter?: (el: Element) => void; onAfterLeave?: (el: Element) => void; onBeforeEnter?: (el: Element) => void; onBeforeLeave?: (el: Element) => void; onEnter?: (el: Element, done: () => void) => void; onLeave?: (el: Element, done: () => void) => void }"
+        "signature": "type { appear?: boolean; css?: boolean; duration?: number | { enter: number; leave: number }; name?: string; onAfterEnter?: (el: Element) => void; onAfterLeave?: (el: Element) => void; onBeforeEnter?: (el: Element) => void; onBeforeLeave?: (el: Element) => void; onEnter?: (el: Element, done: () => void) => void; onLeave?: (el: Element, done: () => void) => void }"
       },
       {
         "name": "unwrapStateAccess",
@@ -1801,7 +1801,7 @@
       {
         "name": "Computed",
         "kind": ["type"],
-        "signature": "type<T> { peek: () => T; readonly __@READONLY_FLAG@1566: false; readonly __@REF_FLAG@1024: true; readonly __@STATE_FLAG@1026: true; readonly dirty: boolean; set: (value: T) => void; value: T }"
+        "signature": "type<T> { peek: () => T; readonly [READONLY_FLAG]: false; readonly [REF_FLAG]: true; readonly [STATE_FLAG]: true; readonly dirty: boolean; set: (value: T) => void; value: T }"
       },
       {
         "name": "ComputedGetterSetter",
@@ -1846,7 +1846,7 @@
       {
         "name": "EffectScope",
         "kind": ["type", "value"],
-        "signature": "value new (detached?: boolean) => EffectScope ; type { active: boolean; cleanups: EffectScopeCleanup[]; effects: ReactiveEffect<unknown>[]; parent: EffectScope | undefined; run: <T>(fn: () => T) => T | undefined; scopes: EffectScope[]; setIndex: (index: number) => void; stop: (fromParent?: boolean) => void }"
+        "signature": "value new (detached?: boolean) => EffectScope ; type { active: boolean; cleanups: EffectScopeCleanup[]; effects: ReactiveEffect[]; parent: EffectScope | undefined; run: <T>(fn: () => T) => T | undefined; scopes: EffectScope[]; setIndex: (index: number) => void; stop: (fromParent?: boolean) => void }"
       },
       {
         "name": "EffectScopeCleanup",
@@ -1856,7 +1856,7 @@
       {
         "name": "EffectStopHandle",
         "kind": ["type"],
-        "signature": "type { effect: ReactiveEffect<unknown>; call () => void }"
+        "signature": "type { effect: ReactiveEffect; call () => void }"
       },
       {
         "name": "flushSync",
@@ -1966,7 +1966,7 @@
       {
         "name": "ReactivityEffectDebugInfo",
         "kind": ["type"],
-        "signature": "type { kind: string; name?: string; source?: { line: number; column: number; } }"
+        "signature": "type { kind: \"binding\" | \"computed\" | \"watch\" | \"effect\" | string; name?: string; source?: { line: number; column: number } }"
       },
       {
         "name": "readonly",
@@ -1976,12 +1976,12 @@
       {
         "name": "ReadonlyComputed",
         "kind": ["type"],
-        "signature": "type<T> { peek: () => T; readonly __@READONLY_FLAG@1566: true; readonly __@REF_FLAG@1024: true; readonly __@STATE_FLAG@1026: true; readonly dirty: boolean; readonly value: T }"
+        "signature": "type<T> { peek: () => T; readonly [READONLY_FLAG]: true; readonly [REF_FLAG]: true; readonly [STATE_FLAG]: true; readonly dirty: boolean; readonly value: T }"
       },
       {
         "name": "ReadonlyRef",
         "kind": ["type"],
-        "signature": "type<T> { peek: () => T; readonly __@REF_FLAG@1024: true; readonly __@STATE_FLAG@1026: true; readonly value: T }"
+        "signature": "type<T> { peek: () => T; readonly [REF_FLAG]: true; readonly [STATE_FLAG]: true; readonly value: T }"
       },
       {
         "name": "recordEffectScope",
@@ -1991,7 +1991,7 @@
       {
         "name": "Ref",
         "kind": ["type"],
-        "signature": "type<T> { peek: () => T; readonly __@REF_FLAG@1024: true; readonly __@STATE_FLAG@1026: true; set: (value: T) => void; value: T }"
+        "signature": "type<T> { peek: () => T; readonly [REF_FLAG]: true; readonly [STATE_FLAG]: true; set: (value: T) => void; value: T }"
       },
       {
         "name": "REF_FLAG",
@@ -2071,7 +2071,7 @@
       {
         "name": "UseEffectOptions",
         "kind": ["type"],
-        "signature": "type { debug?: ReactivityEffectDebugInfo; flush?: \"pre\" | \"post\" | \"sync\"; onStop?: () => void }"
+        "signature": "type { debug?: ReactivityEffectDebugInfo; flush?: \"sync\" | \"pre\" | \"post\"; onStop?: () => void }"
       },
       {
         "name": "useReactive",
@@ -2116,7 +2116,7 @@
       {
         "name": "WatchOptions",
         "kind": ["type"],
-        "signature": "type { deep?: boolean; flush?: \"pre\" | \"post\" | \"sync\"; immediate?: boolean; onStop?: () => void }"
+        "signature": "type { deep?: boolean; flush?: \"sync\" | \"pre\" | \"post\"; immediate?: boolean; onStop?: () => void }"
       },
       {
         "name": "WatchSource",
@@ -2163,7 +2163,7 @@
       {
         "name": "ComponentDefinition",
         "kind": ["type"],
-        "signature": "type { components?: Record<string, string | CustomElementConstructor>; directives?: Record<string, unknown>; emitOptions?: EmitOptions; emits?: string[]; formControl?: boolean | FormControlOptions<any>; props?: PropsOptions; render?: RenderFn; setup?: SetupFn; shadow?: false | \"open\" | \"closed\"; styles?: string[]; tag: string }"
+        "signature": "type { components?: Record<string, string | CustomElementConstructor>; directives?: Record<string, unknown>; emitOptions?: EmitOptions; emits?: string[]; formControl?: boolean | FormControlOptions<any>; props?: PropsOptions; render?: RenderFn; setup?: SetupFn; shadow?: \"open\" | \"closed\" | false; styles?: string[]; tag: string }"
       },
       {
         "name": "ComponentEmitMap",
@@ -2203,7 +2203,7 @@
       {
         "name": "DefineComponentOptions",
         "kind": ["type"],
-        "signature": "type<Props extends object = Record<string, unknown>, Emits extends EmitMap = EmitMap, Slots extends SlotsMap = SlotsMap> { components?: Record<string, string | CustomElementConstructor> | undefined; directives?: Record<string, unknown> | undefined; emitOptions?: EmitOptions; emits?: readonly (keyof Emits & string)[]; formControl?: boolean | import(\"E:/dev_projects/elfui-official/elfui/packages/runtime/src/form-control\").FormControlOptions<any> | undefined; name?: string; props?: PropsOptions; register?: boolean; render?: RenderFn; setup?: TypedSetup<Props, Emits, Slots>; shadow?: false | \"open\" | \"closed\"; styles?: string[]; tag?: string; template?: string }"
+        "signature": "type<Props extends object = Record<string, unknown>, Emits extends EmitMap = EmitMap, Slots extends SlotsMap = SlotsMap> { components?: ComponentDefinition[\"components\"]; directives?: ComponentDefinition[\"directives\"]; emitOptions?: EmitOptions; emits?: ReadonlyArray<keyof Emits & string>; formControl?: ComponentDefinition[\"formControl\"]; name?: string; props?: PropsOptions; register?: boolean; render?: RenderFn; setup?: TypedSetup<Props, Emits, Slots>; shadow?: \"open\" | \"closed\" | false; styles?: string[]; tag?: string; template?: string }"
       },
       {
         "name": "defineCustomElement",
@@ -2514,7 +2514,7 @@
       {
         "name": "RenderContext",
         "kind": ["type"],
-        "signature": "type { components?: Record<string, string | CustomElementConstructor> | undefined; directives?: Record<string, unknown>; emit: (event: string, ...args: unknown[]) => boolean; host: HTMLElement; props: Record<string, unknown>; shadow: ShadowRoot | null; state: Record<string, unknown> }"
+        "signature": "type { components?: ComponentDefinition[\"components\"]; directives?: Record<string, unknown>; emit: (event: string, ...args: unknown[]) => boolean; host: HTMLElement; props: Record<string, unknown>; shadow: ShadowRoot | null; state: Record<string, unknown> }"
       },
       {
         "name": "RenderFn",
@@ -2559,7 +2559,7 @@
       {
         "name": "SetupContext",
         "kind": ["type"],
-        "signature": "type { attrs: Readonly<Record<string, string>>; config: Readonly<ElfUIConfig>; emit: (event: string, ...args: unknown[]) => boolean; form?: FormControlContext<unknown>; host: HTMLElement; shadow: ShadowRoot | null }"
+        "signature": "type { attrs: Readonly<Record<string, string>>; config: Readonly<ElfUIConfig>; emit: (event: string, ...args: unknown[]) => boolean; form?: FormControlContext; host: HTMLElement; shadow: ShadowRoot | null }"
       },
       {
         "name": "SetupFn",
@@ -2629,7 +2629,7 @@
       {
         "name": "TransitionOptions",
         "kind": ["type"],
-        "signature": "type { appear?: boolean; css?: boolean; duration?: number | { enter: number; leave: number; }; name?: string; onAfterEnter?: (el: Element) => void; onAfterLeave?: (el: Element) => void; onBeforeEnter?: (el: Element) => void; onBeforeLeave?: (el: Element) => void; onEnter?: (el: Element, done: () => void) => void; onLeave?: (el: Element, done: () => void) => void }"
+        "signature": "type { appear?: boolean; css?: boolean; duration?: number | { enter: number; leave: number }; name?: string; onAfterEnter?: (el: Element) => void; onAfterLeave?: (el: Element) => void; onBeforeEnter?: (el: Element) => void; onBeforeLeave?: (el: Element) => void; onEnter?: (el: Element, done: () => void) => void; onLeave?: (el: Element, done: () => void) => void }"
       },
       {
         "name": "useAppConfig",
@@ -2821,7 +2821,7 @@
       {
         "name": "ComponentDefinition",
         "kind": ["type"],
-        "signature": "type { components?: Record<string, string | CustomElementConstructor>; directives?: Record<string, unknown>; emitOptions?: EmitOptions; emits?: string[]; formControl?: boolean | FormControlOptions<any>; props?: PropsOptions; render?: RenderFn; setup?: SetupFn; shadow?: false | \"open\" | \"closed\"; styles?: string[]; tag: string }"
+        "signature": "type { components?: Record<string, string | CustomElementConstructor>; directives?: Record<string, unknown>; emitOptions?: EmitOptions; emits?: string[]; formControl?: boolean | FormControlOptions<any>; props?: PropsOptions; render?: RenderFn; setup?: SetupFn; shadow?: \"open\" | \"closed\" | false; styles?: string[]; tag: string }"
       },
       {
         "name": "ComponentInstance",
@@ -3001,7 +3001,7 @@
       {
         "name": "RenderContext",
         "kind": ["type"],
-        "signature": "type { components?: Record<string, string | CustomElementConstructor> | undefined; directives?: Record<string, unknown>; emit: (event: string, ...args: unknown[]) => boolean; host: HTMLElement; props: Record<string, unknown>; shadow: ShadowRoot | null; state: Record<string, unknown> }"
+        "signature": "type { components?: ComponentDefinition[\"components\"]; directives?: Record<string, unknown>; emit: (event: string, ...args: unknown[]) => boolean; host: HTMLElement; props: Record<string, unknown>; shadow: ShadowRoot | null; state: Record<string, unknown> }"
       },
       {
         "name": "RenderFn",
@@ -3121,7 +3121,7 @@
       {
         "name": "TransitionOptions",
         "kind": ["type"],
-        "signature": "type { appear?: boolean; css?: boolean; duration?: number | { enter: number; leave: number; }; name?: string; onAfterEnter?: (el: Element) => void; onAfterLeave?: (el: Element) => void; onBeforeEnter?: (el: Element) => void; onBeforeLeave?: (el: Element) => void; onEnter?: (el: Element, done: () => void) => void; onLeave?: (el: Element, done: () => void) => void }"
+        "signature": "type { appear?: boolean; css?: boolean; duration?: number | { enter: number; leave: number }; name?: string; onAfterEnter?: (el: Element) => void; onAfterLeave?: (el: Element) => void; onBeforeEnter?: (el: Element) => void; onBeforeLeave?: (el: Element) => void; onEnter?: (el: Element, done: () => void) => void; onLeave?: (el: Element, done: () => void) => void }"
       },
       {
         "name": "unwrapStateAccess",

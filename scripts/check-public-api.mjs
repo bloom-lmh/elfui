@@ -148,14 +148,24 @@ const collectSymbolSignature = (checker, symbol) => {
             property,
             propertyDeclaration ?? declaration
           );
+          const declaredPropertyType =
+            propertyDeclaration &&
+            (ts.isPropertyDeclaration(propertyDeclaration) ||
+              ts.isPropertySignature(propertyDeclaration)) &&
+            propertyDeclaration.type
+              ? propertyDeclaration.type.getText(propertyDeclaration.getSourceFile())
+              : typeText(propertyType, propertyDeclaration ?? declaration);
           const readonly = (property.declarations ?? []).some((item) =>
             hasModifier(item, ts.SyntaxKind.ReadonlyKeyword)
           );
           const optional = (property.flags & ts.SymbolFlags.Optional) !== 0;
-          return `${readonly ? "readonly " : ""}${property.getName()}${optional ? "?" : ""}: ${typeText(
-            propertyType,
-            propertyDeclaration ?? declaration
-          )}`;
+          const propertyName =
+            property.getName().startsWith("__@") &&
+            propertyDeclaration &&
+            "name" in propertyDeclaration
+              ? propertyDeclaration.name.getText(propertyDeclaration.getSourceFile())
+              : property.getName();
+          return `${readonly ? "readonly " : ""}${propertyName}${optional ? "?" : ""}: ${normalizeSignature(declaredPropertyType)}`;
         })
         .sort();
       const calls = declaredType
