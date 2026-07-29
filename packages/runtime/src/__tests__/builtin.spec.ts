@@ -107,6 +107,47 @@ describe("D1 Teleport", () => {
     expect(a.querySelector("p")).toBeNull();
   });
 
+  it("多根内容可禁用、切换目标并随所属作用域清理", async () => {
+    const first = document.createElement("div");
+    const second = document.createElement("div");
+    const host = document.createElement("section");
+    document.body.append(first, second, host);
+    const target = useRef<Element>(first);
+    const disabled = useRef(false);
+    const scope = effectScope();
+    let anchor!: Node;
+
+    scope.run(() => {
+      anchor = teleport(
+        () => target.value,
+        () => disabled.value,
+        () => {
+          const fragment = document.createDocumentFragment();
+          const a = document.createElement("span");
+          const b = document.createElement("span");
+          a.textContent = "a";
+          b.textContent = "b";
+          fragment.append(a, b);
+          return fragment;
+        }
+      );
+    });
+    host.appendChild(anchor);
+    await tick();
+
+    expect(first.textContent).toBe("ab");
+    disabled.value = true;
+    expect(first.textContent).toBe("");
+    expect(host.textContent).toBe("ab");
+    disabled.value = false;
+    target.value = second;
+    expect(host.textContent).toBe("");
+    expect(second.textContent).toBe("ab");
+
+    scope.stop();
+    expect(second.textContent).toBe("");
+  });
+
   it("projectLightDom 移动真实 light DOM 节点并可还原", () => {
     const host = document.createElement("elf-test");
     const body = document.createElement("div");

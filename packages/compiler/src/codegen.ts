@@ -1011,7 +1011,21 @@ const genKeepAlive = (node: ElementNode, ctx: CodegenContext): string => {
 const genDynamic = (node: ElementNode, ctx: CodegenContext): string => {
   use(ctx, "dynamicComponent");
   const getCtor = genDynamicCtorGetter(node, ctx);
-  return `dynamicComponent(${getCtor})`;
+  const elVar = fresh(ctx, "dynamic");
+  const statements: string[] = [];
+  const debug = templateNodeDebug(elVar, node, ctx);
+  if (debug) statements.push(debug);
+  for (const prop of node.props) {
+    if (prop.type === AttrTypes.ATTRIBUTE && prop.name !== "is") {
+      statements.push(genAttribute(elVar, prop, ctx));
+    } else if (prop.type === AttrTypes.DIRECTIVE && !(prop.name === "bind" && prop.arg === "is")) {
+      statements.push(genDirective(elVar, prop, ctx));
+    }
+  }
+  for (const child of node.children) {
+    statements.push(`${elVar}.appendChild(${genNode(child, ctx)})`);
+  }
+  return `dynamicComponent(${getCtor}, (${renderAnyParam(ctx, elVar)}) => { ${statements.join("; ")} })`;
 };
 
 const getSlotName = (node: ElementNode): string | undefined => {
@@ -1080,7 +1094,7 @@ const genSuspense = (node: ElementNode, ctx: CodegenContext): string => {
   ]
     .filter(Boolean)
     .join(", ");
-  return `(() => { const __anchor = mark("suspense"); queueMicrotask(() => suspense(__anchor, ${getSource}, { ${slots} })); return __anchor; })()`;
+  return `(() => { const __anchor = mark("suspense"); suspense(__anchor, ${getSource}, { ${slots} }); return __anchor; })()`;
 };
 
 const wrapTransitionHookStatic = (expr: string, ctx: CodegenContext): string => {

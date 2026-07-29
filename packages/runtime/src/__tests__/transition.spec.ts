@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { useRef } from "@elfui/reactivity";
+import { effectScope, useEffect, useRef } from "@elfui/reactivity";
 
 import { mark } from "../control-flow";
 import { transition } from "../transition";
@@ -132,5 +132,77 @@ describe("D2 Transition", () => {
 
     const p = host.querySelector("p") as HTMLElement;
     expect(p.classList.length).toBe(0);
+  });
+
+  it("后续创建的子树 effect 归 owner scope 管理", () => {
+    const host = document.createElement("section");
+    document.body.appendChild(host);
+    const anchor = mark();
+    host.appendChild(anchor);
+    const owner = effectScope();
+    const show = useRef(false);
+    const label = useRef("a");
+    let reads = 0;
+
+    owner.run(() => {
+      transition(anchor, () => {
+        if (!show.value) return null;
+        const node = document.createElement("p");
+        useEffect(() => {
+          reads++;
+          node.textContent = label.value;
+        });
+        return node;
+      });
+    });
+    show.value = true;
+    label.value = "b";
+    expect(host.querySelector("p")?.textContent).toBe("b");
+    const readsBeforeStop = reads;
+
+    owner.stop();
+    expect(host.querySelector("p")).toBeNull();
+    label.value = "c";
+    expect(reads).toBe(readsBeforeStop);
+  });
+
+  it("leave 完成后停止离开子树的 effect", async () => {
+    const host = document.createElement("section");
+    document.body.appendChild(host);
+    const anchor = mark();
+    host.appendChild(anchor);
+    const show = useRef(true);
+    const label = useRef("a");
+    let done!: () => void;
+    let reads = 0;
+
+    transition(
+      anchor,
+      () => {
+        if (!show.value) return null;
+        const node = document.createElement("p");
+        useEffect(() => {
+          reads++;
+          node.textContent = label.value;
+        });
+        return node;
+      },
+      {
+        css: false,
+        onLeave: (_el, finish) => {
+          done = finish;
+        }
+      }
+    );
+    show.value = false;
+    await frame();
+    label.value = "b";
+    expect(host.querySelector("p")?.textContent).toBe("b");
+
+    done();
+    const readsAfterLeave = reads;
+    expect(host.querySelector("p")).toBeNull();
+    label.value = "c";
+    expect(reads).toBe(readsAfterLeave);
   });
 });

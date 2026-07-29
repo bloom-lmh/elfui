@@ -209,4 +209,38 @@ describe("runtime compile / offline codegen parity", () => {
     expectSameDom(pair.runtimeHost, pair.generatedHost);
     expect(pair.runtimeHost.querySelector("output")?.textContent).toBe("ref-after|field-after");
   });
+
+  it("保持动态组件属性、事件和子节点语义一致", async () => {
+    const createFixture = () => {
+      const tag = useRef("article");
+      const title = useRef("hello");
+      const label = useRef("child");
+      const count = useRef(0);
+      return { state: { tag, title, label, count }, tag, title, label, count };
+    };
+    const pair = mountBoth(
+      '<component :is="tag" :title="title" :data-count="count" @click="count.value = count.value + 1"><span>{{ label }}</span></component>',
+      createFixture
+    );
+    await Promise.resolve();
+
+    expectSameDom(pair.runtimeHost, pair.generatedHost);
+    expect(pair.runtimeHost.querySelector("article")?.title).toBe("hello");
+    expect(pair.runtimeHost.querySelector("article")?.textContent).toBe("child");
+
+    pair.runtimeHost.querySelector("article")?.dispatchEvent(new Event("click"));
+    pair.generatedHost.querySelector("article")?.dispatchEvent(new Event("click"));
+    pair.runtime.title.value = "updated";
+    pair.generated.title.value = "updated";
+    pair.runtime.label.value = "next";
+    pair.generated.label.value = "next";
+    pair.runtime.tag.value = "section";
+    pair.generated.tag.value = "section";
+    await Promise.resolve();
+
+    expectSameDom(pair.runtimeHost, pair.generatedHost);
+    expect(pair.runtimeHost.querySelector("section")?.getAttribute("data-count")).toBe("1");
+    expect(pair.runtimeHost.querySelector("section")?.title).toBe("updated");
+    expect(pair.runtimeHost.querySelector("section")?.textContent).toBe("next");
+  });
 });

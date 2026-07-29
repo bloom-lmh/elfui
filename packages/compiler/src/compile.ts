@@ -711,26 +711,24 @@ const createSuspense = (node: ElementNode, ctx: RenderCtx): Node => {
     defaultChildren.push(child);
   }
 
-  queueMicrotask(() => {
-    const slots = {
-      default: () => renderFragment(defaultChildren, ctx)
-    } as {
-      default: () => Node;
-      fallback?: () => Node;
-      error?: (err: unknown) => Node;
-    };
-    if (fallbackChildren) {
-      slots.fallback = () => renderFragment(fallbackChildren, ctx);
-    }
-    if (errorChildren) {
-      slots.error = (err) =>
-        renderFragment(errorChildren, {
-          ...ctx,
-          state: extendRenderState(ctx.state, { error: err })
-        });
-    }
-    suspense(anchor, getSource, slots);
-  });
+  const slots = {
+    default: () => renderFragment(defaultChildren, ctx)
+  } as {
+    default: () => Node;
+    fallback?: () => Node;
+    error?: (err: unknown) => Node;
+  };
+  if (fallbackChildren) {
+    slots.fallback = () => renderFragment(fallbackChildren, ctx);
+  }
+  if (errorChildren) {
+    slots.error = (err) =>
+      renderFragment(errorChildren, {
+        ...ctx,
+        state: extendRenderState(ctx.state, { error: err })
+      });
+  }
+  suspense(anchor, getSource, slots);
   return anchor;
 };
 
@@ -937,7 +935,7 @@ const createTransitionGroup = (node: ElementNode, ctx: RenderCtx): Node => {
       return [];
     };
 
-    const renderItem = (item: any, index: number) => {
+    const renderItem = (item: any, index: any) => {
       const childCtx: RenderCtx = {
         ...ctx,
         state: extendRenderState(ctx.state, {

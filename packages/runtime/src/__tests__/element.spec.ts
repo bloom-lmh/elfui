@@ -1065,6 +1065,39 @@ describe("生命周期", () => {
     document.body.removeChild(b);
   });
 
+  it("父组件延迟队列中的子组件在 setup 前断开后仍可重连挂载", () => {
+    const childTag = nextTag();
+    const setup = vi.fn(() => ({}));
+    defineCustomElement({
+      tag: childTag,
+      setup,
+      render: () => {
+        const node = document.createElement("p");
+        node.textContent = "mounted";
+        return node;
+      }
+    });
+
+    let child!: HTMLElement;
+    const parentTag = nextTag();
+    defineCustomElement({
+      tag: parentTag,
+      render: (ctx) => {
+        child = document.createElement(childTag);
+        ctx.shadow?.appendChild(child);
+        child.remove();
+        return document.createElement("section");
+      }
+    });
+
+    document.body.appendChild(document.createElement(parentTag));
+    expect(setup).not.toHaveBeenCalled();
+    document.body.appendChild(child);
+
+    expect(setup).toHaveBeenCalledTimes(1);
+    expect(child.shadowRoot?.textContent).toBe("mounted");
+  });
+
   it("DOM move、完整断开和重连具有精确的初始化与清理次数", async () => {
     const tag = nextTag();
     const counts = {

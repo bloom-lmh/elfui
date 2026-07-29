@@ -12,12 +12,9 @@ import { DEV as __DEV__ } from "./dev";
 import { ensureCustomElement } from "./element";
 import { attachDevtoolsLogicalParent } from "./devtools";
 import { attachLogicalParentInstance, getInstanceFromHost } from "./inject";
+import { ELF_KEEP_ALIVE_FLAG, ELF_KEEP_ALIVE_RELEASE } from "./keep-alive-protocol";
 import { callHooks, getCurrentInstance } from "./lifecycle";
-
-/** KeepAlive 标记 host 不会被卸载（即使从 DOM 中移除） */
-export const ELF_KEEP_ALIVE_FLAG: unique symbol = Symbol("elfui.keep-alive");
-/** KeepAlive 缓存释放时，让已断开的 ElfUI host 完成延迟卸载。 */
-export const ELF_KEEP_ALIVE_RELEASE: unique symbol = Symbol("elfui.keep-alive-release");
+import { captureNodeRange, insertNodeRange, removeNodeRange } from "./node-range";
 
 // ---------- Teleport ----------
 
@@ -38,8 +35,8 @@ export const teleport = (
   const logicalOwner = __DEV__ ? (logicalOwnerInstance?.host ?? null) : null;
   // 用 effectScope 隔离子内容的 effect
   const scope = effectScope(true);
-  let mounted: Node | null = null;
-  let lastTarget: Element | null = null;
+  let mounted: Node[] = [];
+  let lastTarget: Node | null = null;
   let disposed = false;
 
   const apply = (): void => {
@@ -52,10 +49,13 @@ export const teleport = (
         : (targetRaw as Element | null);
 
     // 首次渲染
-    if (!mounted) {
-      mounted = scope.run(() => renderChildren()) as Node;
-      attachLogicalParentInstance(mounted, logicalOwnerInstance);
-      if (__DEV__) attachDevtoolsLogicalParent(mounted, logicalOwner);
+    if (mounted.length === 0) {
+      const rendered = scope.run(() => renderChildren()) as Node;
+      mounted = captureNodeRange(rendered);
+      for (const node of mounted) {
+        attachLogicalParentInstance(node, logicalOwnerInstance);
+        if (__DEV__) attachDevtoolsLogicalParent(node, logicalOwner);
+      }
     }
 
     // 决定挂载位置
@@ -63,11 +63,14 @@ export const teleport = (
     if (!finalTarget) return; // 目标找不到时不动
 
     if (isDisabled) {
-      anchor.parentNode?.insertBefore(mounted, anchor);
-    } else if (lastTarget !== finalTarget) {
-      finalTarget.appendChild(mounted);
+      insertNodeRange(finalTarget, mounted, anchor);
+    } else if (
+      lastTarget !== finalTarget ||
+      mounted.some((node) => node.parentNode !== finalTarget)
+    ) {
+      insertNodeRange(finalTarget, mounted);
     }
-    lastTarget = finalTarget as Element | null;
+    lastTarget = finalTarget;
   };
 
   // 用 useEffect 触发响应式追踪；首次也要等 anchor 挂上后才能找 parent
@@ -86,13 +89,15 @@ export const teleport = (
     }
   });
 
-  onScopeDispose(() => {
-    disposed = true;
-    mounted?.parentNode?.removeChild(mounted);
-    mounted = null;
-    lastTarget = null;
-    scope.stop();
-  });
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      disposed = true;
+      removeNodeRange(mounted);
+      mounted = [];
+      lastTarget = null;
+      scope.stop();
+    });
+  }
 
   return anchor;
 };
@@ -197,9 +202,12 @@ export const dynamicComponent = (
   const anchor = document.createComment("component");
   const logicalOwner = __DEV__ ? (getCurrentInstance()?.host ?? null) : null;
   let current: HTMLElement | null = null;
+  let currentScope: ReturnType<typeof effectScope> | null = null;
   let lastKey: unknown = undefined;
+  let disposed = false;
 
   const apply = (): void => {
+    if (disposed) return;
     const c = getCtor();
     if (c === lastKey) return;
     lastKey = c;
@@ -208,21 +216,28 @@ export const dynamicComponent = (
       current.parentNode?.removeChild(current);
       current = null;
     }
+    currentScope?.stop();
+    currentScope = null;
     if (!c) return;
 
-    let el: HTMLElement;
-    if (typeof c === "string") {
-      el = document.createElement(c);
-    } else {
-      const ctor = c as unknown as { __elfDefinition?: { tag?: string } };
-      const tag = ctor?.__elfDefinition?.tag;
-      if (tag) {
-        el = document.createElement(ensureCustomElement(c));
+    const childScope = effectScope(true);
+    currentScope = childScope;
+    const el = childScope.run(() => {
+      let next: HTMLElement;
+      if (typeof c === "string") {
+        next = document.createElement(c);
       } else {
-        el = new (c as new () => HTMLElement)();
+        const ctor = c as unknown as { __elfDefinition?: { tag?: string } };
+        const tag = ctor?.__elfDefinition?.tag;
+        if (tag) {
+          next = document.createElement(ensureCustomElement(c));
+        } else {
+          next = new (c as new () => HTMLElement)();
+        }
       }
-    }
-    if (applyProps) applyProps(el);
+      if (applyProps) applyProps(next);
+      return next;
+    }) as HTMLElement;
     if (__DEV__) attachDevtoolsLogicalParent(el, logicalOwner);
     anchor.parentNode?.insertBefore(el, anchor);
     current = el;
@@ -238,6 +253,16 @@ export const dynamicComponent = (
       apply();
     }
   });
+
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      disposed = true;
+      current?.parentNode?.removeChild(current);
+      current = null;
+      currentScope?.stop();
+      currentScope = null;
+    });
+  }
 
   return anchor;
 };

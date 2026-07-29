@@ -37,6 +37,7 @@
     "stable-host-properties",
     "stable-mounted-lifecycle",
     "steady-beta-thirteen",
+    "steady-runtime-ownership",
     "tidy-lifecycle-surface",
     "unified-core-types"
   ]

@@ -4,7 +4,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { useReactive, useRef } from "@elfui/reactivity";
+import { effectScope, useReactive, useRef } from "@elfui/reactivity";
 import { defineCustomElement, onActivated, onDeactivated, onErrorCaptured } from "@elfui/runtime";
 
 import { compile } from "../index";
@@ -731,19 +731,51 @@ describe("KeepAlive & Suspense", () => {
       resolveFn = r;
     });
     const source = useRef<Promise<void> | null>(promise);
+    const label = useRef("a");
     const render = compile(
-      '<Suspense :source="source"><p>done</p><template #fallback><span>loading</span></template></Suspense>'
+      '<Suspense :source="source"><p>done:{{ label }}</p><template #fallback><span>loading:{{ label }}</span></template></Suspense>'
     );
-    const ctx = setupCtx({ source });
+    const ctx = setupCtx({ source, label });
     ctx.host.appendChild(render(ctx));
     await new Promise<void>((r) => queueMicrotask(r));
-    expect(ctx.host.querySelector("span")?.textContent).toBe("loading");
+    label.value = "b";
+    expect(ctx.host.querySelector("span")?.textContent).toBe("loading:b");
 
     resolveFn();
     await promise;
     await new Promise<void>((r) => queueMicrotask(r));
-    expect(ctx.host.querySelector("p")?.textContent).toBe("done");
+    label.value = "c";
+    expect(ctx.host.querySelector("p")?.textContent).toBe("done:c");
     expect(ctx.host.querySelector("span")).toBeNull();
+    ctx.cleanup();
+  });
+
+  it("Teleport 编译路径保留多根节点所有权", async () => {
+    const first = document.createElement("div");
+    const second = document.createElement("div");
+    document.body.append(first, second);
+    const target = useRef<Element>(first);
+    const disabled = useRef(false);
+    const render = compile(
+      '<Teleport :to="target" :disabled="disabled"><span>a</span><span>b</span></Teleport>'
+    );
+    const ctx = setupCtx({ target, disabled });
+    const owner = effectScope();
+    owner.run(() => {
+      ctx.host.appendChild(render(ctx));
+    });
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    expect(first.textContent).toBe("ab");
+
+    disabled.value = true;
+    expect(first.textContent).toBe("");
+    expect(ctx.host.textContent).toBe("ab");
+    disabled.value = false;
+    target.value = second;
+    expect(second.textContent).toBe("ab");
+
+    owner.stop();
+    expect(second.textContent).toBe("");
     ctx.cleanup();
   });
 });

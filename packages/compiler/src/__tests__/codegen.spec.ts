@@ -1,6 +1,6 @@
 // B3.6 离线 codegen — 编译产物可独立运行
 
-import { useReactive, useRef } from "@elfui/reactivity";
+import { effectScope, useReactive, useRef } from "@elfui/reactivity";
 import * as runtime from "@elfui/runtime";
 import * as runtimeInternal from "@elfui/runtime/internal";
 import { afterEach, describe, expect, it } from "vitest";
@@ -491,6 +491,33 @@ describe("B3.6 codegen", () => {
     expect(created).toBe(1);
   });
 
+  it("Teleport 离线 codegen 可移动并清理多根内容", async () => {
+    const first = document.createElement("div");
+    const second = document.createElement("div");
+    document.body.append(first, second);
+    const { code, helpers } = codegen(
+      '<Teleport :to="target" :disabled="disabled"><span>a</span><span>b</span></Teleport>'
+    );
+    const render = evalCode(code, helpers);
+    const target = useRef<Element>(first);
+    const disabled = useRef(false);
+    const owner = effectScope();
+    owner.run(() => {
+      document.body.appendChild(render(makeCtx({ target, disabled })));
+    });
+    await Promise.resolve();
+    expect(first.textContent).toBe("ab");
+
+    disabled.value = true;
+    expect(document.body.textContent).toContain("ab");
+    disabled.value = false;
+    target.value = second;
+    expect(second.textContent).toBe("ab");
+
+    owner.stop();
+    expect(second.textContent).toBe("");
+  });
+
   it("Suspense 离线 codegen 可执行", async () => {
     let resolveFn: () => void = () => {};
     const promise = new Promise<void>((r) => {
@@ -502,13 +529,17 @@ describe("B3.6 codegen", () => {
     expect(helpers).toContain("suspense");
     const render = evalCode(code, helpers);
     const source = useRef<Promise<void> | null>(promise);
-    const root = render(makeCtx({ source }));
-    document.body.appendChild(root);
+    const owner = effectScope();
+    owner.run(() => {
+      document.body.appendChild(render(makeCtx({ source })));
+    });
     await new Promise<void>((r) => queueMicrotask(r));
     expect(document.body.querySelector("span")?.textContent).toBe("loading");
     resolveFn();
     await promise;
     await new Promise<void>((r) => queueMicrotask(r));
     expect(document.body.querySelector("p")?.textContent).toBe("done");
+    owner.stop();
+    expect(document.body.querySelector("p")).toBeNull();
   });
 });

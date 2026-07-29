@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { useRef } from "@elfui/reactivity";
+import { effectScope, useEffect, useRef } from "@elfui/reactivity";
 
 import { mark } from "../control-flow";
 import { suspense } from "../suspense";
@@ -134,5 +134,98 @@ describe("D5 Suspense", () => {
     await sourceState.peek();
     await tick();
     expect(host.querySelector("p")?.textContent).toBe("ok");
+  });
+
+  it("default、fallback 和 error slot 保持响应式", async () => {
+    const host = document.createElement("section");
+    document.body.appendChild(host);
+    const anchor = mark();
+    host.appendChild(anchor);
+    const label = useRef("a");
+    let reject!: (error: Error) => void;
+    const source = new Promise<void>((_resolve, rejectPromise) => {
+      reject = rejectPromise;
+    });
+    const sourceState = useRef<Promise<void> | null>(source);
+    const reactiveNode = (tag: "p" | "span" | "div", prefix: string): Node => {
+      const node = document.createElement(tag);
+      useEffect(() => {
+        node.textContent = `${prefix}:${label.value}`;
+      });
+      return node;
+    };
+
+    suspense(anchor, () => sourceState.value, {
+      default: () => reactiveNode("p", "default"),
+      fallback: () => reactiveNode("span", "fallback"),
+      error: () => reactiveNode("div", "error")
+    });
+    label.value = "b";
+    expect(host.querySelector("span")?.textContent).toBe("fallback:b");
+
+    reject(new Error("boom"));
+    await source.catch(() => undefined);
+    await tick();
+    label.value = "c";
+    expect(host.querySelector("div")?.textContent).toBe("error:c");
+    expect(host.querySelector("span")).toBeNull();
+    sourceState.value = null;
+    label.value = "d";
+    expect(host.querySelector("p")?.textContent).toBe("default:d");
+  });
+
+  it("忽略旧 source 的迟到结果", async () => {
+    const host = document.createElement("section");
+    document.body.appendChild(host);
+    const anchor = mark();
+    host.appendChild(anchor);
+    let resolveFirst!: () => void;
+    let resolveSecond!: () => void;
+    const first = new Promise<void>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const second = new Promise<void>((resolve) => {
+      resolveSecond = resolve;
+    });
+    const source = useRef<Promise<void>>(first);
+    suspense(anchor, () => source.value, {
+      default: () => {
+        const node = document.createElement("p");
+        node.textContent = source.peek() === second ? "second" : "first";
+        return node;
+      },
+      fallback: () => document.createElement("span")
+    });
+
+    source.value = second;
+    resolveFirst();
+    await first;
+    await tick();
+    expect(host.querySelector("p")).toBeNull();
+    resolveSecond();
+    await second;
+    await tick();
+    expect(host.querySelector("p")?.textContent).toBe("second");
+  });
+
+  it("支持多根 slot 并在 owner scope 停止时清理", async () => {
+    const host = document.createElement("section");
+    document.body.appendChild(host);
+    const anchor = mark();
+    host.appendChild(anchor);
+    const scope = effectScope();
+    scope.run(() => {
+      suspense(anchor, () => null, {
+        default: () => {
+          const fragment = document.createDocumentFragment();
+          fragment.append(document.createElement("i"), document.createElement("b"));
+          return fragment;
+        }
+      });
+    });
+    await tick();
+    expect(host.querySelectorAll("i, b")).toHaveLength(2);
+    scope.stop();
+    expect(host.querySelectorAll("i, b")).toHaveLength(0);
   });
 });

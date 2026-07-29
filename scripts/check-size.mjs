@@ -27,13 +27,13 @@ const targets = [
     id: "light",
     name: "@elfui/core aggregate public facade (all stable exports)",
     entry: resolve(root, "packages/core/src/index.ts"),
-    target: { gzip: kb(17.1), brotli: kb(15.4) }
+    target: { gzip: kb(17.8), brotli: kb(16.1) }
   },
   {
     id: "runtime",
     name: "@elfui/runtime (stable runtime API, no compiler)",
     entry: resolve(root, "packages/runtime/src/index.ts"),
-    target: { gzip: kb(14.7), brotli: kb(13.3) }
+    target: { gzip: kb(15.5), brotli: kb(14.1) }
   },
   {
     id: "reactivity",

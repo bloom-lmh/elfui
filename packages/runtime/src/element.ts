@@ -17,7 +17,7 @@ import { effectScope, isRef, useReactive, useShallowRef, type useRef } from "@el
 
 import { getHostAttrs, disposeHostAttrs } from "./attrs";
 import { DEV as __RUNTIME_DEV__ } from "./dev";
-import { ELF_KEEP_ALIVE_FLAG, ELF_KEEP_ALIVE_RELEASE } from "./builtin";
+import { ELF_KEEP_ALIVE_FLAG, ELF_KEEP_ALIVE_RELEASE } from "./keep-alive-protocol";
 import { resolveAppConfig, type ElfUIConfig } from "./config";
 import { handleRuntimeError } from "./error";
 import {
@@ -514,7 +514,12 @@ export const defineCustomElement = (
     }
 
     public disconnectedCallback(): void {
-      if (!this.__mounted || !this.__instance) return;
+      if (!this.__mounted) return;
+      if (!this.__instance) {
+        this.__mounted = false;
+        this.__mountVersion++;
+        return;
+      }
       // 给一个微任务窗口让 dom move 不触发 unmount
       // 如果只是临时移动，元素会很快被重新 connect
       queueMicrotask(() => {

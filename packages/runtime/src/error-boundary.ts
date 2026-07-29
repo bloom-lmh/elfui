@@ -19,10 +19,11 @@
 //
 // 编译器层接入留 H 阶段；这里先提供 runtime helper，用户可手写 render 调用。
 
-import { effectScope } from "@elfui/reactivity";
+import { effectScope, getCurrentScope, onScopeDispose } from "@elfui/reactivity";
 
 import { DEV as __DEV__ } from "./dev";
 import { onErrorCaptured } from "./lifecycle";
+import { captureNodeRange, insertNodeRange, removeNodeRange } from "./node-range";
 
 export interface ErrorBoundarySlots {
   /** 默认内容；抛错时被 fallback 替换 */
@@ -46,7 +47,7 @@ export const errorBoundary = (anchor: Comment, slots: ErrorBoundarySlots): void 
       scope.stop();
       scope = null;
     }
-    for (const n of mounted) n.parentNode?.removeChild(n);
+    removeNodeRange(mounted);
     mounted = [];
   };
 
@@ -54,8 +55,8 @@ export const errorBoundary = (anchor: Comment, slots: ErrorBoundarySlots): void 
     cleanup();
     try {
       const node = slots.fallback(err, retry);
-      anchor.parentNode?.insertBefore(node, anchor);
-      mounted = collectInsertedSiblings(node);
+      mounted = captureNodeRange(node);
+      if (anchor.parentNode) insertNodeRange(anchor.parentNode, mounted, anchor);
     } catch (e) {
       if (__DEV__) console.error("[errorBoundary] fallback render error:", e);
       else console.error(e);
@@ -72,8 +73,8 @@ export const errorBoundary = (anchor: Comment, slots: ErrorBoundarySlots): void 
       // 调用 onErrorCaptured((err) => { errorBoundaryInstance.trigger(err); return false }) 即可。
       try {
         const node = slots.default();
-        anchor.parentNode?.insertBefore(node, anchor);
-        mounted = collectInsertedSiblings(node);
+        mounted = captureNodeRange(node);
+        if (anchor.parentNode) insertNodeRange(anchor.parentNode, mounted, anchor);
       } catch (err) {
         showFallback(err);
       }
@@ -84,18 +85,8 @@ export const errorBoundary = (anchor: Comment, slots: ErrorBoundarySlots): void 
     showDefault();
   };
 
+  if (getCurrentScope()) onScopeDispose(cleanup);
   showDefault();
-};
-
-const collectInsertedSiblings = (root: Node): Node[] => {
-  if (root.nodeType === 11) {
-    // DocumentFragment 在 insertBefore 后已经把子节点搬走了
-    // 这里返回 [] 不行 — fragment 子节点已经在 anchor 父中。简化：返回 root 之前所有
-    // 直到下一个非 fragment 的兄弟。但实际场景：缓存外层 root 引用 vs 子节点 — 这里
-    // 用一个简单 marker：fragment 模式下不主动清理（依赖父级 effect scope 销毁）。
-    return [];
-  }
-  return [root];
 };
 
 /** 父组件（要做错误边界的那个）调用：把子组件抛上来的错冒泡处理。

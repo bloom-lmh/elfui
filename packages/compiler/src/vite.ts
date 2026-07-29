@@ -193,6 +193,9 @@ export const elfuiMacroPlugin = (options: ElfUIMacroPluginOptions = {}): Minimal
       if (!include.test(id) || exclude?.test(id)) return null;
       const isElfFile = elfFileRE.test(id);
       const isScriptFile = scriptFileRE.test(id);
+      if (!isElfFile && !code.includes(macroImport) && !code.includes("@elf component")) {
+        return null;
+      }
       const pragma = analyzeElfComponentPragma(code);
       const usage = analyzeElfMacroUsage(code, macroImport, id);
 

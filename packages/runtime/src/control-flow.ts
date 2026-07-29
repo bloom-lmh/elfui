@@ -14,6 +14,7 @@
 //   也可以接收 (anchor) 自行决定挂载位置
 
 import {
+  batch,
   effectScope,
   getCurrentScope,
   onScopeDispose,
@@ -267,9 +268,11 @@ export const list = <T>(
         }
       }
       if (sameKeyOrder) {
-        for (let i = 0; i < prev.length; i++) {
-          updateListItem(prev[i] as ListItem<T>, newItems[i] as T, i);
-        }
+        batch(() => {
+          for (let i = 0; i < prev.length; i++) {
+            updateListItem(prev[i] as ListItem<T>, newItems[i] as T, i);
+          }
+        });
         return;
       }
     }
@@ -332,14 +335,16 @@ export const list = <T>(
       }
     }
 
-    for (let i = 0; i < newItems.length; i++) {
-      const current = next[i];
-      if (current) {
-        updateListItem(current, newItems[i] as T, i);
-      } else {
-        next[i] = createListItem(newKeys[i] as string | number, newItems[i] as T, i, render);
+    batch(() => {
+      for (let i = 0; i < newItems.length; i++) {
+        const current = next[i];
+        if (current) {
+          updateListItem(current, newItems[i] as T, i);
+        } else {
+          next[i] = createListItem(newKeys[i] as string | number, newItems[i] as T, i, render);
+        }
       }
-    }
+    });
 
     // 注意：每次重新查询 parent，因为 anchor 可能在挂载到 host 前后变换 parent
     const parent = anchor.parentNode;

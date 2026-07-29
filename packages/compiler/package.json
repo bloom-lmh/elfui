@@ -1,6 +1,6 @@
 {
   "name": "@elfui/compiler",
-  "version": "0.1.0-beta.18",
+  "version": "0.1.0-beta.19",
   "description": "Macro component compiler for ElfUI.",
   "keywords": [
     "elfui",
@@ -62,7 +62,6 @@
     "@elfui/compiler-template": "workspace:*",
     "@elfui/reactivity": "workspace:*",
     "@elfui/runtime": "workspace:*",
-    "@elfui/shared": "workspace:*",
     "typescript": "^5.9.3"
   },
   "license": "MIT"

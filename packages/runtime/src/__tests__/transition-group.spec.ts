@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { useRef } from "@elfui/reactivity";
+import { effectScope, useEffect, useRef } from "@elfui/reactivity";
 
 import { transitionGroup } from "../transition-group";
 
@@ -21,7 +21,7 @@ describe("D3 TransitionGroup", () => {
       (n) => n,
       (n) => {
         const li = document.createElement("li");
-        li.textContent = String(n);
+        li.textContent = String(n.value);
         return li;
       }
     );
@@ -41,7 +41,7 @@ describe("D3 TransitionGroup", () => {
       (n) => n,
       (n) => {
         const li = document.createElement("li");
-        li.textContent = String(n);
+        li.textContent = String(n.value);
         return li;
       },
       { name: "fade" }
@@ -65,7 +65,7 @@ describe("D3 TransitionGroup", () => {
       (n) => n,
       (n) => {
         const li = document.createElement("li");
-        li.textContent = String(n);
+        li.textContent = String(n.value);
         return li;
       },
       { name: "fade" }
@@ -93,7 +93,7 @@ describe("D3 TransitionGroup", () => {
       (it) => it.id,
       (it) => {
         const li = document.createElement("li");
-        li.textContent = it.name;
+        li.textContent = it.value.name;
         return li;
       }
     );
@@ -118,7 +118,7 @@ describe("D3 TransitionGroup", () => {
       (n) => n,
       (n) => {
         const li = document.createElement("li");
-        li.textContent = String(n);
+        li.textContent = String(n.value);
         return li;
       },
       { name: "fade", css: false }
@@ -143,12 +143,78 @@ describe("D3 TransitionGroup", () => {
       (it) => it.id,
       (it) => {
         const li = document.createElement("li");
-        li.textContent = String(it.v);
+        li.textContent = String(it.value.v);
         return li;
       },
       { name: "fade", moveClass: "my-move" }
     );
     // 简单验证 options 接受 moveClass
     expect(host.querySelectorAll("li")).toHaveLength(2);
+  });
+
+  it("稳定 key 更新 item 和 index 时复用节点并批量刷新", () => {
+    const host = document.createElement("ul");
+    document.body.appendChild(host);
+    const items = useRef([
+      { id: "a", label: "A" },
+      { id: "b", label: "B" }
+    ]);
+    let runs = 0;
+    transitionGroup(
+      host,
+      () => items.value,
+      (item) => item.id,
+      (item, index) => {
+        const li = document.createElement("li");
+        useEffect(() => {
+          runs++;
+          li.textContent = `${index.value}:${item.value.label}`;
+        });
+        return li;
+      },
+      { css: false }
+    );
+    const before = Array.from(host.children);
+    const initialRuns = runs;
+
+    items.value = [
+      { id: "b", label: "B2" },
+      { id: "a", label: "A2" }
+    ];
+
+    expect(Array.from(host.children)).toEqual([before[1], before[0]]);
+    expect(host.textContent).toBe("0:B21:A2");
+    expect(runs - initialRuns).toBe(2);
+  });
+
+  it("owner scope 停止时清理节点和 item effect", () => {
+    const host = document.createElement("ul");
+    document.body.appendChild(host);
+    const owner = effectScope();
+    const items = useRef([{ id: "a", label: "A" }]);
+    let runs = 0;
+    owner.run(() => {
+      transitionGroup(
+        host,
+        () => items.value,
+        (item) => item.id,
+        (item) => {
+          const li = document.createElement("li");
+          useEffect(() => {
+            runs++;
+            li.textContent = item.value.label;
+          });
+          return li;
+        },
+        { css: false }
+      );
+    });
+    expect(host.textContent).toBe("A");
+
+    owner.stop();
+    const stoppedRuns = runs;
+    expect(host.children).toHaveLength(0);
+    items.value = [{ id: "a", label: "B" }];
+    expect(runs).toBe(stoppedRuns);
   });
 });

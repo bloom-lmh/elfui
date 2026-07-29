@@ -20,7 +20,7 @@ export type InjectionKey<T> = symbol & { __injectionType?: T };
 
 /** 创建一个类型化注入键 */
 export const createInjectionKey = <T = unknown>(description?: string): InjectionKey<T> =>
-  Symbol.for(description ?? "elfui.injection.key") as InjectionKey<T>;
+  Symbol(description) as InjectionKey<T>;
 
 /** 实例上挂载 provides 的属性 key */
 export const PROVIDES_KEY: unique symbol = Symbol.for("elfui.provides") as any;

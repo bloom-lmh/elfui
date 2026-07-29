@@ -21,6 +21,11 @@ describe("createInjectionKey", () => {
     expect(typeof k).toBe("symbol");
     expect((k as unknown as { description?: string }).description).toBe("theme");
   });
+
+  it("相同描述和未命名 key 仍保持唯一", () => {
+    expect(createInjectionKey("theme")).not.toBe(createInjectionKey("theme"));
+    expect(createInjectionKey()).not.toBe(createInjectionKey());
+  });
 });
 
 describe("provide / inject", () => {

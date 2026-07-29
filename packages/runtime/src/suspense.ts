@@ -8,7 +8,9 @@
 // 编译期：<Suspense :source="promise"><div>resolved</div></Suspense>
 // 转为：suspense(anchor, () => promise, { default, fallback, error })
 
-import { effectScope, useEffect } from "@elfui/reactivity";
+import { effectScope, getCurrentScope, onScopeDispose, useEffect } from "@elfui/reactivity";
+
+import { captureNodeRange, insertNodeRange, removeNodeRange } from "./node-range";
 
 export interface SuspenseSlots {
   default: () => Node | null;
@@ -34,30 +36,35 @@ export const suspense = (
   let scope: ReturnType<typeof effectScope> | null = null;
   let lastSource: unknown = undefined;
   let lastStatus: SuspenseStatus | undefined = undefined;
+  let disposed = false;
+  let mountScheduled = false;
 
   const cleanup = (): void => {
-    for (const n of mounted) {
-      n.parentNode?.removeChild(n);
-    }
+    removeNodeRange(mounted);
     mounted = [];
     scope?.stop();
     scope = null;
   };
 
-  const renderInto = (node: Node | null): void => {
-    cleanup();
-    if (!node) return;
-    if (node instanceof DocumentFragment) {
-      mounted = Array.from(node.childNodes);
-    } else {
-      mounted = [node];
-    }
-    anchor.parentNode?.insertBefore(node, anchor);
+  const mountCurrent = (): void => {
+    if (disposed || mounted.length === 0 || !anchor.parentNode) return;
+    insertNodeRange(anchor.parentNode, mounted, anchor);
+  };
+
+  const scheduleMount = (): void => {
+    if (mountScheduled) return;
+    mountScheduled = true;
+    queueMicrotask(() => {
+      mountScheduled = false;
+      mountCurrent();
+    });
   };
 
   const setStatus = (status: SuspenseStatus, err?: unknown): void => {
+    if (disposed) return;
     if (status === lastStatus && status !== "error") return;
     lastStatus = status;
+    cleanup();
     const newScope = effectScope(true);
     scope = newScope;
     let node: Node | null = null;
@@ -70,8 +77,18 @@ export const suspense = (
         node = slots.error ? slots.error(err) : null;
       }
     });
-    renderInto(node);
+    mounted = captureNodeRange(node);
+    mountCurrent();
+    if (!anchor.parentNode) scheduleMount();
   };
+
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      disposed = true;
+      lastSource = undefined;
+      cleanup();
+    });
+  }
 
   useEffect(() => {
     const source = getSource();

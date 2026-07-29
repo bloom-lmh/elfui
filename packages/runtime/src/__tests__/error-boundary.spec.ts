@@ -78,6 +78,34 @@ describe("errorBoundary", () => {
     expect(root.querySelector("span")).toBeNull();
   });
 
+  it("retry 会清理多根 fallback", () => {
+    const { root, anchor } = setup();
+    let fail = true;
+    let retry!: () => void;
+    errorBoundary(anchor, {
+      default: () => {
+        if (fail) {
+          fail = false;
+          throw new Error("first");
+        }
+        const paragraph = document.createElement("p");
+        paragraph.textContent = "ready";
+        return paragraph;
+      },
+      fallback: (_error, next) => {
+        retry = next;
+        const fragment = document.createDocumentFragment();
+        fragment.append(document.createElement("span"), document.createElement("span"));
+        return fragment;
+      }
+    });
+
+    expect(root.querySelectorAll("span")).toHaveLength(2);
+    retry();
+    expect(root.querySelectorAll("span")).toHaveLength(0);
+    expect(root.querySelector("p")?.textContent).toBe("ready");
+  });
+
   it("fallback 自身抛错不崩溃（DEV 守卫 console.error）", () => {
     const { anchor } = setup();
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});

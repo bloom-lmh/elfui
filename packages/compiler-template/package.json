@@ -1,6 +1,6 @@
 {
   "name": "@elfui/compiler-template",
-  "version": "0.1.0-beta.18",
+  "version": "0.1.0-beta.19",
   "description": "Template parser for ElfUI.",
   "keywords": [
     "elfui",
@@ -43,9 +43,6 @@
   "scripts": {
     "build": "tsc -b && node ../../scripts/fix-esm-extensions.mjs packages/compiler-template",
     "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@elfui/shared": "workspace:*"
   },
   "license": "MIT"
 }
