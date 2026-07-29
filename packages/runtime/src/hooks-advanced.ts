@@ -22,6 +22,37 @@ const queryFocusables = (root: Element): HTMLElement[] => {
   );
 };
 
+interface ScrollLockState {
+  owners: number;
+  previousOverflow: string;
+}
+
+const SCROLL_LOCKS_KEY = Symbol.for("elfui.runtime.scroll-locks");
+
+const acquireScrollLock = (body: HTMLElement): void => {
+  const target = body as unknown as Record<symbol, ScrollLockState | undefined>;
+  const state = target[SCROLL_LOCKS_KEY];
+  if (state) {
+    state.owners++;
+    return;
+  }
+  target[SCROLL_LOCKS_KEY] = {
+    owners: 1,
+    previousOverflow: body.style.overflow
+  };
+  body.style.overflow = "hidden";
+};
+
+const releaseScrollLock = (body: HTMLElement): void => {
+  const target = body as unknown as Record<symbol, ScrollLockState | undefined>;
+  const state = target[SCROLL_LOCKS_KEY];
+  if (!state) return;
+  state.owners--;
+  if (state.owners > 0) return;
+  delete target[SCROLL_LOCKS_KEY];
+  body.style.overflow = state.previousOverflow;
+};
+
 /** 焦点陷阱：限制 Tab 焦点在 target 内（Dialog / Drawer 必备）
  *
  *   useFocusTrap(useHost())
@@ -79,26 +110,23 @@ export const useEscapeKey = (handler: () => void): void => {
  *   useScrollLock(() => open.value)
  */
 export const useScrollLock = (getter: () => boolean): void => {
-  let prevOverflow: string | null = null;
-  let locked = false;
+  let lockedBody: HTMLElement | null = null;
 
   useEffect(() => {
     const v = getter();
-    if (v && !locked) {
-      prevOverflow = document.body.style.overflow;
-      document.body.style.overflow = "hidden";
-      locked = true;
-    } else if (!v && locked) {
-      document.body.style.overflow = prevOverflow ?? "";
-      locked = false;
+    if (v && !lockedBody) {
+      lockedBody = document.body;
+      acquireScrollLock(lockedBody);
+    } else if (!v && lockedBody) {
+      releaseScrollLock(lockedBody);
+      lockedBody = null;
     }
   });
 
   onBeforeUnmount(() => {
-    if (locked) {
-      document.body.style.overflow = prevOverflow ?? "";
-      locked = false;
-    }
+    if (!lockedBody) return;
+    releaseScrollLock(lockedBody);
+    lockedBody = null;
   });
 };
 

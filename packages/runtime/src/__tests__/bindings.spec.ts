@@ -2,7 +2,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { effect, useRef } from "@elfui/reactivity";
+import { effect, useComputed, useRef } from "@elfui/reactivity";
 
 import { attr, cls, on, prop, sty, text, type StyleValue } from "../bindings";
 
@@ -127,6 +127,22 @@ describe("on", () => {
     btn.dispatchEvent(new Event("click"));
 
     expect(values).toEqual([0, 2]);
+  });
+
+  it("事件 batch 内写入后立即读取已缓存 computed 会得到新值", () => {
+    const btn = document.createElement("button");
+    const source = useRef(1);
+    const doubled = useComputed(() => source.value * 2);
+    let observed = -1;
+    void doubled.value;
+    on(btn, "click", () => {
+      source.value = 2;
+      observed = doubled.value;
+    });
+
+    btn.dispatchEvent(new Event("click"));
+
+    expect(observed).toBe(4);
   });
 
   it("返回 disposer 并保留 listener this", () => {

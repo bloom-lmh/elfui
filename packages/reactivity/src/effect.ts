@@ -186,8 +186,12 @@ export const triggerEffects = (dep: Dep, debug?: { target: object; key: unknown 
 
   for (const reactiveEffect of effects) {
     if (triggerId) reactiveEffect.devtoolsTriggerId = triggerId;
-    if (batchDepth > 0 || isFlushingBatch) {
-      (reactiveEffect.computed ? batchedComputedEffects : batchedEffects).add(reactiveEffect);
+    if (reactiveEffect.computed) {
+      // Invalidate lazy computed caches synchronously so reads inside the current
+      // transaction observe source writes. Downstream effects remain batched.
+      runTriggeredEffect(reactiveEffect, triggerId);
+    } else if (batchDepth > 0 || isFlushingBatch) {
+      batchedEffects.add(reactiveEffect);
     } else {
       runTriggeredEffect(reactiveEffect, triggerId);
     }
@@ -196,7 +200,6 @@ export const triggerEffects = (dep: Dep, debug?: { target: object; key: unknown 
 
 let batchDepth = 0;
 let isFlushingBatch = false;
-const batchedComputedEffects = new Set<ReactiveEffect>();
 const batchedEffects = new Set<ReactiveEffect>();
 
 const runTriggeredEffect = (reactiveEffect: ReactiveEffect, triggerId: string | null): void => {
@@ -223,9 +226,7 @@ export const flushBatchedEffects = (): void => {
   if (isFlushingBatch) return;
   isFlushingBatch = true;
   try {
-    while (batchedComputedEffects.size > 0 || batchedEffects.size > 0) {
-      // computed scheduler 会继续把下游订阅者加入普通 effect 队列。
-      flushEffectSet(batchedComputedEffects);
+    while (batchedEffects.size > 0) {
       flushEffectSet(batchedEffects);
     }
   } finally {

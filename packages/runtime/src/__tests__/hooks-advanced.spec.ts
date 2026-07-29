@@ -174,6 +174,40 @@ describe("useScrollLock", () => {
     await tick();
     expect(document.body.style.overflow).toBe("");
   });
+
+  it("keeps the body locked until the final concurrent owner releases", async () => {
+    const tag = next();
+    let setFirst!: (value: boolean) => void;
+    let setSecond!: (value: boolean) => void;
+    createComponent()
+      .name(tag)
+      .setup(() => {
+        const first = useRef(false);
+        const second = useRef(false);
+        useScrollLock(() => first.value);
+        useScrollLock(() => second.value);
+        setFirst = (value) => first.set(value);
+        setSecond = (value) => second.set(value);
+        return {};
+      })
+      .render(() => document.createElement("div"))
+      .register();
+
+    document.body.style.overflow = "scroll";
+    const el = document.createElement(tag);
+    document.body.appendChild(el);
+    await tick();
+
+    setFirst(true);
+    setSecond(true);
+    expect(document.body.style.overflow).toBe("hidden");
+
+    setFirst(false);
+    expect(document.body.style.overflow).toBe("hidden");
+
+    setSecond(false);
+    expect(document.body.style.overflow).toBe("scroll");
+  });
 });
 
 describe("DOM observer helpers", () => {

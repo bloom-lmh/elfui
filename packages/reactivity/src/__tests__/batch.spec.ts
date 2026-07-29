@@ -52,6 +52,18 @@ describe("batch", () => {
     expect(values).toEqual([2, 6]);
   });
 
+  it("invalidates a cached computed before an immediate read inside batch", () => {
+    const count = useRef(1);
+    const doubled = useComputed(() => count.value * 2);
+
+    expect(doubled.value).toBe(2);
+
+    batch(() => {
+      count.value = 2;
+      expect(doubled.value).toBe(4);
+    });
+  });
+
   it("同时依赖 source 和 computed 的 effect 仍只执行一次", () => {
     const count = useRef(1);
     const doubled = useComputed(() => count.value * 2);
