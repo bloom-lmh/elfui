@@ -33,6 +33,7 @@ import {
   type TextNode
 } from "@elfui/compiler-template";
 
+import { getBindingPatternNames } from "./binding-pattern";
 import {
   createTemplateExpressionIR,
   type TemplateExpressionIR,
@@ -631,6 +632,14 @@ const genPlain = (node: ElementNode, ctx: CodegenContext): string => {
   let i = 0;
   while (i < node.children.length) {
     const child = node.children[i]!;
+    if (child.type === NodeTypes.ELEMENT && child.tag === "template") {
+      const scopedSlot = genScopedSlotRegistration(elVar, child, ctx);
+      if (scopedSlot) {
+        stmts.push(scopedSlot);
+        i++;
+        continue;
+      }
+    }
     if (child.type === NodeTypes.ELEMENT && hasIfDir(child as ElementNode)) {
       const { code, consumed } = genIfChain(node.children, i, ctx);
       stmts.push(`${elVar}.appendChild(${code})`);
@@ -643,6 +652,37 @@ const genPlain = (node: ElementNode, ctx: CodegenContext): string => {
 
   stmts.push(`return ${elVar}`);
   return `(() => { ${stmts.join("; ")} })()`;
+};
+
+const genScopedSlotRegistration = (
+  hostVar: string,
+  node: ElementNode,
+  ctx: CodegenContext
+): string | null => {
+  const slot = node.props.find(
+    (prop): prop is DirectiveNode => prop.type === AttrTypes.DIRECTIVE && prop.name === "slot"
+  );
+  if (!slot?.arg || !slot.exp.trim()) return null;
+
+  use(ctx, "setScopedSlot");
+  use(ctx, "extendRenderState");
+  const parentCtx = currentCtx(ctx);
+  const scopeVar = fresh(ctx, "scope");
+  const childCtx = fresh(ctx, "ctx");
+  const names = getBindingPatternNames(slot.exp);
+  const locals = names.length > 0 ? `{ ${names.join(", ")} }` : "{}";
+  const children = withCtxName(ctx, childCtx, () =>
+    node.children.map((child) => `__frag.appendChild(${genNode(child, ctx)})`).join("; ")
+  );
+
+  return (
+    `if (${hostVar} instanceof HTMLElement) { ` +
+    `setScopedSlot(${hostVar}, ${escapeStr(slot.arg)}, (${renderAnyParam(ctx, scopeVar)}) => { ` +
+    `const ${slot.exp} = ${scopeVar}; ` +
+    `const ${childCtx} = { ...${parentCtx}, state: extendRenderState(${parentCtx}.state, ${locals}) }; ` +
+    `const __frag = document.createDocumentFragment(); ${children}; return __frag; ` +
+    `}); }`
+  );
 };
 
 const genTemplateFragment = (node: ElementNode, ctx: CodegenContext): string => {

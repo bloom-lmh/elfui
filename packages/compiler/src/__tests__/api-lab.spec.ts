@@ -317,5 +317,7 @@ export const ApiLabParent = defineHtml(\`
     expect(result.code).toContain("transitionGroup(");
     expect(result.code).toContain("keepAlive(");
     expect(result.code).toContain("suspense(");
+    expect(result.code).toContain("setScopedSlot(");
+    expect(result.code).toContain("extendRenderState(");
   });
 });

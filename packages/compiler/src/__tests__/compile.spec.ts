@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { effectScope, useReactive, useRef } from "@elfui/reactivity";
 import { defineCustomElement, onActivated, onDeactivated, onErrorCaptured } from "@elfui/runtime";
+import { ELF_SCOPED_SLOTS } from "@elfui/runtime/internal";
 
 import { compile } from "../index";
 
@@ -40,6 +41,23 @@ describe("基础渲染", () => {
     const ctx = setupCtx();
     ctx.host.appendChild(render(ctx));
     expect(ctx.host.querySelector("p")?.textContent).toBe("hi");
+    ctx.cleanup();
+  });
+
+  it("runtime compile 为 scoped slot 别名注入局部变量", () => {
+    const render = compile(
+      `<elf-child><template #meta="{ value, id: localId }"><span>{{ value }} / {{ localId }}</span></template></elf-child>`
+    );
+    const ctx = setupCtx();
+    const root = render(ctx) as HTMLElement;
+    const slots = (
+      root as HTMLElement & {
+        [ELF_SCOPED_SLOTS]?: Record<string, (scope: unknown) => Node>;
+      }
+    )[ELF_SCOPED_SLOTS];
+
+    const rendered = slots?.meta?.({ value: "runtime", id: "slot-2" });
+    expect(rendered?.textContent).toBe("runtime / slot-2");
     ctx.cleanup();
   });
 

@@ -125,6 +125,24 @@ describe("B3.6 codegen", () => {
     expect(mounted).toEqual(["a", "b"]);
   });
 
+  it("离线 codegen 为解构 scoped slot 注入局部变量", () => {
+    const { code, helpers } = codegen(
+      `<elf-child><template #meta="{ value, id: localId }"><span>{{ value }} / {{ localId }}</span></template></elf-child>`
+    );
+    const render = evalCode(code, helpers);
+    const root = render(makeCtx({})) as HTMLElement;
+    const slots = (
+      root as HTMLElement & {
+        [runtimeInternal.ELF_SCOPED_SLOTS]?: Record<string, (scope: unknown) => Node>;
+      }
+    )[runtimeInternal.ELF_SCOPED_SLOTS];
+
+    expect(helpers).toContain("setScopedSlot");
+    expect(helpers).toContain("extendRenderState");
+    const rendered = slots?.meta?.({ value: "beta21", id: "slot-1" });
+    expect(rendered?.textContent).toBe("beta21 / slot-1");
+  });
+
   it("为 v-model 与控制流生成具名 binding 元数据", () => {
     const { code } = codegen(
       `<input v-model="value" />\n<p v-show="visible">x</p>\n<div v-if="visible">y</div>\n<li v-for="item in items">{{ item }}</li>`

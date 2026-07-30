@@ -625,8 +625,8 @@
       },
       {
         "name": "EffectScope",
-        "kind": ["type", "value"],
-        "signature": "value new (detached?: boolean) => EffectScope ; type { active: boolean; cleanups: EffectScopeCleanup[]; effects: ReactiveEffect[]; parent: EffectScope | undefined; run: <T>(fn: () => T) => T | undefined; scopes: EffectScope[]; setIndex: (index: number) => void; stop: (fromParent?: boolean) => void }"
+        "kind": ["type"],
+        "signature": "type { active: boolean; cleanups: EffectScopeCleanup[]; effects: ReactiveEffect[]; parent: EffectScope | undefined; run: <T>(fn: () => T) => T | undefined; scopes: EffectScope[]; setIndex: (index: number) => void; stop: (fromParent?: boolean) => void }"
       },
       {
         "name": "EffectScopeCleanup",

@@ -78,13 +78,31 @@ const readCompilerOptions = () => {
   return parsed.options;
 };
 
-const classifySymbol = (symbol) => {
+const isTypeOnlyExportDeclaration = (declaration) => {
+  if (ts.isExportSpecifier(declaration)) {
+    if (declaration.isTypeOnly) return true;
+    const namedExports = declaration.parent;
+    return (
+      ts.isNamedExports(namedExports) &&
+      ts.isExportDeclaration(namedExports.parent) &&
+      namedExports.parent.isTypeOnly
+    );
+  }
+  return ts.isExportDeclaration(declaration) && declaration.isTypeOnly;
+};
+
+const isTypeOnlyExport = (symbol) => {
+  const declarations = symbol.declarations ?? [];
+  return declarations.length > 0 && declarations.every(isTypeOnlyExportDeclaration);
+};
+
+const classifySymbol = (symbol, typeOnly = false) => {
   const kinds = [];
   const flags = symbol.flags;
 
-  if ((flags & ts.SymbolFlags.Value) !== 0) kinds.push("value");
+  if (!typeOnly && (flags & ts.SymbolFlags.Value) !== 0) kinds.push("value");
   if ((flags & ts.SymbolFlags.Type) !== 0) kinds.push("type");
-  if ((flags & ts.SymbolFlags.Namespace) !== 0) kinds.push("namespace");
+  if (!typeOnly && (flags & ts.SymbolFlags.Namespace) !== 0) kinds.push("namespace");
 
   return kinds.length > 0 ? kinds : ["unknown"];
 };
@@ -94,7 +112,7 @@ const normalizeSignature = (value) => value.replace(/\s+/gu, " ").trim();
 const hasModifier = (node, kind) =>
   ts.canHaveModifiers(node) && (ts.getModifiers(node) ?? []).some((item) => item.kind === kind);
 
-const collectSymbolSignature = (checker, symbol) => {
+const collectSymbolSignature = (checker, symbol, kinds = classifySymbol(symbol)) => {
   const declaration = symbol.valueDeclaration ?? symbol.declarations?.[0];
   if (!declaration) return symbol.getName();
   const formatFlags =
@@ -107,7 +125,7 @@ const collectSymbolSignature = (checker, symbol) => {
     checker.signatureToString(signature, location, formatFlags);
   const parts = [];
 
-  if ((symbol.flags & ts.SymbolFlags.Value) !== 0) {
+  if (kinds.includes("value")) {
     const valueType = checker.getTypeOfSymbolAtLocation(symbol, declaration);
     const calls = valueType.getCallSignatures().map((signature) => signatureText(signature));
     const constructs = valueType
@@ -116,7 +134,7 @@ const collectSymbolSignature = (checker, symbol) => {
     parts.push(`value ${[...calls, ...constructs].join(" | ") || typeText(valueType)}`);
   }
 
-  if ((symbol.flags & ts.SymbolFlags.Type) !== 0) {
+  if (kinds.includes("type")) {
     const typeDeclaration = symbol.declarations?.find(
       (item) =>
         ts.isInterfaceDeclaration(item) ||
@@ -223,12 +241,14 @@ const collectApiSnapshot = () => {
     entries[entryPoint.entry] = checker
       .getExportsOfModule(moduleSymbol)
       .map((symbol) => {
+        const typeOnly = isTypeOnlyExport(symbol);
         const target =
           (symbol.flags & ts.SymbolFlags.Alias) !== 0 ? checker.getAliasedSymbol(symbol) : symbol;
+        const kinds = classifySymbol(target, typeOnly).sort();
         return {
           name: symbol.getName(),
-          kind: classifySymbol(target).sort(),
-          signature: collectSymbolSignature(checker, target)
+          kind: kinds,
+          signature: collectSymbolSignature(checker, target, kinds)
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name));

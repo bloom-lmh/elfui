@@ -54,6 +54,7 @@ import {
   type DirectiveDefinition
 } from "@elfui/runtime/internal";
 import { DEV as __DEV__ } from "./dev";
+import { getBindingPatternNames } from "./binding-pattern";
 import {
   bindingDebug,
   directiveMeta,
@@ -1047,39 +1048,33 @@ const extractScopedSlot = (
   const name = slotDir.arg;
   const scopeExpr = slotDir.exp;
 
-  // 编译 scope 解构表达式：如 "{ item, index }" -> Function(`{item, index}`, body)
-  // 简化：构造一个 fn(__scope) { with(ctx.state) { return ... } }
-  // 但 scope 解构需要变量注入，用 IIFE 包装
-
+  // 把别名和默认值解析成可合并进子渲染 state 的局部变量记录。
+  const bindingNames = getBindingPatternNames(scopeExpr);
   const argsFn = new Function(
     "ctx",
     "__scope",
-    "createNodes",
-    `with(ctx.state){const ${scopeExpr} = __scope;return createNodes();}`
+    `with(ctx.state){const ${scopeExpr} = __scope;return {${bindingNames.join(",")}};}`
   );
 
   return {
     name,
     fn: (scope: unknown) => {
       const frag = document.createDocumentFragment();
-      const locals = scope && typeof scope === "object" ? (scope as Record<string, unknown>) : {};
-      const childCtx: RenderCtx = {
-        ...ctx,
-        state: extendRenderState(ctx.state, locals)
-      };
-      // 提供 createNodes 闭包，把 scope 注入到 ctx.state
-      const createNodes = (): Node => {
+      try {
+        const resolvedLocals = argsFn(ctx, scope);
+        const locals =
+          resolvedLocals && typeof resolvedLocals === "object"
+            ? (resolvedLocals as Record<string, unknown>)
+            : {};
+        const childCtx: RenderCtx = {
+          ...ctx,
+          state: extendRenderState(ctx.state, locals)
+        };
         const f = document.createDocumentFragment();
         for (const child of node.children) {
           f.appendChild(createNode(child, childCtx));
         }
-        return f;
-      };
-      try {
-        const result = argsFn(childCtx, scope, createNodes);
-        if (result instanceof Node) {
-          frag.appendChild(result);
-        }
+        frag.appendChild(f);
       } catch (err) {
         if (__DEV__) {
           reportRuntimeCompilerDiagnostic(
